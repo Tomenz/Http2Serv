@@ -20,6 +20,10 @@
 
 using namespace std::placeholders;
 
+#ifndef _UTFCONVERTER
+#define _UTFCONVERTER
+std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
+#endif
 
 class EchoServer
 {
@@ -340,6 +344,106 @@ int main()
 //    EchoServer echoSrv;
 //    echoSrv.Start();
 
+    deque<CHttpServ> vServers;
+
+    vector<wstring>&& vDefItem = ConfFile::GetInstance(L"server.cfg").get(L"common", L"DefaultItem");
+    vector<wstring>&& vRootDir = ConfFile::GetInstance(L"server.cfg").get(L"common", L"RootDir");
+    if (vRootDir.empty() == true)
+        vRootDir.push_back(L"./html");
+    vector<wstring>&& vLogFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"LogFile");
+    vector<wstring>&& vErrLog = ConfFile::GetInstance(L"server.cfg").get(L"common", L"ErrorLog");
+    vector<wstring>&& vReWrite = ConfFile::GetInstance(L"server.cfg").get(L"common", L"RewriteRule");
+    vector<wstring>&& vAliasMatch = ConfFile::GetInstance(L"server.cfg").get(L"common", L"AliasMatch");
+
+    vector<wstring>&& vFileTypExt = ConfFile::GetInstance(L"server.cfg").get(L"FileTyps");
+
+
+    vector<wstring>&& vListen = ConfFile::GetInstance(L"server.cfg").get(L"Listen");
+    for (const auto& strListen : vListen)
+    {
+        vector<wstring>&& vPort = ConfFile::GetInstance(L"server.cfg").get(L"Listen", strListen);
+        for (const auto& strPort : vPort)
+        {
+            // Default Werte setzen
+            vServers.emplace_back(*vRootDir.begin(), stoi(strPort), false);
+
+            vServers.back().SetBindAdresse(string(begin(strListen), end(strListen)).c_str());
+            if (vDefItem.empty() == false)
+                vServers.back().SetDefaultItem(*vDefItem.begin());
+            if (vLogFile.empty() == false)
+                vServers.back().SetAccessLogFile(*vLogFile.begin());
+            if (vErrLog.empty() == false)
+                vServers.back().SetErrorLogFile(*vErrLog.begin());
+            if (vReWrite.empty() == false)
+                vServers.back().AddRewriteRule(vReWrite);
+            if (vAliasMatch.empty() == false)
+                vServers.back().AddAliasMatch(vAliasMatch);
+
+            for (const auto& strFileExt : vFileTypExt)
+            {
+                vector<wstring>&& vFileTypAction = ConfFile::GetInstance(L"server.cfg").get(L"FileTyps", strFileExt);
+                if (vFileTypAction.empty() == false)
+                    vServers.back().AddFileTypAction(strFileExt, *vFileTypAction.begin());
+            }
+
+            // Host Parameter holen und setzen
+            function<void(wstring, bool)> fuSetOstParam = [&](wstring strListenAddr, bool IsVHost)
+            {
+                auto tuSSLParam = make_tuple<bool, string, string, string>(false, "", "", "");
+                vector<wstring> vHostList;
+                vector<wstring>&& vHostPara = ConfFile::GetInstance(L"server.cfg").get(strListenAddr + L":" + strPort);
+                for (const auto& strParamKey : vHostPara)
+                {
+                    vector<wstring>&& vParaValue = ConfFile::GetInstance(L"server.cfg").get(strListenAddr + L":" + strPort, strParamKey);
+                    if (vParaValue.empty() == false)
+                    {
+                        if (strParamKey.compare(L"DefaultItem") == 0)
+                            vServers.back().SetDefaultItem(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                        if (strParamKey.compare(L"RootDir") == 0)
+                            vServers.back().SetRootDirectory(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                        if (strParamKey.compare(L"LogFile") == 0)
+                            vServers.back().SetAccessLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                        if (strParamKey.compare(L"ErrorLog") == 0)
+                            vServers.back().SetErrorLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
+
+                        if (strParamKey.compare(L"SSL") == 0 && vParaValue.begin()->compare(L"true") == 0)
+                            get<0>(tuSSLParam) = true;
+                        if (strParamKey.compare(L"KeyFile") == 0)
+                            get<1>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
+                        if (strParamKey.compare(L"CertFile") == 0)
+                            get<2>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
+                        if (strParamKey.compare(L"CaBundle") == 0)
+                            get<3>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
+
+                        if (strParamKey.compare(L"VirtualHost") == 0 && IsVHost == false)
+                        {
+                            size_t nPos = vParaValue.begin()->find_first_of(L','), nStart = 0;
+                            while (nPos != string::npos)
+                            {
+                                vHostList.push_back(vParaValue.begin()->substr(nStart, nPos++));
+                                nStart += nPos;
+                                nPos = vParaValue.begin()->find_first_of(L',', nStart);
+                            }
+                            vHostList.push_back(vParaValue.begin()->substr(nStart));
+                        }
+                    }
+                }
+
+                if (get<0>(tuSSLParam) == true && get<1>(tuSSLParam).empty() == false && get<2>(tuSSLParam).empty() == false && get<3>(tuSSLParam).empty() == false)
+                    vServers.back().SetUseSSL(get<0>(tuSSLParam), get<3>(tuSSLParam), get<2>(tuSSLParam), get<1>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
+
+                for (size_t i = 0; i < vHostList.size(); ++i)
+                    fuSetOstParam(vHostList[i], true);
+            };
+
+            fuSetOstParam(strListen, false);
+        }
+    }
+
+    // Server starten
+    for (auto& HttpServer : vServers)
+        HttpServer.Start();
+/*
     CHttpServ httpServer;
     httpServer.SetBindAdresse("0.0.0.0");
     httpServer.SetPort(80);
@@ -357,7 +461,7 @@ int main()
 
     httpServer.Start();
     SslHttpServer.Start();
-
+*/
 #if defined(_WIN32) || defined(_WIN64)
     //while (::_kbhit() == 0)
     //    this_thread::sleep_for(chrono::milliseconds(1));
@@ -366,8 +470,10 @@ int main()
     getchar();
 #endif
 
-    SslHttpServer.Stop();
-    httpServer.Stop();
+/*    SslHttpServer.Stop();
+    httpServer.Stop();*/
+    for (auto& HttpServer : vServers)
+        HttpServer.Stop();
 
 //    echoSrv.Stop();
 

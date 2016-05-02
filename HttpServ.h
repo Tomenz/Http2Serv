@@ -154,9 +154,7 @@ public:
             m_pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1, _2));
         }
 
-        m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
-
-        return true;
+        return m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
     }
 
     bool Stop()

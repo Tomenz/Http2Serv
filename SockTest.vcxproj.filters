@@ -56,5 +56,8 @@
     <ClInclude Include="OpenSSLWraper.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
+    <ClInclude Include="Trace.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
