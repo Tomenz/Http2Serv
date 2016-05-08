@@ -148,8 +148,9 @@ public:
 
                         if (contentLength != end(GETHEADERLIST(streamData->second)))
                         {
-                            stringstream ssTmp(contentLength->second);
-                            ssTmp >> CONTENTLENGTH(streamData->second);
+                            //stringstream ssTmp(contentLength->second);
+                            //ssTmp >> CONTENTLENGTH(streamData->second);
+                            CONTENTLENGTH(streamData->second) = stoi(contentLength->second);
 
                             Http2WindowUpdate(soMetaDa.fSocketWrite, 0, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
                             Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
@@ -450,9 +451,10 @@ public:
             szBuf += min(static_cast<size_t>(h2f.size), nLen);
             nLen -= min(static_cast<size_t>(h2f.size), nLen);
         }
-
+#ifdef _DEBUG
         if (nLen != 0)
             MyTrace("Protocol Error");
+#endif // DEBUG
 
         return nReturn;
     }
