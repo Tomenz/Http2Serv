@@ -15,7 +15,7 @@
 #include <map>
 #include <algorithm>
 
-#include "SslSocket.h"
+#include "socketlib/SslSocket.h"
 #include "Timer.h"
 #include "TempFile.h"
 #include "H2Proto.h"

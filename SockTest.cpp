@@ -1,7 +1,7 @@
 // SockTest.cpp : Definiert den Einstiegspunkt für die Konsolenanwendung.
 //
 
-#include "SslSocket.h"
+#include "socketlib/SslSocket.h"
 
 #include <unordered_map>
 #include <iostream>
@@ -17,6 +17,12 @@
 #include <ConfFile.h>
 #include <HttpServ.h>
 #include <Timer.h>
+
+#ifdef _DEBUG
+#pragma comment(lib, "Debug/socketlib.lib")
+#else
+#pragma comment(lib, "Release/socketlib.lib")
+#endif
 
 using namespace std::placeholders;
 

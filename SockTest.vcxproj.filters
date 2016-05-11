@@ -18,20 +18,8 @@
     <ClCompile Include="SockTest.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="StdSocket.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="SslSocket.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="StdSocket.h">
-      <Filter>Headerdateien</Filter>
-    </ClInclude>
-    <ClInclude Include="SslSocket.h">
-      <Filter>Headerdateien</Filter>
-    </ClInclude>
     <ClInclude Include="H2Proto.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
@@ -51,9 +39,6 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="LogFile.h">
-      <Filter>Headerdateien</Filter>
-    </ClInclude>
-    <ClInclude Include="OpenSSLWraper.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="Trace.h">

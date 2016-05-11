@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{87FBA899-0A43-4702-89B1-672D79200EAE}</ProjectGuid>
+    <ProjectGuid>{CA4B8E0F-0228-455C-B1DB-D6FB568D9DD9}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>SockTest</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
@@ -150,17 +150,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SockTest.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Base64.h" />
-    <ClInclude Include="ConfFile.h" />
-    <ClInclude Include="GZip.h" />
-    <ClInclude Include="H2Proto.h" />
-    <ClInclude Include="HPack.h" />
-    <ClInclude Include="HttpServ.h" />
-    <ClInclude Include="LogFile.h" />
-    <ClInclude Include="Trace.h" />
+    <ClCompile Include="Http2Fetch.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

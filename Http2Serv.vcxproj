@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{87FBA899-0A43-4702-89B1-672D79200EAE}</ProjectGuid>
+    <ProjectGuid>{060A0FB8-DC7D-40C7-A0D8-A92B9C489712}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>SockTest</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
@@ -150,7 +150,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SockTest.cpp" />
+    <ClCompile Include="Http2Serv.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Base64.h" />
