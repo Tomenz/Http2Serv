@@ -356,7 +356,7 @@ private:
                         return;
                     }
                     unique_ptr<char> pBuf(new char[nLen]);
-                    ::memcpy(pBuf.get(),  pConDetails->strBuffer.c_str(), nLen);
+                    ::memcpy(pBuf.get(), pConDetails->strBuffer.c_str(), nLen);
 
                     size_t nRet;
                     if (nRet = Http2StreamProto(soMetaDa, pBuf.get(), nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->TmpFile, pConDetails->atStop.get()), nRet != SIZE_MAX)
