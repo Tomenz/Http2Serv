@@ -14,6 +14,7 @@
 #include <regex>
 #include <map>
 #include <algorithm>
+#include <iomanip>
 
 #include "socketlib/SslSocket.h"
 #include "Timer.h"
@@ -313,8 +314,6 @@ private:
                 pConDetails->pTimer->Reset();
                 pConDetails->strBuffer.append(reinterpret_cast<char*>(spBuffer.get()), nRead);
 
-                MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
-
                 if (pConDetails->bIsH2Con == false)
                 {
                     if ( pConDetails->strBuffer.size() >= 24 && ::memcmp( pConDetails->strBuffer.c_str(), "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0 && pConDetails->nContentsSoll == 0)
@@ -322,8 +321,9 @@ private:
                         pTcpSocket->Write("\x0\x0\x6\x4\x0\x0\x0\x0\x0\x0\x4\x0\xa0\x0\x0", 15);// SETTINGS frame (4) with ParaID(4) and ?10485760? Value
                         pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\x9f\x0\x1", 13);      // WINDOW_UPDATE frame (8) with value ?10420225? (minus 65535)
                         pConDetails->bIsH2Con = true;
-                         pConDetails->strBuffer.erase(0, 24);
-                        if ( pConDetails->strBuffer.size() == 0)
+                        pConDetails->strBuffer.erase(0, 24);
+
+                        if (pConDetails->strBuffer.size() == 0)
                         {
                             m_mtxConnections.unlock();
                             return;
@@ -334,7 +334,7 @@ private:
                         uint32_t nBytesToWrite = static_cast<uint32_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
                         pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
                         pConDetails->nContentRecv += nBytesToWrite;
-                         pConDetails->strBuffer.erase(0, nBytesToWrite);
+                        pConDetails->strBuffer.erase(0, nBytesToWrite);
 
                         if (pConDetails->nContentRecv < pConDetails->nContentsSoll)
                         {
@@ -356,12 +356,14 @@ private:
                         return;
                     }
                     unique_ptr<char> pBuf(new char[nLen]);
-                    ::memcpy(pBuf.get(), pConDetails->strBuffer.c_str(), nLen);
+                    copy(begin(pConDetails->strBuffer), begin(pConDetails->strBuffer) + nLen, pBuf.get());
+
+                    MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
                     size_t nRet;
                     if (nRet = Http2StreamProto(soMetaDa, pBuf.get(), nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->TmpFile, pConDetails->atStop.get()), nRet != SIZE_MAX)
                     {
-                         pConDetails->strBuffer.erase(0,  pConDetails->strBuffer.size() - nLen);
+                        pConDetails->strBuffer.erase(0,  pConDetails->strBuffer.size() - nLen);
                         m_mtxConnections.unlock();
                         return;
                     }
@@ -381,15 +383,15 @@ auto dwStart = chrono::high_resolution_clock::now();
                     if (nPos != string::npos)
                     {
                         auto parResult = pConDetails->HeaderList.insert(make_pair(string(":method"),  pConDetails->strBuffer.substr(0, nPos)));
-                         pConDetails->strBuffer.erase(0, nPos + 1);
+                        pConDetails->strBuffer.erase(0, nPos + 1);
                     }
-                    nPos =  pConDetails->strBuffer.find(' ');
+                    nPos = pConDetails->strBuffer.find(' ');
                     if (nPos != string::npos)
                     {
                         auto parResult = pConDetails->HeaderList.insert(make_pair(string(":path"),  pConDetails->strBuffer.substr(0, nPos)));
-                         pConDetails->strBuffer.erase(0, nPos + 1);
+                        pConDetails->strBuffer.erase(0, nPos + 1);
                     }
-                    nPos =  pConDetails->strBuffer.find('\n');
+                    nPos = pConDetails->strBuffer.find('\n');
                     if (nPos != string::npos)
                     {
                         auto parResult = pConDetails->HeaderList.insert(make_pair(string(":version"),  pConDetails->strBuffer.substr(0, nPos)));
@@ -400,15 +402,15 @@ auto dwStart = chrono::high_resolution_clock::now();
                             if (parResult->second.find("HTTP/1.") != string::npos)
                                 parResult->second.replace(parResult->second.find("HTTP/1."), 7, "");
                         }
-                         pConDetails->strBuffer.erase(0, nPos + 1);
+                        pConDetails->strBuffer.erase(0, nPos + 1);
                     }
 
                     while ((nPos =  pConDetails->strBuffer.find('\n')) != string::npos && nPos > 1)
                     {
-                        size_t nPos1 =  pConDetails->strBuffer.find(':');
+                        size_t nPos1 = pConDetails->strBuffer.find(':');
                         if (nPos1 != string::npos)
                         {
-                            auto strTmp =  pConDetails->strBuffer.substr(0, nPos1);
+                            auto strTmp = pConDetails->strBuffer.substr(0, nPos1);
                             transform(begin(strTmp), end(strTmp), begin(strTmp), ::tolower);
 
                             auto parResult = pConDetails->HeaderList.insert(make_pair(strTmp,  pConDetails->strBuffer.substr(nPos1 + 1, nPos - (nPos1 + 1))));
@@ -419,12 +421,12 @@ auto dwStart = chrono::high_resolution_clock::now();
                                 while (parResult->second.find('\n') != string::npos) parResult->second.replace(parResult->second.find('\n'), 1, "");
                             }
                         }
-                         pConDetails->strBuffer.erase(0, nPos + 1);
+                        pConDetails->strBuffer.erase(0, nPos + 1);
                     }
 
                     if (nPos != string::npos)
                     {
-                         pConDetails->strBuffer.erase(0, nPos + 1);
+                        pConDetails->strBuffer.erase(0, nPos + 1);
                     }
 
                     auto contentLength = pConDetails->HeaderList.find("content-length");
@@ -444,7 +446,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                                 uint32_t nBytesToWrite = static_cast<uint32_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
                                 pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
                                 pConDetails->nContentRecv += nBytesToWrite;
-                                 pConDetails->strBuffer.erase(0, nBytesToWrite);
+                                pConDetails->strBuffer.erase(0, nBytesToWrite);
                             }
 
                             if (pConDetails->nContentRecv < pConDetails->nContentsSoll)
@@ -477,7 +479,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         string strHttp2Settings = Base64::Decode(http2SettingsHeader->second, true);
                         size_t nHeaderLen = strHttp2Settings.size();
                         auto upTmpBuffer = make_unique<char[]>(nHeaderLen);
-                        memcpy(upTmpBuffer.get(), strHttp2Settings.c_str(), nHeaderLen);
+                        copy(begin(strHttp2Settings), begin(strHttp2Settings) + nHeaderLen, upTmpBuffer.get());
+
+                        MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
                         size_t nRet;
                         if (nRet = Http2StreamProto(soMetaDa, upTmpBuffer.get(), nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->TmpFile, pConDetails->atStop.get()), nRet == 0)
@@ -491,6 +495,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                 if (pConDetails->bIsH2Con == false)  // If we received a GOAWAY Frame in HTTP/2 we end up here, but we will not do any action
                 {
+                    MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
+
                     pConDetails->mutStreams->lock();
                     pConDetails->H2Streams.insert(make_pair(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(pConDetails->StreamParam)))));
                     pConDetails->mutStreams->unlock();
@@ -505,8 +511,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     pConDetails->H2Streams.clear();
                     pConDetails->HeaderList.clear();
                 }
-
-
 
                 m_mtxConnections.unlock();
                 return;
@@ -652,92 +656,99 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
     size_t BuildResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, HEADERWRAPPER hw, uint64_t nContentSize = 0)
     {
-        stringstream strRespons;
-        strRespons.imbue(m_cLocal);
-        strRespons << "HTTP/1." << ((iFlag & HTTPVERSION11) == HTTPVERSION11 ? "1" : "0") << " " << iRespCode << " ";
+        string strRespons;
+        strRespons.reserve(2048);
+        //strRespons.imbue(m_cLocal);
+        strRespons += "HTTP/1.";
+        strRespons += ((iFlag & HTTPVERSION11) == HTTPVERSION11 ? "1 " : "0 ") + to_string(iRespCode) + " ";
 
         switch (iRespCode)
         {
-        case 100: strRespons << "Continue"; break;
-        case 101: strRespons << "Switching Protocols"; break;
-        case 200: strRespons << "OK"; break;
-        case 201: strRespons << "Created"; break;
-        case 202: strRespons << "Accepted"; break;
-        case 203: strRespons << "Non-Authoritative Information"; break;
-        case 204: strRespons << "No Content"; break;
-        case 205: strRespons << "Reset Content"; break;
-        case 206: strRespons << "Partial Content"; break;
-        case 300: strRespons << "Multiple Choices"; break;
-        case 301: strRespons << "Moved Permanently"; break;
-        case 302: strRespons << "Moved Temporarily"; break;
-        case 303: strRespons << "See Other"; break;
-        case 304: strRespons << "Not Modified"; break;
-        case 305: strRespons << "Use Proxy"; break;
-        case 400: strRespons << "Bad Request"; break;
-        case 401: strRespons << "Unauthorized"; break;
-        case 402: strRespons << "Payment Required"; break;
-        case 403: strRespons << "Forbidden"; break;
-        case 404: strRespons << "Not Found"; break;
-        case 405: strRespons << "Method Not Allowed"; break;
-        case 406: strRespons << "Not Acceptable"; break;
-        case 407: strRespons << "Proxy Authentication Required"; break;
-        case 408: strRespons << "Request Timeout"; break;
-        case 409: strRespons << "Conflict"; break;
-        case 410: strRespons << "Gone"; break;
-        case 411: strRespons << "Length Required"; break;
-        case 412: strRespons << "Precondition Failed"; break;
-        case 413: strRespons << "Request Entity Too Large"; break;
-        case 414: strRespons << "Request-URI Too Long"; break;
-        case 415: strRespons << "Unsupported Media Type"; break;
-        case 500: strRespons << "Internal Server Error"; break;
-        case 501: strRespons << "Not Implemented"; break;
-        case 502: strRespons << "Bad Gateway"; break;
-        case 503: strRespons << "Service Unavailable"; break;
-        case 504: strRespons << "Gateway Timeout"; break;
-        case 505: strRespons << "HTTP Version Not Supported"; break;
+        case 100: strRespons += "Continue"; break;
+        case 101: strRespons += "Switching Protocols"; break;
+        case 200: strRespons += "OK"; break;
+        case 201: strRespons += "Created"; break;
+        case 202: strRespons += "Accepted"; break;
+        case 203: strRespons += "Non-Authoritative Information"; break;
+        case 204: strRespons += "No Content"; break;
+        case 205: strRespons += "Reset Content"; break;
+        case 206: strRespons += "Partial Content"; break;
+        case 300: strRespons += "Multiple Choices"; break;
+        case 301: strRespons += "Moved Permanently"; break;
+        case 302: strRespons += "Moved Temporarily"; break;
+        case 303: strRespons += "See Other"; break;
+        case 304: strRespons += "Not Modified"; break;
+        case 305: strRespons += "Use Proxy"; break;
+        case 400: strRespons += "Bad Request"; break;
+        case 401: strRespons += "Unauthorized"; break;
+        case 402: strRespons += "Payment Required"; break;
+        case 403: strRespons += "Forbidden"; break;
+        case 404: strRespons += "Not Found"; break;
+        case 405: strRespons += "Method Not Allowed"; break;
+        case 406: strRespons += "Not Acceptable"; break;
+        case 407: strRespons += "Proxy Authentication Required"; break;
+        case 408: strRespons += "Request Timeout"; break;
+        case 409: strRespons += "Conflict"; break;
+        case 410: strRespons += "Gone"; break;
+        case 411: strRespons += "Length Required"; break;
+        case 412: strRespons += "Precondition Failed"; break;
+        case 413: strRespons += "Request Entity Too Large"; break;
+        case 414: strRespons += "Request-URI Too Long"; break;
+        case 415: strRespons += "Unsupported Media Type"; break;
+        case 500: strRespons += "Internal Server Error"; break;
+        case 501: strRespons += "Not Implemented"; break;
+        case 502: strRespons += "Bad Gateway"; break;
+        case 503: strRespons += "Service Unavailable"; break;
+        case 504: strRespons += "Gateway Timeout"; break;
+        case 505: strRespons += "HTTP Version Not Supported"; break;
         }
 
-        strRespons << "\r\n";
-        strRespons << "Server: Http2-Utility\r\n";
+        strRespons += "\r\n";
+        strRespons += "Server: Http2-Utility\r\n";
 
-        strRespons << "Date: ";
+        strRespons += "Date: ";
         auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
         struct tm* stTime = ::gmtime(&in_time_t);
 
         char *pattern = "%a, %d %b %Y %H:%M:%S GMT\r\n";
-        use_facet <time_put <char> >(m_cLocal).put(strRespons.rdbuf(), strRespons, ' ', stTime, pattern, pattern + strlen(pattern));
+        //use_facet <time_put <char> >(m_cLocal).put(strRespons.rdbuf(), strRespons, ' ', stTime, pattern, pattern + strlen(pattern));
+        stringstream ss;
+        ss.imbue(m_cLocal);
+        ss << put_time(stTime, pattern);
+        strRespons += ss.str();
 
         if (nContentSize != 0 || iFlag & ADDCONENTLENGTH)
-            strRespons << "Content-Length: " << nContentSize << "\r\n";
+            strRespons += "Content-Length: " + to_string(nContentSize) + "\r\n";
 
         for (const auto& item : hw.umHeaderList)
         {
             if (item.first.compare("Pragma") == 0 || item.first.compare("Cache-Control") == 0)
                 iFlag &= ~ADDNOCACHE;
-            strRespons << item.first << ": " << item.second << "\r\n";
+            strRespons += item.first + ": " + item.second + "\r\n";
         }
 
         if (iFlag & ADDNOCACHE)
-            strRespons << "Pragma: no-cache\r\nCache-Control: no-cache\r\nExpires: Mon, 03 Apr 1961 05:00:00 GMT\r\n";
+            strRespons += "Pragma: no-cache\r\nCache-Control: no-cache\r\nExpires: Mon, 03 Apr 1961 05:00:00 GMT\r\n";
 
         if (iFlag & ADDCONNECTIONCLOSE)
-            strRespons << "Connection: close\r\n";
+            strRespons += "Connection: close\r\n";
         else
-            strRespons << "Connection: keep-alive\r\n";
+            strRespons += "Connection: keep-alive\r\n";
 
         if (iFlag & GZIPENCODING)
-            strRespons << "Content-Encoding: gzip\r\n";
+            strRespons += "Content-Encoding: gzip\r\n";
 
         if (iFlag & HSTSHEADER)
-            strRespons << "Strict-Transport-Security: max-age = 631138519; includeSubdomains; preload\r\n";
+            strRespons += "Strict-Transport-Security: max-age = 631138519; includeSubdomains; preload\r\n";
 
         if (iFlag & TERMINATEHEADER)
-            strRespons << "\r\n";
+            strRespons += "\r\n";
 
-        size_t nRet = strRespons.str().size();
-        if (strRespons.str().size() > nBufLen)
+        size_t nRet = strRespons.size();
+        if (nRet > nBufLen)
             return 0;
-        ::memcpy(szBuffer, strRespons.str().c_str(), nRet);
+
+        copy(begin(strRespons), begin(strRespons) + nRet, szBuffer);
 
         return nRet;
     }

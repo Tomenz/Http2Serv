@@ -97,7 +97,7 @@ public:
         long nResult = m_cClientCon.CheckServerCertificate(m_strServer.c_str());
 
         string Protocoll = m_cClientCon.GetSelAlpnProtocol();
-        //wcout << Protocoll.c_str() << endl;
+        //wcerr << Protocoll.c_str() << endl;
 
         if (Protocoll.compare("h2") == 0)
         {
@@ -141,13 +141,13 @@ public:
         }
 
         m_Timer = make_unique<Timer>(30000, bind(&Http2Fetch::OnTimeout, this, _1));
-        soMetaDa = { m_cClientCon.GetClientAddr(), m_cClientCon.GetClientPort(), m_cClientCon.GetInterfaceAddr(), m_cClientCon.GetInterfacePort(), m_cClientCon.IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()) };
+        m_soMetaDa = { m_cClientCon.GetClientAddr(), m_cClientCon.GetClientPort(), m_cClientCon.GetInterfaceAddr(), m_cClientCon.GetInterfacePort(), m_cClientCon.IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()) };
     }
 
     void DatenEmpfangen(TcpSocket* pTcpSocket)
     {
         uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
-        //wcout << nAvalible << L" Bytes in DatenEmpfangen" << endl;
+        //wcerr << nAvalible << L" Bytes in DatenEmpfangen" << endl;
 
         if (nAvalible == 0)
         {
@@ -155,46 +155,46 @@ public:
             return;
         }
 
-        shared_ptr<char> spBuffer(new char[strBuffer.size() + nAvalible + 1]);
-        copy(begin(strBuffer), begin(strBuffer) + strBuffer.size(), spBuffer.get());
+        shared_ptr<char> spBuffer(new char[m_strBuffer.size() + nAvalible + 1]);
+        copy(begin(m_strBuffer), begin(m_strBuffer) + m_strBuffer.size(), spBuffer.get());
 
-        uint32_t nRead = pTcpSocket->Read(spBuffer.get() + strBuffer.size(), nAvalible);
+        uint32_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvalible);
 
         if (nRead > 0)
         {
             m_Timer->Reset();
 
-            nRead += strBuffer.size();
-            strBuffer.clear();
+            nRead += m_strBuffer.size();
+            m_strBuffer.clear();
 
             if (m_bIsHttp2 == true)
             {
                 size_t nRet;
-                if (nRet = Http2StreamProto(soMetaDa, spBuffer.get(), nRead, qDynTable, tuStreamSettings, umStreamCache, &mtxStreams, pTmpFile, nullptr), nRet != SIZE_MAX)
+                if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_pTmpFile, nullptr), nRet != SIZE_MAX)
                 {
                     if (nRet > 0)
-                        strBuffer.append(spBuffer.get(), nRet);
+                        m_strBuffer.append(spBuffer.get(), nRet);
                     return;
                 }
                 // After a GOAWAY we terminate the connection
                 return;
             }
             else
-                wcout << string().append(spBuffer.get(), nRead).c_str();
+                wcerr << string().append(spBuffer.get(), nRead).c_str();
         }
     }
 
 	void SocketError(BaseSocket* pBaseSocket)
 	{
         OutputDebugString(L"Http2Fetch::SocketError\r\n");
-		wcout << L"Error in Verbindung" << endl;
+		wcerr << L"Error in Verbindung" << endl;
 		pBaseSocket->Close();
 	}
 
     void SocketCloseing(BaseSocket* pBaseSocket)
     {
         OutputDebugString(L"Http2Fetch::SocketCloseing\r\n");
-        wcout << L"SocketCloseing aufgerufen" << endl;
+        wcerr << L"SocketCloseing aufgerufen" << endl;
         m_bDone = true;
     }
 
@@ -209,8 +209,8 @@ public:
         m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)->second));
 
         for (const auto& Header : m_umRespHeader)
-            wcout << Header.first.c_str() << L": " << Header.second.c_str() << endl;
-        wcout << endl;
+            wcerr << Header.first.c_str() << L": " << Header.second.c_str() << endl;
+        wcerr << endl;
 
         auto status = m_umRespHeader.find(":status");
         if (status != m_umRespHeader.end())
@@ -270,24 +270,24 @@ public:
     }
 
 private:
-    SslTcpSocket m_cClientCon;
-    string m_strServer;
-    short m_sPort;
-    string m_strPath;
-    bool m_UseSSL;
-    bool m_bDone;
-    uint32_t m_uiStatus;
+    SslTcpSocket         m_cClientCon;
+    string               m_strServer;
+    short                m_sPort;
+    string               m_strPath;
+    bool                 m_UseSSL;
+    bool                 m_bDone;
+    uint32_t             m_uiStatus;
 
-    bool m_bIsHttp2;
-    deque<HEADERENTRY> qDynTable;
-    mutex mtxStreams;
-    STREAMLIST umStreamCache;
-    STREAMSETTINGS tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384);
-    shared_ptr<TempFile> pTmpFile;
-    unique_ptr<Timer> m_Timer;
-    MetaSocketData soMetaDa;
-    string strBuffer;
-    HEADERLIST       m_umRespHeader;
+    bool                 m_bIsHttp2;
+    deque<HEADERENTRY>   m_qDynTable;
+    mutex                m_mtxStreams;
+    STREAMLIST           m_umStreamCache;
+    STREAMSETTINGS       m_tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384);
+    shared_ptr<TempFile> m_pTmpFile;
+    unique_ptr<Timer>    m_Timer;
+    MetaSocketData       m_soMetaDa;
+    string               m_strBuffer;
+    HEADERLIST           m_umRespHeader;
 };
 
 
