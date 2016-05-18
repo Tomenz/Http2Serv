@@ -35,7 +35,8 @@ public:
     virtual ~Timer()
     {
         m_bStop = true;
-        m_thWaitThread.join();
+        if (m_thWaitThread.joinable() == true)
+            m_thWaitThread.join();
     }
 
     void Reset()

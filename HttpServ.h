@@ -522,6 +522,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
     void OnSocketCloseing(BaseSocket* pBaseSocket)
     {
+        OutputDebugString(L"CHttpServ::OnSocketCloseing\r\n");
         lock_guard<mutex> lock(m_mtxConnections);
         CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))

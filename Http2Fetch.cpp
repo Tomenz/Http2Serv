@@ -6,6 +6,7 @@
 #include "H2Proto.h"
 #include "GZip.h"
 #include "Base64.h"
+#include "TempFile.h"
 #include "Timer.h"
 
 #include <unordered_map>
@@ -31,7 +32,7 @@ using namespace std::placeholders;
 class Http2Fetch : public Http2Protocol
 {
 public:
-	Http2Fetch() : m_bIsHttp2(false)
+	Http2Fetch() : m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_bDone(false), m_uiStatus(0)
     {
     }
 
@@ -39,19 +40,51 @@ public:
     {
     }
 
-    void Fetch(const string strIp, const short sPort)
+    bool Fetch(wstring strAdresse)
     {
-        m_strHost = strIp;
-        m_strPath = "/";
+        m_bDone = false;
+
+        m_strServer = string(begin(strAdresse), end(strAdresse));
+        transform(begin(m_strServer), begin(m_strServer) + 5, begin(m_strServer), tolower);
+
+        if (m_strServer.substr(0, 4).compare("http") != 0)
+            return false;
+
+        m_strServer.erase(0, 4);
+        if (m_strServer[0] == 's')
+        {
+            m_sPort = 443, m_UseSSL = true;
+            m_strServer.erase(0, 1);
+        }
+
+        if (m_strServer.substr(0, 3).compare("://") != 0)
+            return false;
+        m_strServer.erase(0, 3);
+
+        size_t nPos = m_strServer.find('/');
+        if (nPos != string::npos)
+        {
+            m_strPath = m_strServer.substr(nPos);
+            m_strServer.erase(nPos);
+        }
+        else
+            m_strPath = "/";
+
+        nPos = m_strServer.find(':');
+        if (nPos != string::npos)
+        {
+            m_sPort = stoi(m_strServer.substr(nPos + 1));
+            m_strServer.erase(nPos);
+        }
 
         m_cClientCon.BindFuncConEstablished(bind(&Http2Fetch::Connected, this, _1));
         m_cClientCon.BindFuncBytesRecived(bind(&Http2Fetch::DatenEmpfangen, this, _1));
         m_cClientCon.BindErrorFunction(bind(&Http2Fetch::SocketError, this, _1));
         m_cClientCon.BindCloseFunction(bind(&Http2Fetch::SocketCloseing, this, _1));
         m_cClientCon.SetTrustedRootCertificates("./certs/ca-certificates.crt");
-//        m_cClientCon.SetAlpnProtokollNames({ { "h2" },{ "http/1.1" } });
-        if (m_cClientCon.Connect(strIp.c_str(), sPort) == false)
-            ;// OutputDebugString(L"Verbindung zu xxx.xxx.xxx.xxx konnte nicht hergestellt werden\r\n");
+        m_cClientCon.SetAlpnProtokollNames({ { "h2" },{ "http/1.1" } });
+
+        return m_cClientCon.Connect(m_strServer.c_str(), m_sPort);
     }
 
     void Stop()
@@ -61,10 +94,10 @@ public:
 
     void Connected(TcpSocket* pTcpSocket)
     {
-        long nResult = m_cClientCon.CheckServerCertificate(m_strHost.c_str());
+        long nResult = m_cClientCon.CheckServerCertificate(m_strServer.c_str());
 
         string Protocoll = m_cClientCon.GetSelAlpnProtocol();
-        wcout << Protocoll.c_str() << endl;
+        //wcout << Protocoll.c_str() << endl;
 
         if (Protocoll.compare("h2") == 0)
         {
@@ -82,7 +115,7 @@ public:
             nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, ":path", m_strPath.c_str());
             if (nReturn != SIZE_MAX)
                 nHeaderLen += nReturn;
-            nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, ":authority", m_strHost.c_str());
+            nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, ":authority", m_strServer.c_str());
             if (nReturn != SIZE_MAX)
                 nHeaderLen += nReturn;
             nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, ":scheme", "https");
@@ -103,11 +136,12 @@ public:
         }
         else
         {
-            string strRequest = "GET " + m_strPath + " HTTP/1.1\r\nHost: " + m_strHost + "\r\nUpgrade: h2c\r\nHTTP2-Settings: " + Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true) + "\r\nAccept: */*\r\nAccept-Encoding: gzip;q=1.0, identity; q=0.5, *;q=0\r\n\r\n";
+            string strRequest = "GET " + m_strPath + " HTTP/1.1\r\nHost: " + m_strServer + "\r\nUpgrade: h2c\r\nHTTP2-Settings: " + Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true) + "\r\nAccept: */*\r\nAccept-Encoding: gzip;q=1.0, identity; q=0.5, *;q=0\r\n\r\n";
             pTcpSocket->Write(strRequest.c_str(), strRequest.size());
         }
 
         m_Timer = make_unique<Timer>(30000, bind(&Http2Fetch::OnTimeout, this, _1));
+        soMetaDa = { m_cClientCon.GetClientAddr(), m_cClientCon.GetClientPort(), m_cClientCon.GetInterfaceAddr(), m_cClientCon.GetInterfacePort(), m_cClientCon.IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()) };
     }
 
     void DatenEmpfangen(TcpSocket* pTcpSocket)
@@ -121,23 +155,29 @@ public:
             return;
         }
 
-        shared_ptr<char> spBuffer(new char[nAvalible + 1]);
+        shared_ptr<char> spBuffer(new char[strBuffer.size() + nAvalible + 1]);
+        copy(begin(strBuffer), begin(strBuffer) + strBuffer.size(), spBuffer.get());
 
-        uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
+        uint32_t nRead = pTcpSocket->Read(spBuffer.get() + strBuffer.size(), nAvalible);
 
         if (nRead > 0)
         {
+            m_Timer->Reset();
+
+            nRead += strBuffer.size();
+            strBuffer.clear();
+
             if (m_bIsHttp2 == true)
             {
                 size_t nRet;
-                if (nRet = Http2StreamProto(stSocketInfo, spBuffer.get(), nRead, qDynTable, tuStreamSettings, umStreamCache, &mtxStreams, pTmpFile, nullptr), nRet != SIZE_MAX)
+                if (nRet = Http2StreamProto(soMetaDa, spBuffer.get(), nRead, qDynTable, tuStreamSettings, umStreamCache, &mtxStreams, pTmpFile, nullptr), nRet != SIZE_MAX)
                 {
                     if (nRet > 0)
-                        m_cSockSystem.PutbackReadData(stSocketInfo.iId, pBuf.get(), nRet);
+                        strBuffer.append(spBuffer.get(), nRet);
                     return;
                 }
                 // After a GOAWAY we terminate the connection
-                Http2Goaway(stSocketInfo, 0, umStreamCache.rbegin()->first, 0, CONNFLAGS::CLOSE);  // GOAWAY
+                return;
             }
             else
                 wcout << string().append(spBuffer.get(), nRead).c_str();
@@ -146,30 +186,108 @@ public:
 
 	void SocketError(BaseSocket* pBaseSocket)
 	{
+        OutputDebugString(L"Http2Fetch::SocketError\r\n");
 		wcout << L"Error in Verbindung" << endl;
 		pBaseSocket->Close();
 	}
 
     void SocketCloseing(BaseSocket* pBaseSocket)
     {
+        OutputDebugString(L"Http2Fetch::SocketCloseing\r\n");
         wcout << L"SocketCloseing aufgerufen" << endl;
+        m_bDone = true;
     }
 
     void OnTimeout(Timer* pTimer)
     {
+        OutputDebugString(L"Http2Fetch::OnTimeout\r\n");
         m_cClientCon.Close();
     }
 
     void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
     {
+        m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)->second));
+
+        for (const auto& Header : m_umRespHeader)
+            wcout << Header.first.c_str() << L": " << Header.second.c_str() << endl;
+        wcout << endl;
+
+        auto status = m_umRespHeader.find(":status");
+        if (status != m_umRespHeader.end())
+            m_uiStatus = stoul(status->second);
+
+        auto encoding = m_umRespHeader.find("content-encoding");
+        if (encoding != m_umRespHeader.end() && encoding->second.find("gzip") != string::npos)
+        {
+            GZipUnpack gzipDecoder;
+            if (gzipDecoder.Init() == Z_OK)
+            {
+                unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
+                unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
+
+                pTmpFile->Rewind();
+                shared_ptr<TempFile> pDestFile = make_unique<TempFile>();
+                pDestFile->Open();
+
+                int iRet;
+                do
+                {
+                    int nBytesRead = static_cast<int>(pTmpFile->Read(srcBuf.get(), 4096));
+                    if (nBytesRead == 0)
+                        break;
+
+                    gzipDecoder.InitBuffer(srcBuf.get(), nBytesRead);
+
+                    uint32_t nBytesConverted;
+                    do
+                    {
+                        nBytesConverted = 4096;
+                        iRet = gzipDecoder.Deflate(dstBuf.get(), &nBytesConverted);
+                        if ((iRet == Z_OK || iRet == Z_STREAM_END) && nBytesConverted != 0)
+                            pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), nBytesConverted);
+                    } while (iRet == Z_OK && nBytesConverted == 4096);
+                } while (iRet == Z_OK);
+
+                pDestFile->Close();
+                swap(pDestFile, pTmpFile);
+            }
+        }
+
+#ifdef _DEBUG
+        if (m_uiStatus == 200)
+        {
+            auto contenttype = m_umRespHeader.find("content-type");
+            if (contenttype != m_umRespHeader.end() && contenttype->second.find("text/") != string::npos)
+                wcout << (*pTmpFile) << flush;
+        }
+#endif
+        m_cClientCon.Close();
+    }
+
+    bool RequestFinished()
+    {
+        return m_bDone;
     }
 
 private:
     SslTcpSocket m_cClientCon;
-    string m_strHost;
+    string m_strServer;
+    short m_sPort;
     string m_strPath;
+    bool m_UseSSL;
+    bool m_bDone;
+    uint32_t m_uiStatus;
+
     bool m_bIsHttp2;
+    deque<HEADERENTRY> qDynTable;
+    mutex mtxStreams;
+    STREAMLIST umStreamCache;
+    STREAMSETTINGS tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384);
+    shared_ptr<TempFile> pTmpFile;
     unique_ptr<Timer> m_Timer;
+    MetaSocketData soMetaDa;
+    string strBuffer;
+    HEADERLIST       m_umRespHeader;
 };
 
 
@@ -185,7 +303,11 @@ int main(int argc, const char* argv[])
     //locale::global(std::locale(""));
 
 	Http2Fetch fetch;
-	fetch.Fetch("twitter.com", 443);
+	fetch.Fetch(L"https://twitter.com/");
+
+    while (fetch.RequestFinished() == false)
+        this_thread::sleep_for(chrono::milliseconds(1));
+    wcerr << L"Request beendet!" << endl;
 
 #if defined(_WIN32) || defined(_WIN64)
     //while (::_kbhit() == 0)

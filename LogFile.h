@@ -173,16 +173,14 @@ private:
 
                     fout.close();
 
-                    bool bTmp = true;
-                    m_atThrRunning.compare_exchange_strong(bTmp, false);
+                    atomic_exchange(&m_atThrRunning, false);
 
                     m_mtxBacklog.unlock();
                 }
                 else
                 {
                     m_lstMessages.clear();
-                    bool bTmp = true;
-                    m_atThrRunning.compare_exchange_strong(bTmp, false);
+                    atomic_exchange(&m_atThrRunning, false);
                 }
             }).detach();
         }
