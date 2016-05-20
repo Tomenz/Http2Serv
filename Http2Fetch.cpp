@@ -13,6 +13,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <regex>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <conio.h>
@@ -32,12 +33,14 @@ using namespace std::placeholders;
 class Http2Fetch : public Http2Protocol
 {
 public:
-	Http2Fetch() : m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_bDone(false), m_uiStatus(0)
+	Http2Fetch() : m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_bDone(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(0), m_nChuncked(-1), m_nNextChunk(0)
     {
     }
 
     ~Http2Fetch()
     {
+        if (m_pcClientCon != nullptr)
+            delete m_pcClientCon;
     }
 
     bool Fetch(wstring strAdresse)
@@ -55,7 +58,11 @@ public:
         {
             m_sPort = 443, m_UseSSL = true;
             m_strServer.erase(0, 1);
+
+            m_pcClientCon = new SslTcpSocket();
         }
+        else
+            m_pcClientCon = reinterpret_cast<SslTcpSocket*>(new TcpSocket());
 
         if (m_strServer.substr(0, 3).compare("://") != 0)
             return false;
@@ -77,27 +84,34 @@ public:
             m_strServer.erase(nPos);
         }
 
-        m_cClientCon.BindFuncConEstablished(bind(&Http2Fetch::Connected, this, _1));
-        m_cClientCon.BindFuncBytesRecived(bind(&Http2Fetch::DatenEmpfangen, this, _1));
-        m_cClientCon.BindErrorFunction(bind(&Http2Fetch::SocketError, this, _1));
-        m_cClientCon.BindCloseFunction(bind(&Http2Fetch::SocketCloseing, this, _1));
-        m_cClientCon.SetTrustedRootCertificates("./certs/ca-certificates.crt");
-        m_cClientCon.SetAlpnProtokollNames({ { "h2" },{ "http/1.1" } });
+        m_pcClientCon->BindFuncConEstablished(bind(&Http2Fetch::Connected, this, _1));
+        m_pcClientCon->BindFuncBytesRecived(bind(&Http2Fetch::DatenEmpfangen, this, _1));
+        m_pcClientCon->BindErrorFunction(bind(&Http2Fetch::SocketError, this, _1));
+        m_pcClientCon->BindCloseFunction(bind(&Http2Fetch::SocketCloseing, this, _1));
+        if (m_UseSSL == true)
+        {
+            m_pcClientCon->SetTrustedRootCertificates("./certs/ca-certificates.crt");
+            m_pcClientCon->SetAlpnProtokollNames({ { "h2" },{ "http/1.1" } });
+        }
 
-        return m_cClientCon.Connect(m_strServer.c_str(), m_sPort);
+        return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
     }
 
     void Stop()
     {
-        m_cClientCon.Close();
+        m_pcClientCon->Close();
     }
 
     void Connected(TcpSocket* pTcpSocket)
     {
-        long nResult = m_cClientCon.CheckServerCertificate(m_strServer.c_str());
+        string Protocoll;
+        if (m_UseSSL == true)
+        {
+            long nResult = m_pcClientCon->CheckServerCertificate(m_strServer.c_str());
 
-        string Protocoll = m_cClientCon.GetSelAlpnProtocol();
-        //wcerr << Protocoll.c_str() << endl;
+            Protocoll = m_pcClientCon->GetSelAlpnProtocol();
+            //wcerr << Protocoll.c_str() << endl;
+        }
 
         if (Protocoll.compare("h2") == 0)
         {
@@ -141,7 +155,7 @@ public:
         }
 
         m_Timer = make_unique<Timer>(30000, bind(&Http2Fetch::OnTimeout, this, _1));
-        m_soMetaDa = { m_cClientCon.GetClientAddr(), m_cClientCon.GetClientPort(), m_cClientCon.GetInterfaceAddr(), m_cClientCon.GetInterfacePort(), m_cClientCon.IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()) };
+        m_soMetaDa = { m_pcClientCon->GetClientAddr(), m_pcClientCon->GetClientPort(), m_pcClientCon->GetInterfaceAddr(), m_pcClientCon->GetInterfacePort(), m_pcClientCon->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()) };
     }
 
     void DatenEmpfangen(TcpSocket* pTcpSocket)
@@ -172,15 +186,151 @@ public:
                 size_t nRet;
                 if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_pTmpFile, nullptr), nRet != SIZE_MAX)
                 {
+                    // no GOAWAY frame
                     if (nRet > 0)
                         m_strBuffer.append(spBuffer.get(), nRet);
-                    return;
                 }
-                // After a GOAWAY we terminate the connection
                 return;
             }
             else
-                wcerr << string().append(spBuffer.get(), nRead).c_str();
+            {
+                uint32_t nWriteOffset = 0;
+
+                if (m_bEndOfHeader == false)
+                {
+                next:
+                    char* pEndOfLine = strstr(spBuffer.get(), "\r\n");
+                    if (pEndOfLine == nullptr)    // No found
+                    {
+                        m_strBuffer.append(spBuffer.get(), nRead);
+                        return;
+                    }
+
+                    if (pEndOfLine == spBuffer.get())   // End of Header
+                    {
+                        m_bEndOfHeader = true, nRead -= 2, nWriteOffset += 2;
+
+                        auto status = m_umRespHeader.find(":status");
+                        auto upgrade = m_umRespHeader.find("upgrade");
+                        if (status != m_umRespHeader.end() && stoi(status->second) == 101 && upgrade != m_umRespHeader.end() && upgrade->second.compare("h2c") == 0)
+                        {
+                            m_bIsHttp2 = true;
+                            copy(pEndOfLine + 2, pEndOfLine + 2 + nRead + 1, spBuffer.get());
+                            size_t nRet;
+                            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_pTmpFile, nullptr), nRet != SIZE_MAX)
+                            {
+                                if (nRet > 0)
+                                    m_strBuffer.append(spBuffer.get(), nRet);
+                            }
+                            return;
+                        }
+
+                        if (m_nContentLength == 0)    // Server send a content-lentgh from 0 to signal end of header we are done!
+                        {
+                            m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                            EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        if (m_umRespHeader.empty() == true) // First line with status code
+                        {
+                            char *pSecondSpace = nullptr, *pFirstSpace = strchr(spBuffer.get(), ' ');
+                            if (pFirstSpace != nullptr && pFirstSpace < pEndOfLine)
+                                pSecondSpace = strchr(pFirstSpace + 1, ' ');
+                            if (pSecondSpace != nullptr && pSecondSpace < pEndOfLine)
+                                m_umRespHeader.insert(make_pair(string(":status"), string(pFirstSpace + 1, pSecondSpace - pFirstSpace - 1)));
+                        }
+                        else
+                        {
+                            char* pColums = strstr(spBuffer.get(), ":");
+                            if (pColums != nullptr)
+                            {
+                                string strHeader(spBuffer.get(), pColums - spBuffer.get());
+                                transform(begin(strHeader), end(strHeader), begin(strHeader), tolower);
+                                auto parResult = m_umRespHeader.insert(make_pair(strHeader, string(pColums + 1, pEndOfLine - pColums - 1)));
+                                if (parResult != m_umRespHeader.end())
+                                    while (parResult->second.at(0) == ' ') parResult->second.replace(parResult->second.find(' '), 1, "");
+                            }
+
+                            if (m_nContentLength == 0)
+                            {
+                                auto pHeader = m_umRespHeader.find("content-length");
+                                if (pHeader != m_umRespHeader.end())
+                                    m_nContentLength = stoul(pHeader->second);
+                            }
+
+                            if (m_nChuncked == -1)
+                            {
+                                auto pHeader = m_umRespHeader.find("transfer-encoding");
+                                if (pHeader != m_umRespHeader.end())
+                                {
+                                    string strTmp(pHeader->second.size(), 0);
+                                    transform(begin(pHeader->second), end(pHeader->second), begin(strTmp), tolower);
+                                    m_nChuncked = strTmp.compare("chunked");
+                                }
+                            }
+                        }
+
+                        nRead -= (pEndOfLine + 2) - spBuffer.get();
+                        copy(pEndOfLine + 2, pEndOfLine + 2 + nRead + 1, spBuffer.get());
+                        goto next;
+                    }
+
+                    if (nRead == 0)
+                        return;
+                }
+
+                // Ab hier werden der Content in eine Temp Datei geschrieben
+
+                if (m_pTmpFile.get() == 0)
+                {
+                    m_pTmpFile = make_unique<TempFile>();
+                    m_pTmpFile.get()->Open();
+                    if (m_nChuncked == 0) // Chunked transfer ecoding ist enabled
+                        nRead += 2, nWriteOffset -= 2;
+                }
+
+
+            nextchunck:
+                if (m_nChuncked == 0 && m_nNextChunk == 0)
+                {
+                    static regex rx("^[\\r]?\\n([0-9a-fA-F]+)[\\r]?\\n");
+                    match_results<const char*> mr;
+                    if (regex_search(spBuffer.get() + nWriteOffset, mr, rx, regex_constants::format_first_only) == true && mr[0].matched == true && mr[1].matched == true)
+                    {
+                        m_nNextChunk = strtol(mr[1].str().c_str(), 0, 16);
+                        nWriteOffset += mr.length();
+                        nRead -= mr.length();
+                    }
+                    else
+                        OutputDebugString(L"Buffer Fehler\r\n");
+                }
+
+                m_pTmpFile.get()->Write(spBuffer.get() + nWriteOffset, m_nNextChunk != 0 ? min(nRead, m_nNextChunk) : nRead);
+                if (m_nNextChunk != 0)
+                {
+                    size_t nSaveLen = nRead;
+                    static size_t nSaveChunk = m_nNextChunk;
+                    nRead -= min(nRead, m_nNextChunk);
+                    if (nRead != 0)  // We wrote only the rest of the chunck
+                        nWriteOffset += m_nNextChunk;
+                    m_nNextChunk -= min(nSaveLen, m_nNextChunk);
+                    if (nRead != 0)
+                        goto nextchunck;
+                }
+
+                if ((m_nContentLength != SIZE_MAX && m_nContentLength == m_pTmpFile->GetFileLength())
+                    || (m_nChuncked == 0 && m_nNextChunk == 0))
+                {
+                    m_pTmpFile.get()->Flush();
+                    m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                    EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
+                }
+
+                //cerr << spBuffer.get() << flush;// OutputDebugStringA(spBuffer.get());
+            }
         }
     }
 
@@ -201,7 +351,7 @@ public:
     void OnTimeout(Timer* pTimer)
     {
         OutputDebugString(L"Http2Fetch::OnTimeout\r\n");
-        m_cClientCon.Close();
+        m_pcClientCon->Close();
     }
 
     void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
@@ -261,7 +411,10 @@ public:
                 wcout << (*pTmpFile) << flush;
         }
 #endif
-        m_cClientCon.Close();
+        if (m_bIsHttp2 == true)
+            Http2Goaway(soMetaDa.fSocketWrite, 0, StreamList.rbegin()->first, 0);  // GOAWAY
+
+        m_pcClientCon->Close();
     }
 
     bool RequestFinished()
@@ -270,7 +423,7 @@ public:
     }
 
 private:
-    SslTcpSocket         m_cClientCon;
+    SslTcpSocket*        m_pcClientCon;
     string               m_strServer;
     short                m_sPort;
     string               m_strPath;
@@ -288,6 +441,11 @@ private:
     MetaSocketData       m_soMetaDa;
     string               m_strBuffer;
     HEADERLIST           m_umRespHeader;
+
+    bool                 m_bEndOfHeader;
+    uint64_t             m_nContentLength;
+    int                  m_nChuncked;
+    size_t               m_nNextChunk;
 };
 
 
@@ -297,13 +455,15 @@ int main(int argc, const char* argv[])
     // Detect Memory Leaks
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF | _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG));
 
-    _setmode(_fileno(stdout), _O_U16TEXT);
+    //_setmode(_fileno(stdout), _O_U16TEXT);
 #endif
 
     //locale::global(std::locale(""));
 
 	Http2Fetch fetch;
-	fetch.Fetch(L"https://twitter.com/");
+	//fetch.Fetch(L"https://twitter.com/");
+    //fetch.Fetch(L"https://www.microsoft.com/de-de");
+    fetch.Fetch(L"https://192.168.161.1/");
 
     while (fetch.RequestFinished() == false)
         this_thread::sleep_for(chrono::milliseconds(1));

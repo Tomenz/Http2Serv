@@ -59,11 +59,14 @@ public:
     {
         if (lt == LOGTYPES::END)
         {
-            m_ssMsg << "\r\n";
-            StartWriteThread(m_ssMsg.str().c_str());
+            if (m_strFileName.empty() == false)
+            {
+                m_ssMsg << "\r\n";
+                StartWriteThread(m_ssMsg.str().c_str());
+            }
             stringstream().swap(m_ssMsg);
         }
-        else if (lt == LOGTYPES::PUTTIME)
+        else if (lt == LOGTYPES::PUTTIME && m_strFileName.empty() == false)
         {
             auto in_time_t = system_clock::to_time_t(system_clock::now());
             struct tm* stTime = ::localtime(&in_time_t);
@@ -76,32 +79,39 @@ public:
 
     CLogFile& operator << (const uint64_t nSize)
     {
-        m_ssMsg << nSize;
+        if (m_strFileName.empty() == false)
+            m_ssMsg << nSize;
         return *this;
     }
 
     CLogFile& operator << (const size_t nSize)
     {
-        m_ssMsg << nSize;
+        if (m_strFileName.empty() == false)
+            m_ssMsg << nSize;
         return *this;
     }
 
     CLogFile& operator << (const string& strItem)
     {
-        m_ssMsg << strItem;
+        if (m_strFileName.empty() == false)
+            m_ssMsg << strItem;
         return *this;
     }
 
     CLogFile& operator << (const char* const strItem)
     {
-        m_ssMsg << strItem;
+        if (m_strFileName.empty() == false)
+            m_ssMsg << strItem;
         return *this;
     }
 
     CLogFile& WriteToLog()
     {
-        m_ssMsg << "\r\n";
-        StartWriteThread(m_ssMsg.str().c_str());
+        if (m_strFileName.empty() == false)
+        {
+            m_ssMsg << "\r\n";
+            StartWriteThread(m_ssMsg.str().c_str());
+        }
         stringstream().swap(m_ssMsg);
 
         return *this;
@@ -110,14 +120,16 @@ public:
     template<typename ...Args>
     CLogFile& WriteToLog(LOGTYPES value, const Args&... rest)
     {
-        (*this) << value;
+        if (m_strFileName.empty() == false)
+            (*this) << value;
         return WriteToLog(rest...);
     }
 
     template<typename T, typename ...Args>
     CLogFile& WriteToLog(const T& value, const Args&... rest)
     {
-        m_ssMsg << value;
+        if (m_strFileName.empty() == false)
+            m_ssMsg << value;
         return WriteToLog(rest...);
     }
 

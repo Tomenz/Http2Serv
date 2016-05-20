@@ -153,7 +153,8 @@ public:
                             CONTENTLENGTH(streamData->second) = stoi(contentLength->second);
 
                             Http2WindowUpdate(soMetaDa.fSocketWrite, 0, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
-                            Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
+                            if ((h2f.flag & 0x1) == 0x0)    // No END_STREAM
+                                Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
                         }
 
                         pTmpFile = make_shared<TempFile>();

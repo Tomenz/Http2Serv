@@ -136,8 +136,8 @@ public:
     {
         HOSTPARAM hp;
         hp.m_strRootPath = strRootPath;
-        hp.m_strLogFile = L"access.log";
-        hp.m_strErrLog = L"error.log";
+        //hp.m_strLogFile = L"access.log";
+        //hp.m_strErrLog = L"error.log";
         hp.m_bSSL = bSSL;
         hp.m_strCAcertificate = "";
         hp.m_strHostCertificate = "";
