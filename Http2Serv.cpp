@@ -40,6 +40,62 @@ int main()
     _setmode(_fileno(stdout), _O_U16TEXT);
 #endif
 
+#pragma region MyRegion
+#if defined(_WIN32) || defined(_WIN64)
+#else
+    //Set our Logging Mask and open the Log
+    setlogmask(LOG_UPTO(LOG_NOTICE));
+    openlog("http2serv", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
+
+    syslog(LOG_NOTICE, "Starting Http2Serv");
+    pid_t pid, sid;
+    //Fork the Parent Process
+    pid = fork();
+
+    if (pid < 0)
+        exit(EXIT_FAILURE);
+
+    //We got a good pid, Close the Parent Process
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
+
+    //Create a new Signature Id for our child
+    sid = setsid();
+    if (sid < 0)
+        exit(EXIT_FAILURE);
+
+    //Fork second time the Process
+    pid = fork();
+
+    if (pid < 0)
+        exit(EXIT_FAILURE);
+
+    //We got a good pid, Close the Parent Process
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
+
+    //Change File Mask
+    umask(0);
+
+    stringstream ss;
+    pid = getpid();
+    string ModulPath(PATH_MAX, 0);
+    ss << "/proc/" << pid << "/exe";
+    if (readlink(ss.str().c_str(), &ModulPath[0], PATH_MAX) > 0)
+        ModulPath.erase(ModulPath.find_last_of('/'));
+
+    //Change Directory
+    //If we cant find the directory we exit with failure.
+    if ((chdir(ModulPath.c_str()/*"/"*/)) < 0)
+        exit(EXIT_FAILURE);
+
+    //Close Standard File Descriptors
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+#endif
+#pragma endregion
+
     //locale::global(std::locale(""));
 
 #ifdef _DEBUG
@@ -163,10 +219,26 @@ int main()
     _getch();
 #else
     getchar();
+
+    sigset_t sigset;
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGTERM);
+    sigprocmask(SIG_BLOCK, &sigset, NULL);
+
+    int sig;
+    sigwait(&sigset, &sig);
 #endif
 
 	for (auto& HttpServer : vServers)
         HttpServer.Stop();
+
+#if defined(_WIN32) || defined(_WIN64)
+#else
+    syslog(LOG_NOTICE, "Beenden Http2Serv");
+
+    //Close the log
+    closelog();
+#endif
 
     return 0;
 }
