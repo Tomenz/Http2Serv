@@ -157,6 +157,15 @@ public:
             SslTcpServer* pSocket = new SslTcpServer();
             pSocket->AddCertificat(m_vHostParam[L""].m_strCAcertificate.c_str(), m_vHostParam[L""].m_strHostCertificate.c_str(), m_vHostParam[L""].m_strHostKey.c_str());
             pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1, _2));
+
+            for (auto& Item : m_vHostParam)
+            {
+                if (Item.first.compare(L"") != 0 && Item.second.m_bSSL == true)
+                {
+                    pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str());
+                }
+            }
+
             m_pSocket = pSocket;
         }
         else
