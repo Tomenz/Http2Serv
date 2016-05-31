@@ -33,19 +33,6 @@ public:
                     break;
                 }
             } while (m_bStop == false);
-/*
-            uint64_t  nDifMilliSec;
-            do
-            {
-                this_thread::sleep_for(chrono::milliseconds(1));
-                if (m_bStop == true)
-                    return;
-                chrono::system_clock::time_point m_tpNow = chrono::system_clock::now();
-                nDifMilliSec = chrono::duration_cast<chrono::milliseconds>(m_tpNow - (chrono::system_clock::time_point)m_tpStart).count();
-            } while (nDifMilliSec < m_tMilliSeconds);
-
-            if (m_bStop == false && m_fTimeOut != 0)
-                m_fTimeOut(this);*/
         });
     }
 
@@ -59,7 +46,6 @@ public:
 
     void Reset()
     {
-        //atomic_init(&m_tpStart, chrono::system_clock::now());
         m_cv.notify_all();
     }
 
@@ -71,10 +57,8 @@ public:
 
 private:
     uint32_t m_tMilliSeconds;
-    //atomic<chrono::system_clock::time_point> m_tpStart;
     function<void(Timer*)> m_fTimeOut;
     atomic<bool> m_bStop;
     thread m_thWaitThread;
-
     condition_variable m_cv;
 };

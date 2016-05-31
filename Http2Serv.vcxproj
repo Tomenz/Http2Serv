@@ -160,6 +160,8 @@
     <ClInclude Include="HPack.h" />
     <ClInclude Include="HttpServ.h" />
     <ClInclude Include="LogFile.h" />
+    <ClInclude Include="TempFile.h" />
+    <ClInclude Include="Timer.h" />
     <ClInclude Include="Trace.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

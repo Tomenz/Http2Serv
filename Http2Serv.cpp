@@ -16,7 +16,6 @@
 
 #include <ConfFile.h>
 #include <HttpServ.h>
-#include <Timer.h>
 
 #ifdef _DEBUG
 #pragma comment(lib, "Debug/socketlib.lib")
