@@ -12,6 +12,9 @@
 #include <conio.h>
 #include <io.h>
 #include <fcntl.h>
+#else
+#include <syslog.h>
+#include <signal.h>
 #endif
 
 #include <ConfFile.h>
