@@ -408,7 +408,7 @@ public:
         {
             auto contenttype = m_umRespHeader.find("content-type");
             if (contenttype != m_umRespHeader.end() && contenttype->second.find("text/") != string::npos)
-                wcout << (*pTmpFile) << flush;
+                cout << (*pTmpFile) << flush;
         }
 #endif
         if (m_bIsHttp2 == true)
@@ -461,9 +461,9 @@ int main(int argc, const char* argv[])
     //locale::global(std::locale(""));
 
 	Http2Fetch fetch;
-	//fetch.Fetch(L"https://twitter.com/");
+	fetch.Fetch(L"https://twitter.com/");
     //fetch.Fetch(L"https://www.microsoft.com/de-de");
-    fetch.Fetch(L"https://192.168.161.1/");
+    //fetch.Fetch(L"https://192.168.161.1/");
 
     while (fetch.RequestFinished() == false)
         this_thread::sleep_for(chrono::milliseconds(1));

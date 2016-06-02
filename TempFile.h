@@ -26,11 +26,10 @@ class TempFile
 {
 public:
     friend wostream& operator<<(wostream&, TempFile&);
+    friend ostream& operator<<(ostream& os, TempFile& cTmpFile);
 
     TempFile() : m_bIsFile(false)
     {
-        if (nullptr != getenv("TMP"))
-            m_strTmpPath = getenv("TMP");
     }
 
     virtual ~TempFile()
@@ -52,13 +51,8 @@ public:
     {
         do
         {
-            //if (m_strTmpFileName.empty() == false)
-            //{
-            //    wstringstream ss; ss << L"Wahrscheinlich konnte File " << m_strTmpFileName.c_str() << L" nicht geöffnet werden" << endl; OutputDebugString(ss.str().c_str());
-            //}
-
-            unique_ptr<char> upFileName(_tempnam(m_strTmpPath.empty() == true ? nullptr : m_strTmpPath.c_str(), "Http2Util_"));
-            if (nullptr != upFileName.get())
+            auto upFileName = make_unique<char[]>(L_tmpnam);
+            if (std::tmpnam(upFileName.get()))
             {
                 m_theFile.open(upFileName.get(), ios::out | ios::in | ios::trunc | ios::binary);
                 m_strTmpFileName = upFileName.get();
@@ -70,14 +64,8 @@ public:
 
     void Close()
     {
-        // int iCount = 0;
         while (m_theFile.is_open() == true)
         {
-            //if (++iCount > 1)
-            //{
-            //    wstringstream ss; ss << L"Error closeing File " << m_strTmpFileName.c_str() << endl; OutputDebugString(ss.str().c_str());
-            //}
-
             Flush();
             m_theFile.close();
         }
@@ -147,7 +135,6 @@ public:
     }
 
 private:
-    string  m_strTmpPath;
     string  m_strTmpFileName;
     fstream m_theFile;
     bool    m_bIsFile;
@@ -162,6 +149,28 @@ wostream& operator<<(wostream& os, TempFile& cTmpFile)
 
 //  http://wordaligned.org/articles/cpp-streambufs
 //  http://www.cplusplus.com/reference/fstream/ofstream/rdbuf/
+
+    char c = cTmpFile.m_theFile.rdbuf()->sbumpc();
+    while (c != EOF)
+    {
+        os.rdbuf()->sputc(c);
+        c = cTmpFile.m_theFile.rdbuf()->sbumpc();
+    }
+
+    cTmpFile.Close();
+
+    return os;
+}
+
+ostream& operator<<(ostream& os, TempFile& cTmpFile)
+{
+    if (cTmpFile.m_theFile.is_open() == false)
+        cTmpFile.m_theFile.open(cTmpFile.m_strTmpFileName, ios::in | ios::binary);
+    else
+        cTmpFile.m_theFile.seekg(0, ios_base::beg);
+
+    //  http://wordaligned.org/articles/cpp-streambufs
+    //  http://www.cplusplus.com/reference/fstream/ofstream/rdbuf/
 
     char c = cTmpFile.m_theFile.rdbuf()->sbumpc();
     while (c != EOF)
