@@ -24,22 +24,15 @@
 #include "Base64.h"
 #include "GZip.h"
 
-#ifdef _DEBUG
-#pragma comment(lib, "Debug/socketlib.lib")
-#else
-#pragma comment(lib, "Release/socketlib.lib")
-#endif
-
 using namespace std;
 using namespace std::placeholders;
 
 #if defined(_WIN32) || defined(_WIN64)
+
 #if _MSC_VER < 1700
 using namespace tr1;
 #endif
-#endif
 
-#if defined(_WIN32) || defined(_WIN64)
 #define FN_CA(x) x.c_str()
 #define FN_STR(x) x
 const wchar_t* ENV = L"SET ";
@@ -48,6 +41,13 @@ const wchar_t* QUOTES = L"";
 #define FIXENVSTR(x) regex_replace(x, regex("\\&"), string("^&"))
 #define WFIXENVSTR(x) regex_replace(x, wregex(L"\\&"), wstring(L"^&"))
 const wchar_t* PIPETYPE = L"rb";
+
+#ifdef _DEBUG
+#pragma comment(lib, "Debug/socketlib.lib")
+#else
+#pragma comment(lib, "Release/socketlib.lib")
+#endif
+
 #else
 #define __USE_LARGEFILE64
 #define _LARGEFILE_SOURCE

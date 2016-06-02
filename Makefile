@@ -8,7 +8,7 @@
 
 CC = g++
 #CC = clang++
-CFLAGS = -w -O3 -std=c++14 -D ZLIB_CONST -pthread -ffunction-sections -fdata-sections	# -lstdc++fs # -ffunction-sections -fdata-sections -fomit-frame-pointer
+CFLAGS = -Wall -O3 -std=c++14 -D ZLIB_CONST -pthread -ffunction-sections -fdata-sections	# -lstdc++fs # -ffunction-sections -fdata-sections -fomit-frame-pointer
 #CFLAGS = -ggdb -w -std=c++14 -D _DEBUG -D ZLIB_CONST -pthread # -lstdc++fs # -ffunction-sections -fdata-sections -fomit-frame-pointer -DPOSIX
 #CFLAGS = -w -std=c++14 -m32 -pthread -lstdc++fs # -lstdc++fs -ffunction-sections -fdata-sections -fomit-frame-pointer -DPOSIX
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++ # -lstdc++fs

@@ -35,7 +35,6 @@ int main(int argc, const char* argv[])
 
     if (bRunAsPrg == false)
     {
-#pragma region MyRegion
 #if defined(_WIN32) || defined(_WIN64)
 #else
         //Set our Logging Mask and open the Log
@@ -89,7 +88,6 @@ int main(int argc, const char* argv[])
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
 #endif
-#pragma endregion
     }
     else
         wcout << L"Http2Serv gestartet" << endl;
