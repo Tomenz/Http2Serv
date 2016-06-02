@@ -21,7 +21,7 @@ CLEANDIRS = $(DIRS:%=clean-%)
 
 #INC_PATH = -I ../matrixssl-3-7-2b-open/ -I .
 #LIB_PATH = -L ../matrixssl-3-7-2b-open/core -L ../matrixssl-3-7-2b-open/crypto -L ../matrixssl-3-7-2b-open/matrixssl -L ./zlib
-INC_PATH = -I ../openssl-1.0.2f/include -I .
+INC_PATH = -I ../openssl-1.0.2f/include
 LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f
 
 OBJ = Http2Serv.o

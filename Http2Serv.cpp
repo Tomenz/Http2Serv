@@ -12,8 +12,8 @@
 #include <signal.h>
 #endif
 
-#include <ConfFile.h>
-#include <HttpServ.h>
+#include "ConfFile.h"
+#include "HttpServ.h"
 
 #ifndef _UTFCONVERTER
 #define _UTFCONVERTER
