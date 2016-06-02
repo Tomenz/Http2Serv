@@ -24,6 +24,12 @@
 #include "Base64.h"
 #include "GZip.h"
 
+#ifdef _DEBUG
+#pragma comment(lib, "Debug/socketlib.lib")
+#else
+#pragma comment(lib, "Release/socketlib.lib")
+#endif
+
 using namespace std;
 using namespace std::placeholders;
 
