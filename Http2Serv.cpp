@@ -1,12 +1,7 @@
 // SockTest.cpp : Definiert den Einstiegspunkt für die Konsolenanwendung.
 //
 
-#include "socketlib/SslSocket.h"
-
-#include <unordered_map>
 #include <iostream>
-#include <fstream>
-#include <sstream>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <conio.h>
@@ -20,20 +15,12 @@
 #include <ConfFile.h>
 #include <HttpServ.h>
 
-#ifdef _DEBUG
-#pragma comment(lib, "Debug/socketlib.lib")
-#else
-#pragma comment(lib, "Release/socketlib.lib")
-#endif
-
-using namespace std::placeholders;
-
 #ifndef _UTFCONVERTER
 #define _UTFCONVERTER
 std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
 #endif
 
-int main()
+int main(int argc, const char* argv[])
 {
 #if defined(_WIN32) || defined(_WIN64)
     // Detect Memory Leaks
@@ -42,61 +29,70 @@ int main()
     _setmode(_fileno(stdout), _O_U16TEXT);
 #endif
 
+    bool bRunAsPrg = false;
+    if (argc > 1 && strcmp(argv[1], "-f") == 0)
+        bRunAsPrg = true;
+
+    if (bRunAsPrg == false)
+    {
 #pragma region MyRegion
 #if defined(_WIN32) || defined(_WIN64)
 #else
-    //Set our Logging Mask and open the Log
-    setlogmask(LOG_UPTO(LOG_NOTICE));
-    openlog("http2serv", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
+        //Set our Logging Mask and open the Log
+        setlogmask(LOG_UPTO(LOG_NOTICE));
+        openlog("http2serv", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
 
-    syslog(LOG_NOTICE, "Starting Http2Serv");
-    pid_t pid, sid;
-    //Fork the Parent Process
-    pid = fork();
+        syslog(LOG_NOTICE, "Starting Http2Serv");
+        pid_t pid, sid;
+        //Fork the Parent Process
+        pid = fork();
 
-    if (pid < 0)
-        exit(EXIT_FAILURE);
+        if (pid < 0)
+            exit(EXIT_FAILURE);
 
-    //We got a good pid, Close the Parent Process
-    if (pid > 0)
-        exit(EXIT_SUCCESS);
+        //We got a good pid, Close the Parent Process
+        if (pid > 0)
+            exit(EXIT_SUCCESS);
 
-    //Create a new Signature Id for our child
-    sid = setsid();
-    if (sid < 0)
-        exit(EXIT_FAILURE);
+        //Create a new Signature Id for our child
+        sid = setsid();
+        if (sid < 0)
+            exit(EXIT_FAILURE);
 
-    //Fork second time the Process
-    pid = fork();
+        //Fork second time the Process
+        pid = fork();
 
-    if (pid < 0)
-        exit(EXIT_FAILURE);
+        if (pid < 0)
+            exit(EXIT_FAILURE);
 
-    //We got a good pid, Close the Parent Process
-    if (pid > 0)
-        exit(EXIT_SUCCESS);
+        //We got a good pid, Close the Parent Process
+        if (pid > 0)
+            exit(EXIT_SUCCESS);
 
-    //Change File Mask
-    umask(0);
+        //Change File Mask
+        umask(0);
 
-    stringstream ss;
-    pid = getpid();
-    string ModulPath(PATH_MAX, 0);
-    ss << "/proc/" << pid << "/exe";
-    if (readlink(ss.str().c_str(), &ModulPath[0], PATH_MAX) > 0)
-        ModulPath.erase(ModulPath.find_last_of('/'));
+        stringstream ss;
+        pid = getpid();
+        string ModulPath(PATH_MAX, 0);
+        ss << "/proc/" << pid << "/exe";
+        if (readlink(ss.str().c_str(), &ModulPath[0], PATH_MAX) > 0)
+            ModulPath.erase(ModulPath.find_last_of('/'));
 
-    //Change Directory
-    //If we cant find the directory we exit with failure.
-    if ((chdir(ModulPath.c_str()/*"/"*/)) < 0)
-        exit(EXIT_FAILURE);
+        //Change Directory
+        //If we cant find the directory we exit with failure.
+        if ((chdir(ModulPath.c_str()/*"/"*/)) < 0)
+            exit(EXIT_FAILURE);
 
-    //Close Standard File Descriptors
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
+        //Close Standard File Descriptors
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
 #endif
 #pragma endregion
+    }
+    else
+        wcout << L"Http2Serv gestartet" << endl;
 
     //locale::global(std::locale(""));
 
@@ -216,31 +212,35 @@ int main()
         HttpServer.Start();
 
 #if defined(_WIN32) || defined(_WIN64)
-    //while (::_kbhit() == 0)
-    //    this_thread::sleep_for(chrono::milliseconds(1));
     _getch();
 #else
-    getchar();
+    if (bRunAsPrg == false)
+    {
+        sigset_t sigset;
+        sigemptyset(&sigset);
+        sigaddset(&sigset, SIGTERM);
+        sigprocmask(SIG_BLOCK, &sigset, NULL);
 
-    sigset_t sigset;
-    sigemptyset(&sigset);
-    sigaddset(&sigset, SIGTERM);
-    sigprocmask(SIG_BLOCK, &sigset, NULL);
-
-    int sig;
-    sigwait(&sigset, &sig);
+        int sig;
+        sigwait(&sigset, &sig);
+    }
+    else
+        getchar();
 #endif
 
-	for (auto& HttpServer : vServers)
+    for (auto& HttpServer : vServers)
         HttpServer.Stop();
 
+    if (bRunAsPrg == false)
+    {
 #if defined(_WIN32) || defined(_WIN64)
 #else
-    syslog(LOG_NOTICE, "Beenden Http2Serv");
+        syslog(LOG_NOTICE, "Http2Serv beendet.");
 
-    //Close the log
-    closelog();
+        //Close the log
+        closelog();
 #endif
+    }
 
     return 0;
 }
