@@ -1462,6 +1462,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
     }
 
 private:
+#pragma message("TODO!!! Folge Zeile wieder entfernen.")
+    friend int main(int, const char*[]);
     TcpServer*             m_pSocket;
     CONNECTIONLIST         m_vConnections;
     mutex                  m_mtxConnections;

@@ -210,7 +210,19 @@ int main(int argc, const char* argv[])
         HttpServer.Start();
 
 #if defined(_WIN32) || defined(_WIN64)
-    _getch();
+    //_getch();
+    const wchar_t caZeichen[] = L"\\|/-";
+    int iIndex = 0;
+    while (_kbhit() == 0)
+    {
+        size_t nHttpCon = 0;
+        for (auto& HttpServer : vServers)
+            nHttpCon += HttpServer.m_vConnections.size();
+
+        wcout << L'\r' << caZeichen[iIndex++]  << L"  Sockets:" << setw(3) << BaseSocket::s_atRefCount << L"  SSL-Pumpen:" << setw(3) << SslTcpSocket::s_atAnzahlPumps << L"  HTTP-Connections:" << setw(3) << nHttpCon << flush;
+        if (iIndex > 3) iIndex = 0;
+        this_thread::sleep_for(chrono::milliseconds(100));
+    }
 #else
     if (bRunAsPrg == false)
     {
@@ -223,7 +235,48 @@ int main(int argc, const char* argv[])
         sigwait(&sigset, &sig);
     }
     else
-        getchar();
+    {
+        //getchar();
+        auto _kbhit = [&]() -> int
+        {
+            struct termios oldt, newt;
+            int ch;
+            int oldf;
+
+            tcgetattr(STDIN_FILENO, &oldt);
+            newt = oldt;
+            newt.c_lflag &= ~(ICANON | ECHO);
+            tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+            oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+            fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+
+            ch = getchar();
+
+            tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+            fcntl(STDIN_FILENO, F_SETFL, oldf);
+
+            if (ch != EOF)
+            {
+                ungetc(ch, stdin);
+                return 1;
+            }
+
+            return 0;
+        };
+
+        const wchar_t caZeichen[] = L"\\|/-";
+        int iIndex = 0;
+        while (_kbhit() == 0)
+        {
+            size_t nHttpCon = 0;
+            for (auto& HttpServer : vServers)
+                nHttpCon += HttpServer.m_vConnections.size();
+
+            wcout << L'\r' << caZeichen[iIndex++] << L"  Sockets:" << setw(3) << BaseSocket::s_atRefCount << L"  SSL-Pumpen:" << setw(3) << SslTcpSocket::s_atAnzahlPumps << L"  HTTP-Connections:" << setw(3) << nHttpCon << flush;
+            if (iIndex > 3) iIndex = 0;
+            this_thread::sleep_for(chrono::milliseconds(100));
+        }
+    }
 #endif
 
     for (auto& HttpServer : vServers)
