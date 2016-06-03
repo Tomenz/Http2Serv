@@ -79,7 +79,7 @@ public:
             if (nLen * 8 < TotalBits)    // Das letzte Byte ist über unserer Länge des Bitstreams
                 break;
 
-            if (iCode != -1 && iCode < sizeof(SYMTABLE))
+            if (iCode != -1 && iCode < static_cast<int>(sizeof(SYMTABLE)))
                 strRet += SYMTABLE[iCode];
 
             size_t AnzByt = TotalBits / 8;

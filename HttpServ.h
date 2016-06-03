@@ -1390,7 +1390,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     }
 
                     size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
-                    if (nInQue != SIZE_MAX && nInQue >= 0x200000 || nStreamWndSize < nSizeSendBuf || nTotaleWndSize < nSizeSendBuf)
+                    if (/*nInQue != SIZE_MAX && */nInQue >= 0x200000 || nStreamWndSize < nSizeSendBuf || nTotaleWndSize < nSizeSendBuf)
                     {
                         this_thread::sleep_for(chrono::milliseconds(1));
                         continue;
