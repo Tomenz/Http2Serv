@@ -10,6 +10,9 @@
 #else
 #include <syslog.h>
 #include <signal.h>
+#pragma message("TODO!!! Folge Zeile wieder entfernen.")
+#include <termios.h>
+#include <fcntl.h>
 #endif
 
 #include "ConfFile.h"
