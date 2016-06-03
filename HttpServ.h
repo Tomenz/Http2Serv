@@ -49,9 +49,11 @@ const wchar_t* PIPETYPE = L"rb";
 #endif
 
 #else
+#ifndef __USE_LARGEFILE64
 #define __USE_LARGEFILE64
 #define _LARGEFILE_SOURCE
 #define _LARGEFILE64_SOURCE
+#endif
 #include <sys/stat.h>
 #include <unistd.h>
 #define _wpopen popen
@@ -397,13 +399,13 @@ auto dwStart = chrono::high_resolution_clock::now();
                     size_t nPos =  pConDetails->strBuffer.find(' ');
                     if (nPos != string::npos)
                     {
-                        auto parResult = pConDetails->HeaderList.insert(make_pair(string(":method"),  pConDetails->strBuffer.substr(0, nPos)));
+                        /*auto parResult = */pConDetails->HeaderList.insert(make_pair(string(":method"),  pConDetails->strBuffer.substr(0, nPos)));
                         pConDetails->strBuffer.erase(0, nPos + 1);
                     }
                     nPos = pConDetails->strBuffer.find(' ');
                     if (nPos != string::npos)
                     {
-                        auto parResult = pConDetails->HeaderList.insert(make_pair(string(":path"),  pConDetails->strBuffer.substr(0, nPos)));
+                        /*auto parResult = */pConDetails->HeaderList.insert(make_pair(string(":path"),  pConDetails->strBuffer.substr(0, nPos)));
                         pConDetails->strBuffer.erase(0, nPos + 1);
                     }
                     nPos = pConDetails->strBuffer.find('\n');
@@ -591,7 +593,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         stringstream strTemp;
         strTemp.imbue(m_cLocal);
-        char *pattern = "%a, %d %b %Y %H:%M:%S GMT";
+        char pattern[] = "%a, %d %b %Y %H:%M:%S GMT";
         use_facet <time_put <char> >(m_cLocal).put(strTemp.rdbuf(), strTemp, ' ', stTime, pattern, pattern + strlen(pattern));
 
         nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "date", strTemp.str().c_str());
@@ -725,7 +727,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
         struct tm* stTime = ::gmtime(&in_time_t);
 
-        char *pattern = "%a, %d %b %Y %H:%M:%S GMT\r\n";
+        char pattern[] = "%a, %d %b %Y %H:%M:%S GMT\r\n";
         //use_facet <time_put <char> >(m_cLocal).put(strRespons.rdbuf(), strRespons, ' ', stTime, pattern, pattern + strlen(pattern));
         stringstream ss;
         ss.imbue(m_cLocal);

@@ -220,7 +220,6 @@ private:
         struct _stat stFileInfo;
         if (::_wstat(FN_CA(m_strFileName), &stFileInfo) != 0 || ::fabs(::difftime(stFileInfo.st_mtime, m_tFileTime)) > 0.00001)
         {   // error on getting the file time or the file was modified
-            m_tFileTime;
             return true;
         }
 

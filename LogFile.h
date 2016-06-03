@@ -70,7 +70,7 @@ public:
         {
             auto in_time_t = system_clock::to_time_t(system_clock::now());
             struct tm* stTime = ::localtime(&in_time_t);
-            char *pattern = "%d/%b/%Y:%H:%M:%S %z";
+            char pattern[] = "%d/%b/%Y:%H:%M:%S %z";
             use_facet <time_put <char> >(locale("C")).put(m_ssMsg.rdbuf(), m_ssMsg, ' ', stTime, pattern, pattern + strlen(pattern));
         }
 

@@ -339,6 +339,7 @@ public:
                     uint8_t PadLen = 0;
                     if ((h2f.flag & 0x8) == 0x8)
                         PadLen = szBuf++[0], h2f.size--;
+                    MyTrace("    Pad Length = 0x", static_cast<unsigned long>(PadLen));
                 }
                 pmtxStream->unlock();
                 break;

@@ -16,6 +16,7 @@
 
 #include "zlib/zlib.h"
 
+#if defined(_WIN32) || defined(_WIN64)
 #ifdef _DEBUG
 #ifdef _WIN64
 #pragma comment(lib, "x64/Debug/zlib")
@@ -27,6 +28,7 @@
 #pragma comment(lib, "x64/Release/zlib")
 #else
 #pragma comment(lib, "Release/zlib")
+#endif
 #endif
 #endif
 
@@ -62,7 +64,7 @@ public:
         m_strm.next_out  = pOut;
 
         int iRet = inflate(&m_strm, Z_NO_FLUSH);
-        
+
         *pnOutCount -= m_strm.avail_out;
 
         return iRet;
@@ -86,7 +88,7 @@ public:
     int Init()
     {
         /* allocate inflate state */
-        int iRet = deflateInit2(&m_strm, Z_BEST_SPEED/*Z_DEFAULT_COMPRESSION/*Z_BEST_COMPRESSION*/, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
+        int iRet = deflateInit2(&m_strm, Z_BEST_SPEED/*Z_DEFAULT_COMPRESSION*//*Z_BEST_COMPRESSION*/, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
         //deflateReset(&m_strm);
         //int iRet = deflateInit(&m_strm, Z_BEST_COMPRESSION);
 
