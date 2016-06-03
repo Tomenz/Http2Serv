@@ -75,6 +75,9 @@ const wchar_t* QUOTES = L"\"";
 const char* PIPETYPE = "r";
 #define FIXENVSTR(x) x
 #define WFIXENVSTR(x) x
+
+#pragma message("TODO!!! Folge Zeile wieder entfernen.")
+#include <termios.h>
 #endif
 
 class CHttpServ : public Http2Protocol
