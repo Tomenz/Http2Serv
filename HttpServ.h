@@ -1390,13 +1390,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     }
 
                     size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
-                    if (/*nInQue != SIZE_MAX && */nInQue >= 0x200000 || nStreamWndSize < nSizeSendBuf || nTotaleWndSize < nSizeSendBuf)
+                    if (nInQue >= 0x200000 || nStreamWndSize < nSizeSendBuf || nTotaleWndSize < nSizeSendBuf)
                     {
                         this_thread::sleep_for(chrono::milliseconds(1));
                         continue;
                     }
 
-                    uint32_t nSendBufLen = static_cast<uint32_t>(min(static_cast<uint64_t>(nSizeSendBuf), nFSize - nBytesTransfered));
+                    uint32_t nSendBufLen = static_cast<uint32_t>(min(static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered));
 
                     nBytesTransfered += nSendBufLen;
 
@@ -1405,8 +1405,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         BuildHttp2Frame(apBuf.get(), nSendBufLen, 0x0, (nFSize - nBytesTransfered == 0 ? 0x1 : 0x0), nStreamId);
                     soMetaDa.fSocketWrite(apBuf.get(), nSendBufLen + nHttp2Offset);
                     soMetaDa.fResetTimer();
-                    if (nFSize - nBytesTransfered == 0 && nCloseConnection != 0)
-                        soMetaDa.fSocketClose();
 
                     if (nStreamId != 0)
                     {
@@ -1425,6 +1423,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 }
             }
             fin.close();
+            if (nCloseConnection != 0)
+                soMetaDa.fSocketClose(), ++nCounter1;
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second

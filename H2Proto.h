@@ -386,8 +386,8 @@ public:
                     else
                     {   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
                         Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1); // 1 = // PROTOCOL_ERROR
-                        umStreamCache.erase(streamData);
-                        break;
+                        if (streamData != end(umStreamCache))
+                            umStreamCache.erase(streamData);
                     }
                 }
                 pmtxStream->unlock();
@@ -448,6 +448,7 @@ public:
                 break;
             default:
                 MyTrace("Undefined frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
+                pmtxStream->unlock();
             }
 
             szBuf += min(static_cast<size_t>(h2f.size), nLen);

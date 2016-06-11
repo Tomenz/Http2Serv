@@ -3,11 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SockTest", "SockTest.vcxproj", "{87FBA899-0A43-4702-89B1-672D79200EAE}"
-	ProjectSection(ProjectDependencies) = postProject
-		{4FC79DB8-703D-417B-A084-C1E9D1A92A3F} = {4FC79DB8-703D-417B-A084-C1E9D1A92A3F}
-	EndProjectSection
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "zlib\zlib.vcxproj", "{4FC79DB8-703D-417B-A084-C1E9D1A92A3F}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "socketlib", "socketlib\socketlib.vcxproj", "{758383C6-5B15-4191-9F17-5835F216F7A1}"
@@ -26,14 +21,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Debug|x64.ActiveCfg = Debug|x64
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Debug|x64.Build.0 = Debug|x64
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Debug|x86.ActiveCfg = Debug|Win32
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Debug|x86.Build.0 = Debug|Win32
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Release|x64.ActiveCfg = Release|x64
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Release|x64.Build.0 = Release|x64
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Release|x86.ActiveCfg = Release|Win32
-		{87FBA899-0A43-4702-89B1-672D79200EAE}.Release|x86.Build.0 = Release|Win32
 		{4FC79DB8-703D-417B-A084-C1E9D1A92A3F}.Debug|x64.ActiveCfg = Debug|x64
 		{4FC79DB8-703D-417B-A084-C1E9D1A92A3F}.Debug|x64.Build.0 = Debug|x64
 		{4FC79DB8-703D-417B-A084-C1E9D1A92A3F}.Debug|x86.ActiveCfg = Debug|Win32
