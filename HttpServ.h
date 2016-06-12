@@ -1424,7 +1424,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
             fin.close();
             if (nCloseConnection != 0)
-                soMetaDa.fSocketClose(), ++nCounter1;
+                soMetaDa.fSocketClose();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second
