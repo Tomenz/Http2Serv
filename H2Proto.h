@@ -94,6 +94,7 @@ public:
     {
         size_t nReturn = 0;
         char* szBufStart = szBuf;
+        map<uint32_t, uint32_t> mapWindUodate;
 
         while (nLen >= 9)   // Settings ACK Frame is 9 Bytes long
         {
@@ -140,22 +141,13 @@ public:
                     if (pTmpFile.get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                     {
                         auto contentLength = GETHEADERLIST(streamData->second).find("content-length");
-                        //if (contentLength == end(GETHEADERLIST(streamData->second)))
-                        //{   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
-                        //    Http2StreamError(stSocketData, h2f.streamId, 1); // 1 = // PROTOCOL_ERROR
-                        //    umStreamCache.erase(streamData);
-                        //    break;
-                        //}
 
                         if (contentLength != end(GETHEADERLIST(streamData->second)))
                         {
-                            //stringstream ssTmp(contentLength->second);
-                            //ssTmp >> CONTENTLENGTH(streamData->second);
                             CONTENTLENGTH(streamData->second) = stoull(contentLength->second);
 
                             Http2WindowUpdate(soMetaDa.fSocketWrite, 0, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
-                            if ((h2f.flag & 0x1) == 0x0)    // No END_STREAM
-                                Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
+                            //Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
                         }
 
                         pTmpFile = make_shared<TempFile>();
@@ -164,6 +156,8 @@ public:
 
                     pTmpFile.get()->Write(szBuf, min(static_cast<size_t>(h2f.size), nLen) - PadLen);
                     CONTENTRESCIV(streamData->second) += min(static_cast<size_t>(h2f.size), nLen);
+
+                    mapWindUodate[h2f.streamId] += static_cast<size_t>(h2f.size) - PadLen;
 
                     if ((h2f.flag & 0x1) == 0x1)    // END_STREAM
                     {
@@ -462,6 +456,9 @@ public:
         if (nLen != 0)
             MyTrace("Protocol Error");
 #endif // DEBUG
+
+        for (auto item : mapWindUodate)
+            Http2WindowUpdate(soMetaDa.fSocketWrite, item.first, item.second);
 
         return nReturn;
     }

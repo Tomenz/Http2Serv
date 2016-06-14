@@ -301,7 +301,7 @@ private:
                 pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
                 lock_guard<mutex> lock(m_mtxConnections);
-                m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, make_shared<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX), make_shared<atomic_bool>(false) }));
+                m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX), make_shared<atomic_bool>(false) }));
                 pSocket->StartReceiving();
             }
         }
