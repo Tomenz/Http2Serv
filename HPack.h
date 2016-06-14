@@ -35,7 +35,7 @@ class HPack
 {
 public:
 
-    string HufmanDecode(const char* szBuf, size_t nLen) noexcept
+    string HufmanDecode(const char* szBuf, size_t nLen) const noexcept
     {
         string strRet;
         size_t TotalBits = 0;
@@ -93,7 +93,7 @@ public:
         return strRet;
     }
 
-    uint32_t DecodeInteger(const char** pszBuf, size_t* const pnLen)
+    uint32_t DecodeInteger(const char** pszBuf, size_t* const pnLen) const noexcept
     {
         uint32_t nRet = 0;
         uint32_t nBitCount = 0; // M = 0
@@ -108,7 +108,7 @@ public:
         return nRet;
     }
 
-    string DecodeString(const char** pszBuf, size_t* const pnLen)
+    string DecodeString(const char** pszBuf, size_t* const pnLen) const noexcept
     {
         bool bEncoded = (*(*pszBuf) & 0x80) == 0x80 ? true : false;
         size_t nStrLen = (*((*pszBuf)++) & 0x7f);
@@ -123,7 +123,7 @@ public:
         return strReturn;
     }
 
-    size_t DecodeIndex(const char** pszBuf, size_t* const pnLen, uint32_t nBitMask)
+    size_t DecodeIndex(const char** pszBuf, size_t* const pnLen, uint32_t nBitMask) const noexcept
     {
         size_t iIndex = *((*pszBuf)++) & nBitMask;
         (*pnLen)--;
@@ -134,7 +134,7 @@ public:
         return iIndex;
     }
 
-    size_t HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qDynTable, string& strHeaderName, string& strHeaderValue)
+    size_t HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qDynTable, string& strHeaderName, string& strHeaderValue) const noexcept
     {
         //basic_fstream<char> fout("header.bin", ios_base::out | ios_base::binary);
         //if (fout.is_open() == true)
@@ -212,7 +212,7 @@ public:
         return (szBuf - szStart);
     }
 
-    size_t HufmanEncode(char* const szBuf, size_t nBufSize, const char* const szString, size_t nStrLen)
+    size_t HufmanEncode(char* const szBuf, size_t nBufSize, const char* const szString, size_t nStrLen) const noexcept
     {
         ::memset(szBuf, 0, nBufSize);   // clear buffer with all 0 because of the "or" operation
 
@@ -287,7 +287,7 @@ public:
         return (nTotalBits / 8);
     }
 
-    size_t EncodeInteger(char* const szBuf, size_t nBufSize, size_t nIndex, uint8_t nBitMask, uint8_t nRepBits)
+    size_t EncodeInteger(char* const szBuf, size_t nBufSize, size_t nIndex, uint8_t nBitMask, uint8_t nRepBits) const noexcept
     {
         size_t nRet = 1;    // 1 Byte is allays written
 
@@ -318,7 +318,7 @@ public:
         return nRet;
     }
 
-    size_t EncodeString(char* const szBuf, size_t nBufSize, const char* szString, size_t nStrLen)
+    size_t EncodeString(char* const szBuf, size_t nBufSize, const char* szString, size_t nStrLen) const noexcept
     {
         size_t nRet = 0;
 
@@ -347,7 +347,7 @@ public:
         return nRet;
     }
 
-    size_t HPackEncode(char* const szBuf, size_t nLen, const char* const strHeaderId, const char* const strHeaderValue)
+    size_t HPackEncode(char* const szBuf, size_t nLen, const char* const strHeaderId, const char* const strHeaderValue) const noexcept
     {
         uint8_t nIndex = 0;
         string strValue;
@@ -386,7 +386,7 @@ public:
         return nBytesWritten;
     }
 
-    void BuildHttp2Frame(char* const szBuf, size_t nDataLen, uint8_t cTyp, uint8_t cFlag, uint32_t nStreamId)
+    void BuildHttp2Frame(char* const szBuf, size_t nDataLen, uint8_t cTyp, uint8_t cFlag, uint32_t nStreamId) const noexcept
     {
         H2FRAME h2f = { static_cast<unsigned long>(nDataLen), cTyp, cFlag, nStreamId, false };
         h2f.size = ::htonl(h2f.size) & 0xffffff00;
@@ -397,7 +397,7 @@ public:
         ::memcpy(&szBuf[5], &h2f.streamId, 4);
     }
 
-    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HEADERLIST& lstHeaderFields)
+    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HEADERLIST& lstHeaderFields) const noexcept
     {
         while (nHeaderLen != 0)
         {

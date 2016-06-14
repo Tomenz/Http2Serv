@@ -59,7 +59,7 @@ public:
     Http2Protocol() {}
     virtual ~Http2Protocol() {}
 
-    void Http2WindowUpdate(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulStreamSize)
+    void Http2WindowUpdate(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulStreamSize) const noexcept
     {
         char caBuffer[20];
         unsigned long ulSizeStream = htonl(ulStreamSize);
@@ -68,7 +68,7 @@ public:
         Write(caBuffer, 9 + 4);
     }
 
-    void Http2StreamError(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulErrorCode)
+    void Http2StreamError(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulErrorCode) const noexcept
     {
         char caBuffer[20];
         unsigned long ulErrCode = htonl(ulErrorCode);
@@ -79,7 +79,7 @@ public:
         MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
-    void Http2Goaway(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulLastStreamID, unsigned long ulErrorCode)
+    void Http2Goaway(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulLastStreamID, unsigned long ulErrorCode) const noexcept
     {
         char caBuffer[20];
         unsigned long ulLastStream = htonl(ulLastStreamID);
