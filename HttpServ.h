@@ -301,7 +301,7 @@ private:
                 pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
                 lock_guard<mutex> lock(m_mtxConnections);
-                m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, make_shared<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384), make_shared<atomic_bool>(false) }));
+                m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, make_shared<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX), make_shared<atomic_bool>(false) }));
                 pSocket->StartReceiving();
             }
         }
@@ -335,8 +335,8 @@ private:
                 {
                     if ( pConDetails->strBuffer.size() >= 24 && ::memcmp( pConDetails->strBuffer.c_str(), "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0 && pConDetails->nContentsSoll == 0)
                     {
-                        pTcpSocket->Write("\x0\x0\x6\x4\x0\x0\x0\x0\x0\x0\x4\x0\xa0\x0\x0", 15);// SETTINGS frame (4) with ParaID(4) and ?10485760? Value
-                        pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\x9f\x0\x1", 13);      // WINDOW_UPDATE frame (8) with value ?10420225? (minus 65535)
+                        pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x10\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and 1048576 Value + ParaID(5) and 16375 Value
+                        pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\xf\x0\x1", 13);       // WINDOW_UPDATE frame (8) with value ?1048576? (minus 65535) == 983041
                         pConDetails->bIsH2Con = true;
                         pConDetails->strBuffer.erase(0, 24);
 
@@ -451,7 +451,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                     {
                         //stringstream ssTmp(contentLength->second);
                         //ssTmp >> pConDetails->nContentsSoll;
-                        pConDetails->nContentsSoll = stoll(contentLength->second);
+                        pConDetails->nContentsSoll = stoull(contentLength->second);
 
                         if (pConDetails->nContentsSoll > 0)
                         {
@@ -538,6 +538,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
     void OnSocketError(BaseSocket* pBaseSocket)
     {
+        lock_guard<mutex> lock(m_mtxConnections);
+        CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
+        if (item != end(m_vConnections))
+        {
+            *item->second.atStop.get() = true;
+        }
+
         pBaseSocket->Close();
     }
 
@@ -601,7 +608,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return 0;
         nHeaderSize += nReturn;
 
-        nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "server", "Http2-Util");
+        nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "server", "Http2Serv");
         if (nReturn == SIZE_MAX)
             return 0;
         nHeaderSize += nReturn;

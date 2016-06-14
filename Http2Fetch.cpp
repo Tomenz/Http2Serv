@@ -117,8 +117,8 @@ public:
         {
             m_bIsHttp2 = true;
             pTcpSocket->Write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24);
-            pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21);// SETTINGS frame (4) with ParaID(3) and 1000 Value and ParaID(4) and 6291456 Value
-            pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\x9f\x0\x1", 13);      // WINDOW_UPDATE frame (8) with value ?10420225? (minus 65535)
+            pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x0\x64\x0\x4\x0\x10\x0\x0", 21);// SETTINGS frame (4) with ParaID(3) and 100 Value and ParaID(4) and 1048576 Value
+            pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\xf\x0\x1", 13);      // WINDOW_UPDATE frame (8) with value ?1048576? (minus 65535) == 983041
 
             char caBuffer[2048];
             size_t nHeaderLen = 0;
@@ -435,7 +435,7 @@ private:
     deque<HEADERENTRY>   m_qDynTable;
     mutex                m_mtxStreams;
     STREAMLIST           m_umStreamCache;
-    STREAMSETTINGS       m_tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384);
+    STREAMSETTINGS       m_tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX);
     shared_ptr<TempFile> m_pTmpFile;
     unique_ptr<Timer>    m_Timer;
     MetaSocketData       m_soMetaDa;
@@ -461,9 +461,11 @@ int main(int argc, const char* argv[])
     //locale::global(std::locale(""));
 
 	Http2Fetch fetch;
-	fetch.Fetch(L"https://twitter.com/");
+	//fetch.Fetch(L"https://twitter.com/");
     //fetch.Fetch(L"https://www.microsoft.com/de-de");
     //fetch.Fetch(L"https://192.168.161.1/");
+    //fetch.Fetch(L"https://192.66.65.226/");
+    fetch.Fetch(L"https://www.google.de/");
 
     while (fetch.RequestFinished() == false)
         this_thread::sleep_for(chrono::milliseconds(1));

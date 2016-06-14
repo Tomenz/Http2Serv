@@ -16,16 +16,17 @@
 #include "HPack.h"
 #include "TempFile.h"
 
-typedef tuple<uint32_t, int32_t, uint32_t> STREAMSETTINGS;
+typedef tuple<uint32_t, int32_t, uint32_t, uint32_t> STREAMSETTINGS;
 #define MAXSTREAMCOUNT(x) get<0>(x)
 #define INITWINDOWSIZE(x) get<1>(x)
 #define MAXFRAMESIZE(x) get<2>(x)
+#define MAXHEADERSIZE(x) get<3>(x)
 
 typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #define BUFFER(x) get<0>(x)
 #define BUFLEN(x) get<1>(x)
 
-typedef tuple<uint32_t, deque<DATAITEM>, HEADERLIST, size_t, size_t, shared_ptr<atomic<int32_t>>> STREAMITEM;
+typedef tuple<uint32_t, deque<DATAITEM>, HEADERLIST, uint64_t, uint64_t, shared_ptr<atomic<int32_t>>> STREAMITEM;
 #define STREAMSTATE(x) get<0>(x)
 #define DATALIST(x) get<1>(x)
 #define GETHEADERLIST(x) get<2>(x)
@@ -150,7 +151,7 @@ public:
                         {
                             //stringstream ssTmp(contentLength->second);
                             //ssTmp >> CONTENTLENGTH(streamData->second);
-                            CONTENTLENGTH(streamData->second) = stoi(contentLength->second);
+                            CONTENTLENGTH(streamData->second) = stoull(contentLength->second);
 
                             Http2WindowUpdate(soMetaDa.fSocketWrite, 0, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
                             if ((h2f.flag & 0x1) == 0x0)    // No END_STREAM
@@ -326,6 +327,9 @@ public:
                                 umStreamCache.erase(streamData);
                                 break;
                             }
+                            break;
+                        case 6: // SETTINGS_MAX_HEADER_LIST_SIZE
+                            MAXHEADERSIZE(tuStreamSettings) = lValue;
                             break;
                         }
                     }
