@@ -384,6 +384,7 @@ private:
                         m_mtxConnections.unlock();
                         return;
                     }
+                    *pConDetails->atStop.get() = true;
                     // After a GOAWAY we terminate the connection
                     soMetaDa.fSocketClose();
                     m_mtxConnections.unlock();
@@ -560,6 +561,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             {
                 if (iter->second == item->second.atStop.get())
                 {
+                    *iter->second = true;   // Stop the DoAction thread
                     m_ActThrMutex.unlock();
                     this_thread::sleep_for(milliseconds(1));
                     m_ActThrMutex.lock();
