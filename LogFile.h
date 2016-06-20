@@ -84,7 +84,7 @@ public:
         return *this;
     }
 
-    CLogFile& operator << (const size_t nSize)
+    CLogFile& operator << (const uint32_t nSize)
     {
         if (m_strFileName.empty() == false)
             m_ssMsg << nSize;
