@@ -133,8 +133,10 @@ class CHttpServ : public Http2Protocol
         string  m_strCAcertificate;
         string  m_strHostCertificate;
         string  m_strHostKey;
+        string  m_strDhParam;
         vector<wstring> m_vstrRewriteRule;
         vector<wstring> m_vstrAliasMatch;
+        vector<wstring> m_vstrForceTyp;
         map<wstring, wstring> m_mFileTypeAction;
     } HOSTPARAM;
 
@@ -164,6 +166,7 @@ public:
         {
             SslTcpServer* pSocket = new SslTcpServer();
             pSocket->AddCertificat(m_vHostParam[L""].m_strCAcertificate.c_str(), m_vHostParam[L""].m_strHostCertificate.c_str(), m_vHostParam[L""].m_strHostKey.c_str());
+            pSocket->SetDHParameter(m_vHostParam[L""].m_strDhParam.c_str());
             pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1, _2));
 
             for (auto& Item : m_vHostParam)
@@ -171,6 +174,7 @@ public:
                 if (Item.first.compare(L"") != 0 && Item.second.m_bSSL == true)
                 {
                     pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str());
+                    pSocket->SetDHParameter(Item.second.m_strDhParam.c_str());
                 }
             }
 
@@ -200,7 +204,7 @@ public:
         m_mtxConnections.unlock();
 
         while (m_vConnections.size() != 0)
-            this_thread::sleep_for(chrono::milliseconds(1));
+            this_thread::sleep_for(chrono::milliseconds(10));
 
         return true;
     }
@@ -237,14 +241,47 @@ public:
         return *this;
     }
 
-    CHttpServ& SetUseSSL(const bool& bSSL, const string& strCAcertificate, const string& strHostCertificate, const string& strHostKey, const wchar_t* szHostName = nullptr)
+    CHttpServ& SetUseSSL(const bool& bSSL, const wchar_t* szHostName = nullptr)
     {
         if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
             m_vHostParam[szHostName] = m_vHostParam[L""];
+
         m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_bSSL = bSSL;
+        return *this;
+    }
+
+    CHttpServ& SetCAcertificate(const string& strCAcertificate, const wchar_t* szHostName = nullptr)
+    {
+        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
+            m_vHostParam[szHostName] = m_vHostParam[L""];
+
         m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strCAcertificate = strCAcertificate;
+        return *this;
+    }
+
+    CHttpServ& SetHostCertificate(const string& strHostCertificate, const wchar_t* szHostName = nullptr)
+    {
+        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
+            m_vHostParam[szHostName] = m_vHostParam[L""];
+
         m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strHostCertificate = strHostCertificate;
+        return *this;
+    }
+
+    CHttpServ& SetHostKey(const string& strHostKey, const wchar_t* szHostName = nullptr)
+    {
+        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
+            m_vHostParam[szHostName] = m_vHostParam[L""];
+
         m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strHostKey = strHostKey;
+        return *this;
+    }
+
+    CHttpServ& SetDhParam(const string& strDhParam, const wchar_t* szHostName = nullptr)
+    {
+        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
+            m_vHostParam[szHostName] = m_vHostParam[L""];
+        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strDhParam = strDhParam;
         return *this;
     }
 
@@ -285,6 +322,14 @@ public:
         if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
             m_vHostParam[szHostName] = m_vHostParam[L""];
         m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_mFileTypeAction.insert(make_pair(strFileExtension, strFileTypAction));
+        return *this;
+    }
+
+    CHttpServ& AddForceTyp(const vector<wstring>& vstrForceTyp, const wchar_t* szHostName = nullptr)
+    {
+        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
+            m_vHostParam[szHostName] = m_vHostParam[L""];
+        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_vstrForceTyp = vstrForceTyp;
         return *this;
     }
 
@@ -563,7 +608,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 {
                     *iter->second = true;   // Stop the DoAction thread
                     m_ActThrMutex.unlock();
-                    this_thread::sleep_for(milliseconds(1));
+                    this_thread::sleep_for(milliseconds(10));
                     m_ActThrMutex.lock();
                     iter = begin(m_umActionThreads);
                     continue;
@@ -874,7 +919,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
 
-            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "]  Method Not Allowed: ", itPath->second);
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "]  Method Not Allowed: ", itMethode->second);
 
             fuExitDoAction();
             return;
@@ -1008,6 +1053,19 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     bNewRootSet = true;
                     break;
                 }
+            }
+        }
+
+        string strMineType("application/octet-stream");
+        for (auto& strTyp : m_vHostParam[szHost].m_vstrForceTyp)    // DefaultType
+        {
+            nPos = strTyp.find(L" ");
+            wregex rx(strTyp.substr(0, nPos));
+            nPos += strTyp.substr(nPos + 1).find_first_not_of(L" \t");
+            if (regex_search(strItemPath, rx, regex_constants::format_first_only) == true)
+            {
+                wstring strTmp(strTyp.substr(nPos + 1));
+                strMineType = string(strTmp.begin(), strTmp.end());
             }
         }
 
@@ -1362,7 +1420,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
 
             // MimeType
-            string strMineType("application/octet-stream");
             auto it = find_if(begin(MimeListe), end(MimeListe), [strFileExtension](const MIMEENTRY & item) { return strFileExtension == MIMEEXTENSION(item); });
             if (it != end(MimeListe))
                 strMineType = MIMESTRING(*it);
@@ -1473,6 +1530,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 private:
 #pragma message("TODO!!! Folge Zeile wieder entfernen.")
     friend int main(int, const char*[]);
+    friend void sigusr1_handler(int);
     TcpServer*             m_pSocket;
     CONNECTIONLIST         m_vConnections;
     mutex                  m_mtxConnections;

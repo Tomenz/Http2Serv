@@ -122,6 +122,11 @@ int main(int argc, const char* argv[])
     vector<wstring>&& vErrLog = ConfFile::GetInstance(L"server.cfg").get(L"common", L"ErrorLog");
     vector<wstring>&& vReWrite = ConfFile::GetInstance(L"server.cfg").get(L"common", L"RewriteRule");
     vector<wstring>&& vAliasMatch = ConfFile::GetInstance(L"server.cfg").get(L"common", L"AliasMatch");
+    vector<wstring>&& vDH_ParaFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"SSL_DH_ParaFile");
+    vector<wstring>&& vSslKeyFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"KeyFile");
+    vector<wstring>&& vSslCertFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"CertFile");
+    vector<wstring>&& vSslCaBundle = ConfFile::GetInstance(L"server.cfg").get(L"common", L"CaBundle");
+    vector<wstring>&& vForceTyp = ConfFile::GetInstance(L"server.cfg").get(L"common", L"ForceType");
 
     vector<wstring>&& vFileTypExt = ConfFile::GetInstance(L"server.cfg").get(L"FileTyps");
 
@@ -146,6 +151,16 @@ int main(int argc, const char* argv[])
                 vServers.back().AddRewriteRule(vReWrite);
             if (vAliasMatch.empty() == false)
                 vServers.back().AddAliasMatch(vAliasMatch);
+            if (vDH_ParaFile.empty() == false)
+                vServers.back().SetDhParam(Utf8Converter.to_bytes(*vDH_ParaFile.begin()));
+            if (vSslCaBundle.empty() == false)
+                vServers.back().SetCAcertificate(Utf8Converter.to_bytes(*vSslCaBundle.begin()));
+            if (vSslCertFile.empty() == false)
+                vServers.back().SetHostCertificate(Utf8Converter.to_bytes(*vSslCertFile.begin()));
+            if (vSslKeyFile.empty() == false)
+                vServers.back().SetHostKey(Utf8Converter.to_bytes(*vSslKeyFile.begin()));
+            if (vForceTyp.empty() == false)
+                vServers.back().AddForceTyp(vForceTyp);
 
             for (const auto& strFileExt : vFileTypExt)
             {
@@ -173,6 +188,8 @@ int main(int argc, const char* argv[])
                             vServers.back().SetAccessLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
                         if (strParamKey.compare(L"ErrorLog") == 0)
                             vServers.back().SetErrorLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                        if (strParamKey.compare(L"SSL_DH_ParaFile") == 0)
+                            vServers.back().SetDhParam(Utf8Converter.to_bytes(*vParaValue.begin()), IsVHost == true ? strListenAddr.c_str() : nullptr);
 
                         if (strParamKey.compare(L"SSL") == 0 && vParaValue.begin()->compare(L"true") == 0)
                             get<0>(tuSSLParam) = true;
@@ -197,8 +214,14 @@ int main(int argc, const char* argv[])
                     }
                 }
 
-                if (get<0>(tuSSLParam) == true && get<1>(tuSSLParam).empty() == false && get<2>(tuSSLParam).empty() == false && get<3>(tuSSLParam).empty() == false)
-                    vServers.back().SetUseSSL(get<0>(tuSSLParam), get<3>(tuSSLParam), get<2>(tuSSLParam), get<1>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                if (get<0>(tuSSLParam) == true)
+                    vServers.back().SetUseSSL(get<0>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                if (get<1>(tuSSLParam).empty() == false)
+                    vServers.back().SetHostKey(get<1>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                if (get<2>(tuSSLParam).empty() == false)
+                    vServers.back().SetHostCertificate(get<2>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                if (get<3>(tuSSLParam).empty() == false)
+                    vServers.back().SetCAcertificate(get<3>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
 
                 for (size_t i = 0; i < vHostList.size(); ++i)
                     fuSetOstParam(vHostList[i], true);

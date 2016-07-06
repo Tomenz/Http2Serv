@@ -468,7 +468,7 @@ int main(int argc, const char* argv[])
     fetch.Fetch(L"https://www.google.de/");
 
     while (fetch.RequestFinished() == false)
-        this_thread::sleep_for(chrono::milliseconds(1));
+        this_thread::sleep_for(chrono::milliseconds(10));
     wcerr << L"Request beendet!" << endl;
 
 #if defined(_WIN32) || defined(_WIN64)

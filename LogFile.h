@@ -140,7 +140,7 @@ public:
         while (m_lstMessages.size() > 0 || m_atThrRunning == true)
         {
             m_mtxBacklog.unlock();
-            this_thread::sleep_for(milliseconds(1));
+            this_thread::sleep_for(milliseconds(10));
             m_mtxBacklog.lock();
         }
         m_mtxBacklog.unlock();
