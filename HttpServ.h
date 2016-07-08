@@ -43,9 +43,17 @@ const wchar_t* QUOTES = L"";
 const wchar_t* PIPETYPE = L"rb";
 
 #ifdef _DEBUG
-#pragma comment(lib, "Debug/socketlib.lib")
+#ifdef _WIN64
+#pragma comment(lib, "x64/Debug/socketlib")
 #else
-#pragma comment(lib, "Release/socketlib.lib")
+#pragma comment(lib, "Debug/socketlib")
+#endif
+#else
+#ifdef _WIN64
+#pragma comment(lib, "x64/Release/socketlib")
+#else
+#pragma comment(lib, "Release/socketlib")
+#endif
 #endif
 
 #else
