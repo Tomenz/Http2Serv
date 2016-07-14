@@ -48,11 +48,30 @@ public:
         auto instance = s_lstLogFiles.find(strLogfileName);
         if (instance == s_lstLogFiles.end())
         {
-            s_lstLogFiles[strLogfileName] = move(CLogFile(strLogfileName));
-            return ref(s_lstLogFiles[strLogfileName]);
+            s_lstLogFiles.emplace(strLogfileName, CLogFile(strLogfileName));
+            return s_lstLogFiles.find(strLogfileName)->second;
         }
 
         return instance->second;
+    }
+
+    CLogFile(const CLogFile& src)
+    {
+        m_strFileName = src.m_strFileName;
+        m_lstMessages = src.m_lstMessages;
+        m_atThrRunning.store(src.m_atThrRunning);
+    }
+
+    virtual ~CLogFile()
+    {
+        m_mtxBacklog.lock();
+        while (m_lstMessages.size() > 0 || m_atThrRunning == true)
+        {
+            m_mtxBacklog.unlock();
+            this_thread::sleep_for(milliseconds(10));
+            m_mtxBacklog.lock();
+        }
+        m_mtxBacklog.unlock();
     }
 
     CLogFile& operator << (const LOGTYPES lt)
@@ -133,30 +152,12 @@ public:
         return WriteToLog(rest...);
     }
 
-    CLogFile() {};
-    virtual ~CLogFile()
-    {
-        m_mtxBacklog.lock();
-        while (m_lstMessages.size() > 0 || m_atThrRunning == true)
-        {
-            m_mtxBacklog.unlock();
-            this_thread::sleep_for(milliseconds(10));
-            m_mtxBacklog.lock();
-        }
-        m_mtxBacklog.unlock();
-    }
-
 private:
-    CLogFile(const wstring& strLogfileName) : m_strFileName(strLogfileName), m_atThrRunning(false)
-    {
-    }
-
-    CLogFile& operator =(const CLogFile& src)
-    {
-        m_strFileName = src.m_strFileName;
-        m_atThrRunning.store(src.m_atThrRunning);
-        return *this;
-    }
+    CLogFile() = delete;
+    explicit CLogFile(const wstring& strLogfileName) : m_strFileName(strLogfileName), m_atThrRunning(false) {}
+    CLogFile(CLogFile&&) = delete;
+    CLogFile& operator=(CLogFile&&) = delete;
+    CLogFile& operator=(const CLogFile&) = delete;
 
     void StartWriteThread(const char* const szMessage)
     {
@@ -207,5 +208,3 @@ private:
     static map<wstring, CLogFile> s_lstLogFiles;
 };
 
-map<wstring, CLogFile>CLogFile::s_lstLogFiles;
-thread_local stringstream CLogFile::m_ssMsg;

@@ -10,16 +10,16 @@
  */
 
 #pragma once
-
 #include <sstream>
 
 using namespace std;
 
-thread_local stringstream ssTrace;
+extern thread_local stringstream ssTrace;
 
-void MyTraceAdd(const uint8_t& value) {
-    ssTrace << static_cast<int>(value);
-}
+void TraceOutput();
+void MyTraceAdd(const uint8_t& value);
+void MyTraceAdd(const wstring& value);
+
 
 template<typename T>
 void MyTraceAdd(const T& value) {
@@ -32,11 +32,7 @@ void MyTrace(const T& value)
 #ifdef _DEBUG
     MyTraceAdd(value);
     ssTrace << endl;
-#if defined(_WIN32) || defined(_WIN64)
-    ::OutputDebugStringA(ssTrace.str().c_str());
-#else
-    wcout << ssTrace.str().c_str();
-#endif
+    TraceOutput();
     stringstream().swap(ssTrace);
 #endif
 }
