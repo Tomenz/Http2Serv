@@ -30,12 +30,8 @@
 #include <math.h>
 #define _stat stat
 #define _wstat stat
-#ifndef _UTFCONVERTER
-#define _UTFCONVERTER
-std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
-#endif
-#define FN_CA(x) Utf8Converter.to_bytes(x).c_str()
-#define FN_STR(x) Utf8Converter.to_bytes(x).c_str()
+#define FN_CA(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
+#define FN_STR(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
 #endif
 
 using namespace std;

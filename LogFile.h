@@ -22,11 +22,9 @@
 #if defined(_WIN32) || defined(_WIN64)
 #define FN_STR(x) x
 #else
-#ifndef _UTFCONVERTER
-#define _UTFCONVERTER
-std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
-#endif
-#define FN_STR(x) Utf8Converter.to_bytes(x).c_str()
+#include <thread>
+#include <codecvt>
+#define FN_STR(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
 #endif
 
 using namespace std;
@@ -89,8 +87,8 @@ public:
         {
             auto in_time_t = system_clock::to_time_t(system_clock::now());
             struct tm* stTime = ::localtime(&in_time_t);
-            char pattern[] = "%d/%b/%Y:%H:%M:%S %z";
-            use_facet <time_put <char> >(locale("C")).put(m_ssMsg.rdbuf(), m_ssMsg, ' ', stTime, pattern, pattern + strlen(pattern));
+            string pattern = "%d/%b/%Y:%H:%M:%S %z";
+            use_facet <time_put <char> >(locale("C")).put(m_ssMsg.rdbuf(), m_ssMsg, ' ', stTime, pattern.c_str(), pattern.c_str() + pattern.size());
         }
 
         return *this;
@@ -180,7 +178,7 @@ private:
                         m_mtxBacklog.unlock();
 
                         fout.write(msg.c_str(), msg.size());
-                        this_thread::sleep_for(microseconds(1));
+
                         m_mtxBacklog.lock();
                     }
 
