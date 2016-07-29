@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "zlib\zlib.vcxproj", "{4FC79DB8-703D-417B-A084-C1E9D1A92A3F}"
 EndProject
@@ -12,6 +12,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Http2Fetch", "Http2Fetch.vcxproj", "{CA4B8E0F-0228-455C-B1DB-D6FB568D9DD9}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UPnPServ", "UPnPServ.vcxproj", "{326E4BD7-85C3-43DD-84C5-B5A1C904A2EB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mDnsServ", "mDnsServ.vcxproj", "{4448EA04-04EE-442A-BC38-69B848E25D5F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -61,6 +63,14 @@ Global
 		{326E4BD7-85C3-43DD-84C5-B5A1C904A2EB}.Release|x64.Build.0 = Release|x64
 		{326E4BD7-85C3-43DD-84C5-B5A1C904A2EB}.Release|x86.ActiveCfg = Release|Win32
 		{326E4BD7-85C3-43DD-84C5-B5A1C904A2EB}.Release|x86.Build.0 = Release|Win32
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Debug|x64.ActiveCfg = Debug|x64
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Debug|x64.Build.0 = Debug|x64
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Debug|x86.ActiveCfg = Debug|Win32
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Debug|x86.Build.0 = Debug|Win32
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Release|x64.ActiveCfg = Release|x64
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Release|x64.Build.0 = Release|x64
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Release|x86.ActiveCfg = Release|Win32
+		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
