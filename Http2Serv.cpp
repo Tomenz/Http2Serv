@@ -97,15 +97,16 @@ int main(int argc, const char* argv[])
 
     //locale::global(std::locale(""));
 
+    const ConfFile& conf = ConfFile::GetInstance(L"server.cfg");
 #ifdef _DEBUG
-    vector<wstring>&& vSec = ConfFile::GetInstance(L"server.cfg").get();
+    vector<wstring>&& vSec = conf.get();
     for (const auto& item : vSec)
     {
         wcout << L"[" << item << L"]" << endl;
-        vector<wstring>&& vKeys = ConfFile::GetInstance(L"server.cfg").get(item);
+        vector<wstring>&& vKeys = conf.get(item);
         for (const auto& key : vKeys)
         {
-            vector<wstring>&& vValues = ConfFile::GetInstance(L"server.cfg").get(item, key);
+            vector<wstring>&& vValues = conf.get(item, key);
             for (const auto& value : vValues)
                 wcout << key << L" = " << value << endl;
         }
@@ -114,120 +115,122 @@ int main(int argc, const char* argv[])
 
     deque<CHttpServ> vServers;
 
-    vector<wstring>&& vDefItem = ConfFile::GetInstance(L"server.cfg").get(L"common", L"DefaultItem");
-    vector<wstring>&& vRootDir = ConfFile::GetInstance(L"server.cfg").get(L"common", L"RootDir");
-    if (vRootDir.empty() == true)
-        vRootDir.push_back(L"./html");
-    vector<wstring>&& vLogFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"LogFile");
-    vector<wstring>&& vErrLog = ConfFile::GetInstance(L"server.cfg").get(L"common", L"ErrorLog");
-    vector<wstring>&& vReWrite = ConfFile::GetInstance(L"server.cfg").get(L"common", L"RewriteRule");
-    vector<wstring>&& vAliasMatch = ConfFile::GetInstance(L"server.cfg").get(L"common", L"AliasMatch");
-    vector<wstring>&& vDH_ParaFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"SSL_DH_ParaFile");
-    vector<wstring>&& vSslKeyFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"KeyFile");
-    vector<wstring>&& vSslCertFile = ConfFile::GetInstance(L"server.cfg").get(L"common", L"CertFile");
-    vector<wstring>&& vSslCaBundle = ConfFile::GetInstance(L"server.cfg").get(L"common", L"CaBundle");
-    vector<wstring>&& vForceTyp = ConfFile::GetInstance(L"server.cfg").get(L"common", L"ForceType");
+    const tuple<wstring, int> strKeyWordUniqueItems[] = { {L"DefaultItem", 1}, {L"RootDir", 2}, {L"LogFile", 3}, {L"ErrorLog",4}, {L"SSL_DH_ParaFile",5}, {L"KeyFile",6}, {L"CertFile",7}, {L"CaBundle",8}, {L"SSL", 9} };
+    const tuple<wstring, int> strKeyWordMultiItems[] = { {L"RewriteRule",1}, {L"AliasMatch",2 }, {L"ForceType",3 }, {L"FileTyps",4 }, {L"SetEnvIf",5 }, {L"RedirectMatch",6} };
 
-    vector<wstring>&& vFileTypExt = ConfFile::GetInstance(L"server.cfg").get(L"FileTyps");
+    vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
 
-
-    vector<wstring>&& vListen = ConfFile::GetInstance(L"server.cfg").get(L"Listen");
+    vector<wstring>&& vListen = conf.get(L"Listen");
     for (const auto& strListen : vListen)
     {
-        vector<wstring>&& vPort = ConfFile::GetInstance(L"server.cfg").get(L"Listen", strListen);
+        vector<wstring>&& vPort = conf.get(L"Listen", strListen);
         for (const auto& strPort : vPort)
         {
             // Default Werte setzen
-            vServers.emplace_back(*vRootDir.begin(), stoi(strPort), false);
-
+            vServers.emplace_back(L"./html", stoi(strPort), false);
             vServers.back().SetBindAdresse(string(begin(strListen), end(strListen)).c_str());
-            if (vDefItem.empty() == false)
-                vServers.back().SetDefaultItem(*vDefItem.begin());
-            if (vLogFile.empty() == false)
-                vServers.back().SetAccessLogFile(*vLogFile.begin());
-            if (vErrLog.empty() == false)
-                vServers.back().SetErrorLogFile(*vErrLog.begin());
-            if (vReWrite.empty() == false)
-                vServers.back().AddRewriteRule(vReWrite);
-            if (vAliasMatch.empty() == false)
-                vServers.back().AddAliasMatch(vAliasMatch);
-            if (vDH_ParaFile.empty() == false)
-                vServers.back().SetDhParam(Utf8Converter.to_bytes(*vDH_ParaFile.begin()));
-            if (vSslCaBundle.empty() == false)
-                vServers.back().SetCAcertificate(Utf8Converter.to_bytes(*vSslCaBundle.begin()));
-            if (vSslCertFile.empty() == false)
-                vServers.back().SetHostCertificate(Utf8Converter.to_bytes(*vSslCertFile.begin()));
-            if (vSslKeyFile.empty() == false)
-                vServers.back().SetHostKey(Utf8Converter.to_bytes(*vSslKeyFile.begin()));
-            if (vForceTyp.empty() == false)
-                vServers.back().AddForceTyp(vForceTyp);
 
-            for (const auto& strFileExt : vFileTypExt)
+            // Default und Common Parameter of the listening socket
+            function<void(const wstring&, const wchar_t*)> fnSetParameter = [&](const wstring& strSection, const wchar_t* szHost = nullptr)
             {
-                vector<wstring>&& vFileTypAction = ConfFile::GetInstance(L"server.cfg").get(L"FileTyps", strFileExt);
-                if (vFileTypAction.empty() == false)
-                    vServers.back().AddFileTypAction(strFileExt, *vFileTypAction.begin());
-            }
+                static wregex seperator(L"\\s+");
 
-            // Host Parameter holen und setzen
-            function<void(wstring, bool)> fuSetOstParam = [&](wstring strListenAddr, bool IsVHost)
-            {
-                auto tuSSLParam = make_tuple<bool, string, string, string>(false, "", "", "");
-                vector<wstring> vHostList;
-                vector<wstring>&& vHostPara = ConfFile::GetInstance(L"server.cfg").get(strListenAddr + L":" + strPort);
-                for (const auto& strParamKey : vHostPara)
+                CHttpServ::HOSTPARAM& HostParam = vServers.back().GetParameterBlockRef(szHost);
+                for (const auto& strKey : strKeyWordUniqueItems)
                 {
-                    vector<wstring>&& vParaValue = ConfFile::GetInstance(L"server.cfg").get(strListenAddr + L":" + strPort, strParamKey);
-                    if (vParaValue.empty() == false)
+                    wstring strValue = conf.getUnique(strSection, get<0>(strKey));
+                    if (strValue.empty() == false)
                     {
-                        if (strParamKey.compare(L"DefaultItem") == 0)
-                            vServers.back().SetDefaultItem(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                        if (strParamKey.compare(L"RootDir") == 0)
-                            vServers.back().SetRootDirectory(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                        if (strParamKey.compare(L"LogFile") == 0)
-                            vServers.back().SetAccessLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                        if (strParamKey.compare(L"ErrorLog") == 0)
-                            vServers.back().SetErrorLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                        if (strParamKey.compare(L"SSL_DH_ParaFile") == 0)
-                            vServers.back().SetDhParam(Utf8Converter.to_bytes(*vParaValue.begin()), IsVHost == true ? strListenAddr.c_str() : nullptr);
-
-                        if (strParamKey.compare(L"SSL") == 0 && vParaValue.begin()->compare(L"true") == 0)
-                            get<0>(tuSSLParam) = true;
-                        if (strParamKey.compare(L"KeyFile") == 0)
-                            get<1>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
-                        if (strParamKey.compare(L"CertFile") == 0)
-                            get<2>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
-                        if (strParamKey.compare(L"CaBundle") == 0)
-                            get<3>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
-
-                        if (strParamKey.compare(L"VirtualHost") == 0 && IsVHost == false)
+                        switch (get<1>(strKey))
                         {
-                            size_t nPos = vParaValue.begin()->find_first_of(L','), nStart = 0;
-                            while (nPos != string::npos)
+                        case 1:
                             {
-                                vHostList.push_back(vParaValue.begin()->substr(nStart, nPos++));
-                                nStart += nPos;
-                                nPos = vParaValue.begin()->find_first_of(L',', nStart);
+                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                while (token != wsregex_token_iterator())
+                                    HostParam.m_vstrDefaultItem.push_back(token++->str());
                             }
-                            vHostList.push_back(vParaValue.begin()->substr(nStart));
+                            break;
+                        case 2: HostParam.m_strRootPath = strValue; break;
+                        case 3: HostParam.m_strLogFile = strValue; break;
+                        case 4: HostParam.m_strErrLog = strValue; break;
+                        case 5: HostParam.m_strDhParam = Utf8Converter.to_bytes(strValue); break;
+                        case 6: HostParam.m_strHostKey = Utf8Converter.to_bytes(strValue); break;
+                        case 7: HostParam.m_strHostCertificate = Utf8Converter.to_bytes(strValue); break;
+                        case 8: HostParam.m_strCAcertificate = Utf8Converter.to_bytes(strValue); break;
+                        case 9: transform(begin(strValue), end(strValue), begin(strValue), ::toupper);
+                                HostParam.m_bSSL = strValue.compare(L"TRUE") == 0 ? true : false; break;
                         }
                     }
                 }
 
-                if (get<0>(tuSSLParam) == true)
-                    vServers.back().SetUseSSL(get<0>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                if (get<1>(tuSSLParam).empty() == false)
-                    vServers.back().SetHostKey(get<1>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                if (get<2>(tuSSLParam).empty() == false)
-                    vServers.back().SetHostCertificate(get<2>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                if (get<3>(tuSSLParam).empty() == false)
-                    vServers.back().SetCAcertificate(get<3>(tuSSLParam), IsVHost == true ? strListenAddr.c_str() : nullptr);
+                for (const auto& strKey : strKeyWordMultiItems)
+                {
+                    vector<wstring>&& vValues = conf.get(strSection, get<0>(strKey));
+                    if (vValues.empty() == false)
+                    {
+                        switch (get<1>(strKey))
+                        {
+                        case 1: HostParam.m_vstrRewriteRule = vValues; break;
+                        case 2: HostParam.m_vstrAliasMatch = vValues; break;
+                        case 3: HostParam.m_vstrForceTyp = vValues; break;
+                        case 4:
+                            for (auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                if (token != wsregex_token_iterator())
+                                    HostParam.m_mFileTypeAction.insert(make_pair(token->str(), strValue.substr(token->str().size() + 1)));
+                            }
+                            break;
+                        case 5:
+                            for (auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                vector<wstring> vecTmp;
+                                while (token != wsregex_token_iterator())
+                                    vecTmp.push_back(token++->str());
+                                if (vecTmp.size() == 3)
+                                    HostParam.m_vEnvIf.emplace_back(make_tuple(vecTmp[0], vecTmp[1], vecTmp[2]));
+                            }
+                            break;
+                        case 6:
+                            for (auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                vector<wstring> vecTmp;
+                                while (token != wsregex_token_iterator())
+                                    vecTmp.push_back(token++->str());
+                                if (vecTmp.size() == 3)
+                                    HostParam.m_vRedirMatch.emplace_back(make_tuple(vecTmp[0], vecTmp[1], vecTmp[2]));
+                            }
+                            break;
+                        }
+                    }
+                }
+            };
+            fnSetParameter(L"common", nullptr);
 
-                for (size_t i = 0; i < vHostList.size(); ++i)
-                    fuSetOstParam(vHostList[i], true);
+            ///////////////////////////////////////////
+
+            // Host Parameter holen und setzen
+            function<void(wstring, bool)> fuSetHostParam = [&](wstring strListenAddr, bool IsVHost)
+            {
+                fnSetParameter(strListenAddr + L":" + strPort, IsVHost == true ? strListenAddr.c_str() : nullptr);
+
+                const wstring strValue = conf.getUnique(strListenAddr + L":" + strPort, L"VirtualHost");
+                if (strValue.empty() == false)
+                {
+                    size_t nPos = strValue.find_first_of(L','), nStart = 0;
+                    while (nPos != string::npos)
+                    {
+                        fuSetHostParam(strValue.substr(nStart, nPos++), true);
+                        nStart += nPos;
+                        nPos = strValue.find_first_of(L',', nStart);
+                    }
+                    fuSetHostParam(strValue.substr(nStart), true);
+                }
             };
 
-            fuSetOstParam(strListen, false);
+            fuSetHostParam(strListen, false);
         }
     }
 
@@ -245,7 +248,8 @@ int main(int argc, const char* argv[])
         for (auto& HttpServer : vServers)
             nHttpCon += HttpServer.m_vConnections.size();
 
-        wcout << L'\r' << caZeichen[iIndex++]  << L"  Sockets:" << setw(3) << BaseSocket::s_atRefCount << L"  SSL-Pumpen:" << setw(3) << SslTcpSocket::s_atAnzahlPumps << L"  HTTP-Connections:" << setw(3) << nHttpCon << flush;
+        wcout << L'\r' << caZeichen[iIndex++] << L"  Sockets:" << setw(3) << BaseSocket::s_atRefCount << L"  SSL-Pumpen:" << setw(3) << SslTcpSocket::s_atAnzahlPumps << L"  HTTP-Connections:" << setw(3) << nHttpCon << flush;// setw(6) << nCounter3 << setw(6) << nCounter2 << setw(6) << nCounter1 << setw(6) << nCounter4 << flush;
+
         if (iIndex > 3) iIndex = 0;
         this_thread::sleep_for(chrono::milliseconds(100));
     }

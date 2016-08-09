@@ -14,6 +14,7 @@
 #include <regex>
 #include <map>
 #include <algorithm>
+#include <iterator>
 #include <iomanip>
 
 #include "socketlib/SslSocket.h"
@@ -146,6 +147,8 @@ class CHttpServ : public Http2Protocol
         vector<wstring> m_vstrAliasMatch;
         vector<wstring> m_vstrForceTyp;
         map<wstring, wstring> m_mFileTypeAction;
+        vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;
+        vector<tuple<wstring, wstring, wstring>> m_vEnvIf;
     } HOSTPARAM;
 
 public:
@@ -160,7 +163,7 @@ public:
         hp.m_strCAcertificate = "";
         hp.m_strHostCertificate = "";
         hp.m_strHostKey = "";
-        m_vHostParam.insert(make_pair(L"", hp));
+        m_vHostParam.emplace(L"", hp);
     }
 
     virtual ~CHttpServ()
@@ -215,6 +218,14 @@ public:
             this_thread::sleep_for(chrono::milliseconds(10));
 
         return true;
+    }
+
+    HOSTPARAM& GetParameterBlockRef(const wchar_t* szHostName = nullptr)
+    {
+        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
+            m_vHostParam[szHostName] = m_vHostParam[L""];
+
+        return m_vHostParam[szHostName == nullptr ? L"" : szHostName];
     }
 
     CHttpServ& SetDefaultItem(const wstring& strDefItem, const wchar_t* szHostName = nullptr)
@@ -350,6 +361,13 @@ private:
             //SslTcpSocket* pSocket = reinterpret_cast<SslTcpServer*>(pTcpServer)->GetNextPendingConnection();
             if (pSocket != nullptr)
             {
+                if (pSocket->GetErrorNo() != 0)
+                {
+                    CLogFile::GetInstance(L"./logs/Server.log").WriteToLog("Socket error \'", pSocket->GetErrorNo(), "\' on new connection");
+                    delete pSocket;
+                    continue;
+                }
+
                 pSocket->BindFuncBytesRecived(bind(&CHttpServ::OnDataRecieved, this, _1));
                 pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
@@ -382,11 +400,11 @@ private:
             {
                 CONNECTIONDETAILS* pConDetails = &item->second;
                 pConDetails->pTimer->Reset();
-                pConDetails->strBuffer.append(reinterpret_cast<char*>(spBuffer.get()), nRead);
+                pConDetails->strBuffer.append(spBuffer.get(), nRead);
 
                 if (pConDetails->bIsH2Con == false)
                 {
-                    if ( pConDetails->strBuffer.size() >= 24 && ::memcmp( pConDetails->strBuffer.c_str(), "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0 && pConDetails->nContentsSoll == 0)
+                    if ( pConDetails->strBuffer.size() >= 24 && pConDetails->strBuffer.compare(0, 24, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") == 0 && pConDetails->nContentsSoll == 0)
                     {
                         pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x10\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and 1048576 Value + ParaID(5) and 16375 Value
                         pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\xf\x0\x1", 13);       // WINDOW_UPDATE frame (8) with value ?1048576? (minus 65535) == 983041
@@ -450,55 +468,46 @@ private:
                 {
 auto dwStart = chrono::high_resolution_clock::now();
                     // If we get here we should have a HTTP request in strPuffer
-                    size_t nPos =  pConDetails->strBuffer.find(' ');
-                    if (nPos != string::npos)
-                    {
-                        /*auto parResult = */pConDetails->HeaderList.insert(make_pair(string(":method"),  pConDetails->strBuffer.substr(0, nPos)));
-                        pConDetails->strBuffer.erase(0, nPos + 1);
-                    }
-                    nPos = pConDetails->strBuffer.find(' ');
-                    if (nPos != string::npos)
-                    {
-                        /*auto parResult = */pConDetails->HeaderList.insert(make_pair(string(":path"),  pConDetails->strBuffer.substr(0, nPos)));
-                        pConDetails->strBuffer.erase(0, nPos + 1);
-                    }
-                    nPos = pConDetails->strBuffer.find('\n');
-                    if (nPos != string::npos)
-                    {
-                        auto parResult = pConDetails->HeaderList.insert(make_pair(string(":version"),  pConDetails->strBuffer.substr(0, nPos)));
-                        if (parResult != end(pConDetails->HeaderList))
-                        {
-                            while (parResult->second.find('\r') != string::npos) parResult->second.replace(parResult->second.find('\r'), 1, "");
-                            transform(begin(parResult->second), end(parResult->second), begin(parResult->second), ::toupper);
-                            if (parResult->second.find("HTTP/1.") != string::npos)
-                                parResult->second.replace(parResult->second.find("HTTP/1."), 7, "");
-                        }
-                        pConDetails->strBuffer.erase(0, nPos + 1);
-                    }
 
-                    while ((nPos =  pConDetails->strBuffer.find('\n')) != string::npos && nPos > 1)
+                    const static regex crlfSeperator("\r\n");
+                    sregex_token_iterator line(begin(pConDetails->strBuffer), begin(pConDetails->strBuffer) + nPosEndOfHeader, crlfSeperator, -1);
+                    while (line != sregex_token_iterator())
                     {
-                        size_t nPos1 = pConDetails->strBuffer.find(':');
-                        if (nPos1 != string::npos)
+                        if (pConDetails->HeaderList.size() == 0)    // 1 Zeile
                         {
-                            auto strTmp = pConDetails->strBuffer.substr(0, nPos1);
-                            transform(begin(strTmp), end(strTmp), begin(strTmp), ::tolower);
-
-                            auto parResult = pConDetails->HeaderList.insert(make_pair(strTmp,  pConDetails->strBuffer.substr(nPos1 + 1, nPos - (nPos1 + 1))));
-                            if (parResult != end(pConDetails->HeaderList))
+                            string& strLine = line->str();
+                            const static regex SpaceSeperator(" ");
+                            sregex_token_iterator token(begin(strLine), end(strLine), SpaceSeperator, -1);
+                            if (token != sregex_token_iterator())
+                                pConDetails->HeaderList.emplace(":method", token++->str());
+                            if (token != sregex_token_iterator())
+                                pConDetails->HeaderList.emplace(":path", token++->str());
+                            if (token != sregex_token_iterator())
                             {
-                                while (parResult->second.at(0) == ' ') parResult->second.replace(parResult->second.find(' '), 1, "");
-                                while (parResult->second.find('\r') != string::npos) parResult->second.replace(parResult->second.find('\r'), 1, "");
-                                while (parResult->second.find('\n') != string::npos) parResult->second.replace(parResult->second.find('\n'), 1, "");
+                                auto parResult = pConDetails->HeaderList.emplace(":version", token++->str());
+                                if (parResult != end(pConDetails->HeaderList))
+                                    parResult->second.erase(0, parResult->second.find_first_of('.') + 1);
                             }
                         }
-                        pConDetails->strBuffer.erase(0, nPos + 1);
-                    }
+                        else
+                        {
+                            size_t nPos1 = line->str().find(':');
+                            if (nPos1 != string::npos)
+                            {
+                                string strTmp = line->str().substr(0, nPos1);
+                                transform(begin(strTmp), begin(strTmp) + nPos1, begin(strTmp), ::tolower);
 
-                    if (nPos != string::npos)
-                    {
-                        pConDetails->strBuffer.erase(0, nPos + 1);
+                                auto parResult = pConDetails->HeaderList.emplace(strTmp, line->str().substr(nPos1 + 1));
+                                if (parResult != end(pConDetails->HeaderList))
+                                {
+                                    parResult->second.erase(parResult->second.find_last_not_of(" \r\n\t")  + 1);
+                                    parResult->second.erase(0, parResult->second.find_first_not_of(" \t"));
+                                }
+                            }
+                        }
+                        ++line;
                     }
+                    pConDetails->strBuffer.erase(0, nPosEndOfHeader + 4);
 
                     auto contentLength = pConDetails->HeaderList.find("content-length");
                     if (contentLength != end(pConDetails->HeaderList))
@@ -537,9 +546,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     return;
                 }
 
-
-
-
                 uint32_t nStreamId = 0;
                 auto upgradeHeader = pConDetails->HeaderList.find("upgrade");
                 if (upgradeHeader != end(pConDetails->HeaderList) && upgradeHeader->second.compare("h2c") == 0)
@@ -569,7 +575,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
                     pConDetails->mutStreams->lock();
-                    pConDetails->H2Streams.insert(make_pair(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(pConDetails->StreamParam)))));
+                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(pConDetails->StreamParam))));
                     pConDetails->mutStreams->unlock();
                     DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
                     if (nStreamId != 0)
@@ -592,6 +598,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
     void OnSocketError(BaseSocket* pBaseSocket)
     {
+        MyTrace("Error: Network error ", pBaseSocket->GetErrorNo());
+        TcpSocket* pTcpSocket = dynamic_cast<TcpSocket*>(pBaseSocket);
+        CLogFile::GetInstance(m_vHostParam[L""].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", (pTcpSocket != nullptr ? pTcpSocket->GetClientAddr() : "0.0.0.0"), "] network error no.: ",  pBaseSocket->GetErrorNo());
+
         lock_guard<mutex> lock(m_mtxConnections);
         CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
@@ -651,12 +661,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         nHeaderSize += nReturn;
 
         auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
-        struct tm* stTime = ::gmtime(&in_time_t);
 
         stringstream strTemp;
         strTemp.imbue(m_cLocal);
-        char pattern[] = "%a, %d %b %Y %H:%M:%S GMT";
-        use_facet <time_put <char> >(m_cLocal).put(strTemp.rdbuf(), strTemp, ' ', stTime, pattern, pattern + strlen(pattern));
+        strTemp << put_time(::gmtime(&in_time_t), "%a, %d %b %Y %H:%M:%S GMT\r\n");
 
         nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "date", strTemp.str().c_str());
         if (nReturn == SIZE_MAX)
@@ -787,13 +795,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         strRespons += "Date: ";
         auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
-        struct tm* stTime = ::gmtime(&in_time_t);
 
-        char pattern[] = "%a, %d %b %Y %H:%M:%S GMT\r\n";
-        //use_facet <time_put <char> >(m_cLocal).put(strRespons.rdbuf(), strRespons, ' ', stTime, pattern, pattern + strlen(pattern));
         stringstream ss;
         ss.imbue(m_cLocal);
-        ss << put_time(stTime, pattern);
+        ss << put_time(::gmtime(&in_time_t), "%a, %d %b %Y %H:%M:%S GMT\r\n");
         strRespons += ss.str();
 
         if (nContentSize != 0 || iFlag & ADDCONENTLENGTH)
@@ -834,24 +839,24 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
     void DoAction(MetaSocketData soMetaDa, uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, HEADERWRAPPER, uint64_t)> BuildRespHeader, atomic<bool>* patStop)
     {
-        static array<size_t, 4>arMethoden = { hash<string>()("GET"), hash<string>()("HEAD"), hash<string>()("POST"), hash<string>()("OPTIONS") /*, hash<string>()("PUT"), hash<string>()("PATCH"), hash<string>()("DELETE"),*/ };
+        const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
         if (patStop != nullptr)
         {
             lock_guard<mutex> lock(m_ActThrMutex);
-            m_umActionThreads.insert(make_pair(this_thread::get_id(), patStop));
+            m_umActionThreads.emplace(this_thread::get_id(), patStop);
         }
 
         auto fuExitDoAction = [&]()
         {
-            lock_guard<mutex> lockg1(*pmtxStream);
+            lock_guard<mutex> lock1(*pmtxStream);
             auto StreamItem = hw2.StreamList.find(nStreamId);
             if (StreamItem != end(hw2.StreamList))
                 hw2.StreamList.erase(StreamItem);
 
             if (patStop != nullptr)
             {
-                lock_guard<mutex> lockg2(m_ActThrMutex);
+                lock_guard<mutex> lock2(m_ActThrMutex);
                 m_umActionThreads.erase(this_thread::get_id());
             }
         };
@@ -911,15 +916,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), ::toupper);
 
-        size_t nMethode = 0, nHashMethode = hash<string>()(itMethode->second);
-        for (const auto& item : arMethoden)
-        {
-            if (item == nHashMethode)
-                break;
-            ++nMethode;
-        }
+        auto aritMethode = arMethoden.find(itMethode->second);
 
-        if (nMethode >= arMethoden.size())
+        if (aritMethode == arMethoden.end())
         {
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 405, HEADERWRAPPER{ HEADERLIST() }, 0);
             if (nStreamId != 0)
@@ -933,17 +932,40 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return;
         }
 
+        // Check for redirekt
+        for (auto& tuRedirekt : m_vHostParam[szHost].m_vRedirMatch)    // RedirectMatch
+        {
+            wregex rx(get<1>(tuRedirekt));
+            wsmatch match;
+            wstring strNewPath = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itPath->second);
+            if (regex_match(strNewPath.cbegin(), strNewPath.cend(), match, rx) == true)
+            {
+                wstring strLokation = regex_replace(strNewPath, rx, get<2>(tuRedirekt), regex_constants::format_first_only);
+                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
+
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HEADERWRAPPER{ { { "Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation) } } }, 0);
+                if (nStreamId != 0)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                soMetaDa.fResetTimer();
+                soMetaDa.fSocketClose();
+
+                fuExitDoAction();
+                return;
+            }
+        }
+
         // Decode URL (%20 -> ' ')
         wstring strItemPath;
         size_t nLen = itPath->second.size();
         wchar_t wch = 0;
         int nAnzParts = 0;
-        for (size_t n = 0; n < nLen; n++)
+        for (size_t n = 0; n < nLen; ++n)
         {
-            int chr = itPath->second.at(n++);
+            int chr = itPath->second.at(n);
             if ('%' == chr)
             {
-                stringstream ss({ itPath->second.at(n++), itPath->second.at(n) });
+                stringstream ss({ itPath->second.at(++n), itPath->second.at(n++ + 1) });
                 ss >> hex >> chr;
                 if (chr < 0x7f)
                     strItemPath += static_cast<wchar_t>(chr);
@@ -968,7 +990,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 }
             }
             else
-                strItemPath += static_cast<wchar_t>(itPath->second.at(--n));
+                strItemPath += static_cast<wchar_t>(itPath->second.at(n));
         }
 
         wstring strQuery;
@@ -988,7 +1010,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
 
         // Test for forbidden element /.. /aux /lpt /com .htaccess .htpasswd .htgroup
-        if (regex_search(strItemPath.c_str(), s_rxForbidden) == true)
+        const static wregex rxForbidden(L"/\\.\\.|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);
+        if (regex_search(strItemPath.c_str(), rxForbidden) == true)
         {
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 403, HEADERWRAPPER{ HEADERLIST() }, 0);
             if (nStreamId != 0)
@@ -1026,7 +1049,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         //    return;
         //}
 
-        if (nMethode == 3)  // OPTION
+        if (aritMethode->second == 3)  // OPTION
         {
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, HEADERWRAPPER{ { {"Allow", "GET, HEAD, POST"} } }, 0);
             if (nStreamId != 0)
@@ -1229,7 +1252,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                             size_t nPos2 = strBuffer.substr(0, nPosStart).find(":");
                                             if (nPos2 != string::npos)
                                             {
-                                                auto iter = umPhpHeaders.insert(make_pair(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1))));
+                                                auto iter = umPhpHeaders.emplace(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1)));
                                                 if (iter != end(umPhpHeaders))
                                                     while (iter->second.find(' ') == 0) iter->second.erase(0, 1);
                                             }
@@ -1373,9 +1396,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         fstream fin(FN_CA(strItemPath), ios_base::in | ios_base::binary);
         if (fin.is_open() == true)
         {
-            //fin.seekg(0, ios_base::end);
-            uint64_t nFSize = stFileInfo.st_size; //static_cast<uint32_t>(fin.tellg());
-            //fin.seekg(0, ios_base::beg);
+            uint64_t nFSize = stFileInfo.st_size;
 
             auto acceptencoding = lstHeaderFields.find("accept-encoding");
             if (acceptencoding != end(lstHeaderFields) && acceptencoding->second.find("gzip") != string::npos)
@@ -1383,7 +1404,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 iHeaderFlag |= GZIPENCODING;
 
                 // http://www.filesignatures.net/index.php?page=all
-                if (wstring(L"zip|rar|7z|iso|png|jpg|gif|mp3|wma|avi|mpg|gz|tar").find(strFileExtension) != string::npos)
+                const static wstring strNoZip(L"zip|rar|7z|iso|png|jpg|gif|mp3|wma|avi|mpg|gz|tar");
+                if (strNoZip.find(strFileExtension) != string::npos)
                     iHeaderFlag &= ~GZIPENCODING;
             }
 
@@ -1439,7 +1461,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
 
-            if (nMethode == 0 || nMethode == 2) // GET or POST
+            if (aritMethode->second == 0 || aritMethode->second == 2) // GET or POST
             {
                 auto apBuf = make_unique<char[]>(nSizeSendBuf + nHttp2Offset + 2);
 
@@ -1550,7 +1572,6 @@ private:
     unordered_multimap<thread::id, atomic<bool>*> m_umActionThreads;
     mutex                  m_ActThrMutex;
 
-    static const wregex    s_rxForbidden;
     const array<MIMEENTRY, 110>  MimeListe = { {
         MIMEENTRY(L"txt", "text/plain"),
         MIMEENTRY(L"rtx", "text/richtext"),
@@ -1664,5 +1685,3 @@ private:
         MIMEENTRY(L"wbmp", "image/vnd.wap.wbmp")
     } };
 };
-
-const wregex CHttpServ::s_rxForbidden(L"/\\.\\.|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);

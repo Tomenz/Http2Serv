@@ -383,7 +383,8 @@ public:
                         (*WINDOWSIZE(streamData->second).get()) += lValue;
                     else
                     {   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
-                        Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1); // 1 = // PROTOCOL_ERROR
+                        if (lValue == 0 || lValue > 2147483647)
+                            Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1); // 1 = // PROTOCOL_ERROR
                         if (streamData != end(umStreamCache))
                             umStreamCache.erase(streamData);
                     }

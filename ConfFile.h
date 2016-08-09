@@ -176,8 +176,8 @@ private:
                     wstring strLine;
                     getline(fin, strLine);
 
-                    size_t nPos = strLine.find_first_of(L"#;");
-                    strLine.erase(nPos);   // erase commends from line
+                    size_t nPos = strLine.find_first_of(L"#;\r\n");
+                    if (nPos != string::npos) strLine.erase(nPos);   // erase commends from line
                     strLine = TrimString(strLine);
 
                     if (strLine.empty() == false)
