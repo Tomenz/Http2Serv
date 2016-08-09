@@ -115,8 +115,8 @@ int main(int argc, const char* argv[])
 
     deque<CHttpServ> vServers;
 
-    const tuple<wstring, int> strKeyWordUniqueItems[] = { {L"DefaultItem", 1}, {L"RootDir", 2}, {L"LogFile", 3}, {L"ErrorLog",4}, {L"SSL_DH_ParaFile",5}, {L"KeyFile",6}, {L"CertFile",7}, {L"CaBundle",8}, {L"SSL", 9} };
-    const tuple<wstring, int> strKeyWordMultiItems[] = { {L"RewriteRule",1}, {L"AliasMatch",2 }, {L"ForceType",3 }, {L"FileTyps",4 }, {L"SetEnvIf",5 }, {L"RedirectMatch",6} };
+    const pair<wstring, int> strKeyWordUniqueItems[] = { {L"DefaultItem", 1}, {L"RootDir", 2}, {L"LogFile", 3}, {L"ErrorLog",4}, {L"SSL_DH_ParaFile",5}, {L"KeyFile",6}, {L"CertFile",7}, {L"CaBundle",8}, {L"SSL", 9} };
+    const pair<wstring, int> strKeyWordMultiItems[] = { {L"RewriteRule",1}, {L"AliasMatch",2 }, {L"ForceType",3 }, {L"FileTyps",4 }, {L"SetEnvIf",5 }, {L"RedirectMatch",6} };
 
     vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
 
@@ -138,10 +138,10 @@ int main(int argc, const char* argv[])
                 CHttpServ::HOSTPARAM& HostParam = vServers.back().GetParameterBlockRef(szHost);
                 for (const auto& strKey : strKeyWordUniqueItems)
                 {
-                    wstring strValue = conf.getUnique(strSection, get<0>(strKey));
+                    wstring strValue = conf.getUnique(strSection, strKey.first);
                     if (strValue.empty() == false)
                     {
-                        switch (get<1>(strKey))
+                        switch (strKey.second)
                         {
                         case 1:
                             {
@@ -165,10 +165,10 @@ int main(int argc, const char* argv[])
 
                 for (const auto& strKey : strKeyWordMultiItems)
                 {
-                    vector<wstring>&& vValues = conf.get(strSection, get<0>(strKey));
+                    vector<wstring>&& vValues = conf.get(strSection, strKey.first);
                     if (vValues.empty() == false)
                     {
-                        switch (get<1>(strKey))
+                        switch (strKey.second)
                         {
                         case 1: HostParam.m_vstrRewriteRule = vValues; break;
                         case 2: HostParam.m_vstrAliasMatch = vValues; break;
