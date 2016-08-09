@@ -167,7 +167,7 @@ private:
                     size_t nPos = strVal.find_last_not_of(L" \t\r\n");
                     strVal.erase(nPos + 1);  // Trim Whitespace character on the right
                     nPos = strVal.find_first_not_of(L" \t");
-                    if (nPos != string::npos) strVal.erase(0, nPos);
+                    strVal.erase(0, nPos);
                     return strVal;
                 };
 
@@ -177,9 +177,7 @@ private:
                     getline(fin, strLine);
 
                     size_t nPos = strLine.find_first_of(L"#;");
-                    if (nPos != wstring::npos) strLine.erase(nPos);   // erase commends from line
-                    nPos = strLine.find(L"//");
-                    if (nPos != wstring::npos) strLine.erase(nPos);   // erase commends from line
+                    strLine.erase(nPos);   // erase commends from line
                     strLine = TrimString(strLine);
 
                     if (strLine.empty() == false)
