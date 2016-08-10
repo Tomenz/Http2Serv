@@ -475,7 +475,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                     {
                         if (pConDetails->HeaderList.size() == 0)    // 1 Zeile
                         {
-                            string& strLine = line->str();
+                            const string& strLine = line->str();
                             const static regex SpaceSeperator(" ");
                             sregex_token_iterator token(begin(strLine), end(strLine), SpaceSeperator, -1);
                             if (token != sregex_token_iterator())
