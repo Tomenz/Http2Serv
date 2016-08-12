@@ -963,10 +963,15 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         for (size_t n = 0; n < nLen; ++n)
         {
             int chr = itPath->second.at(n);
-            if ('%' == chr)
+            if ('%' == chr && n + 2 < nLen && isxdigit(itPath->second.at(n + 1)) && isxdigit(itPath->second.at(n + 2)))
             {
-                stringstream ss({ itPath->second.at(++n), itPath->second.at(n++ + 1) });
-                ss >> hex >> chr;
+                char Nipple1 = itPath->second.at(n + 1) - (itPath->second.at(n + 1) <= '9' ? '0' : (itPath->second.at(n + 1) <= 'F' ? 'A' : 'a') - 10);
+                char Nipple2 = itPath->second.at(n + 2) - (itPath->second.at(n + 2) <= '9' ? '0' : (itPath->second.at(n + 2) <= 'F' ? 'A' : 'a') - 10);
+                chr = 16 * Nipple1 + Nipple2;
+                n += 2;
+
+                //stringstream ss({ itPath->second.at(++n), itPath->second.at(n++ + 1) });
+                //ss >> hex >> chr;
                 if (chr < 0x7f)
                     strItemPath += static_cast<wchar_t>(chr);
                 else if (chr >= 0x80 && chr <= 0xBF)

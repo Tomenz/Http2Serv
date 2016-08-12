@@ -124,7 +124,9 @@ public:
             {
                 if (distance(item.first, item.second) > 1)
                     MyTrace("Warnung: Configfile has hidden entrys in section \'", strSektion, "\', key \'", strValue, "\' exist more than once");
-                return prev(item.second)->second; // Letztes Element    //item.first->second;
+                unordered_multimap<wstring, wstring>::const_local_iterator it = item.first, itNext = it;
+                while (++itNext != item.second && it != item.second) ++it;
+                return it->second;  // Letztes Element    //item.first->second;
             }
         }
 
