@@ -963,15 +963,27 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         for (size_t n = 0; n < nLen; ++n)
         {
             int chr = itPath->second.at(n);
-            if ('%' == chr && n + 2 < nLen && isxdigit(itPath->second.at(n + 1)) && isxdigit(itPath->second.at(n + 2)))
+            if ('%' == chr)
             {
+                if (n + 2 >= nLen || isxdigit(itPath->second.at(n + 1)) == 0 || isxdigit(itPath->second.at(n + 2)) == 0)
+                {
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 400, HEADERWRAPPER{ HEADERLIST() }, 0);
+                    if (nStreamId != 0)
+                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                    soMetaDa.fResetTimer();
+
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - " << itMethode->second << " \"" << lstHeaderFields.find(":path")->second << "\" 400 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] bad request: ", itPath->second);
+
+                    fuExitDoAction();
+                    return;
+                }
                 char Nipple1 = itPath->second.at(n + 1) - (itPath->second.at(n + 1) <= '9' ? '0' : (itPath->second.at(n + 1) <= 'F' ? 'A' : 'a') - 10);
                 char Nipple2 = itPath->second.at(n + 2) - (itPath->second.at(n + 2) <= '9' ? '0' : (itPath->second.at(n + 2) <= 'F' ? 'A' : 'a') - 10);
                 chr = 16 * Nipple1 + Nipple2;
                 n += 2;
 
-                //stringstream ss({ itPath->second.at(++n), itPath->second.at(n++ + 1) });
-                //ss >> hex >> chr;
                 if (chr < 0x7f)
                     strItemPath += static_cast<wchar_t>(chr);
                 else if (chr >= 0x80 && chr <= 0xBF)
@@ -1025,6 +1037,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             soMetaDa.fResetTimer();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - " << itMethode->second << " \"" << lstHeaderFields.find(":path")->second << "\" 403 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] forbidden element: ", itPath->second);
 
             fuExitDoAction();
             return;
