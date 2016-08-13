@@ -11,24 +11,13 @@
 
 #pragma once
 
+#include <sstream>
 #include <map>
+#include <list>
 #include <atomic>
 #include <mutex>
-#include <fstream>
-#include <list>
-#include <chrono>
-#include <locale>
-
-#if defined(_WIN32) || defined(_WIN64)
-#define FN_STR(x) x
-#else
-#include <thread>
-#include <codecvt>
-#define FN_STR(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
-#endif
 
 using namespace std;
-using namespace std::chrono;
 
 class CLogFile
 {
@@ -38,102 +27,16 @@ public:
         END = 1, PUTTIME = 2
     };
 
-    static CLogFile& GetInstance(const wstring& strLogfileName)
-    {
-        if (m_ssMsg.getloc().name().compare("C") != 0)
-            m_ssMsg.imbue(locale("C"));
+    static CLogFile& GetInstance(const wstring& strLogfileName);
+    CLogFile(const CLogFile& src);
+    virtual ~CLogFile();
 
-        auto instance = s_lstLogFiles.find(strLogfileName);
-        if (instance == s_lstLogFiles.end())
-        {
-            s_lstLogFiles.emplace(strLogfileName, CLogFile(strLogfileName));
-            return s_lstLogFiles.find(strLogfileName)->second;
-        }
-
-        return instance->second;
-    }
-
-    CLogFile(const CLogFile& src)
-    {
-        m_strFileName = src.m_strFileName;
-        m_lstMessages = src.m_lstMessages;
-        m_atThrRunning.store(src.m_atThrRunning);
-    }
-
-    virtual ~CLogFile()
-    {
-        m_mtxBacklog.lock();
-        while (m_lstMessages.size() > 0 || m_atThrRunning == true)
-        {
-            m_mtxBacklog.unlock();
-            this_thread::sleep_for(milliseconds(10));
-            m_mtxBacklog.lock();
-        }
-        m_mtxBacklog.unlock();
-    }
-
-    CLogFile& operator << (const LOGTYPES lt)
-    {
-        if (lt == LOGTYPES::END)
-        {
-            if (m_strFileName.empty() == false)
-            {
-                m_ssMsg << "\r\n";
-                StartWriteThread(m_ssMsg.str().c_str());
-            }
-            stringstream().swap(m_ssMsg);
-        }
-        else if (lt == LOGTYPES::PUTTIME && m_strFileName.empty() == false)
-        {
-            auto in_time_t = system_clock::to_time_t(system_clock::now());
-            struct tm* stTime = ::localtime(&in_time_t);
-            const static string pattern = "%d/%b/%Y:%H:%M:%S %z";
-            use_facet <time_put <char> >(locale("C")).put(m_ssMsg.rdbuf(), m_ssMsg, ' ', stTime, pattern.c_str(), pattern.c_str() + pattern.size());
-        }
-
-        return *this;
-    }
-
-    CLogFile& operator << (const uint64_t nSize)
-    {
-        if (m_strFileName.empty() == false)
-            m_ssMsg << nSize;
-        return *this;
-    }
-
-    CLogFile& operator << (const uint32_t nSize)
-    {
-        if (m_strFileName.empty() == false)
-            m_ssMsg << nSize;
-        return *this;
-    }
-
-    CLogFile& operator << (const string& strItem)
-    {
-        if (m_strFileName.empty() == false)
-            m_ssMsg << strItem;
-        return *this;
-    }
-
-    CLogFile& operator << (const char* const strItem)
-    {
-        if (m_strFileName.empty() == false)
-            m_ssMsg << strItem;
-        return *this;
-    }
-
-    CLogFile& WriteToLog()
-    {
-        if (m_strFileName.empty() == false)
-        {
-            m_ssMsg << "\r\n";
-            StartWriteThread(m_ssMsg.str().c_str());
-        }
-        stringstream().swap(m_ssMsg);
-
-        return *this;
-    }
-
+    CLogFile& operator << (const LOGTYPES lt);
+    CLogFile& operator << (const uint64_t nSize);
+    CLogFile& operator << (const uint32_t nSize);
+    CLogFile& operator << (const string& strItem);
+    CLogFile& operator << (const char* const strItem);
+    CLogFile& WriteToLog();
     template<typename ...Args>
     CLogFile& WriteToLog(LOGTYPES value, const Args&... rest)
     {
@@ -150,6 +53,8 @@ public:
         return WriteToLog(rest...);
     }
 
+    static void SetDontLog(bool bDontLog = true);
+
 private:
     CLogFile() = delete;
     explicit CLogFile(const wstring& strLogfileName) : m_strFileName(strLogfileName), m_atThrRunning(false) {}
@@ -157,52 +62,15 @@ private:
     CLogFile& operator=(CLogFile&&) = delete;
     CLogFile& operator=(const CLogFile&) = delete;
 
-    void StartWriteThread(const char* const szMessage)
-    {
-        lock_guard<mutex>lock(m_mtxBacklog);
-        m_lstMessages.push_back(szMessage);
-
-        bool bTmp = false;
-        if (m_atThrRunning.compare_exchange_strong(bTmp, true) == true)
-        {
-            thread([&]() {
-                fstream fout;
-                fout.open(FN_STR(m_strFileName), ios::out | ios::app | ios::binary);
-                if (fout.is_open() == true)
-                {
-                    m_mtxBacklog.lock();
-                    while (m_lstMessages.size() > 0)
-                    {
-                        auto msg = *begin(m_lstMessages);
-                        m_lstMessages.pop_front();
-                        m_mtxBacklog.unlock();
-
-                        fout.write(msg.c_str(), msg.size());
-
-                        m_mtxBacklog.lock();
-                    }
-
-                    fout.close();
-
-                    atomic_exchange(&m_atThrRunning, false);
-
-                    m_mtxBacklog.unlock();
-                }
-                else
-                {
-                    m_lstMessages.clear();
-                    atomic_exchange(&m_atThrRunning, false);
-                }
-            }).detach();
-        }
-    }
+    void StartWriteThread(const string& szMessage);
 
 private:
-    wstring m_strFileName;
-    list<string> m_lstMessages;
-    mutex m_mtxBacklog;
-    atomic<bool> m_atThrRunning;
-    thread_local static stringstream m_ssMsg;
-    static map<wstring, CLogFile> s_lstLogFiles;
+    wstring                             m_strFileName;
+    list<string>                        m_lstMessages;
+    mutex                               m_mtxBacklog;
+    atomic<bool>                        m_atThrRunning;
+    thread_local static stringstream    m_ssMsg;
+    thread_local static bool            s_bDontLog;
+    static map<wstring, CLogFile>       s_lstLogFiles;
 };
 

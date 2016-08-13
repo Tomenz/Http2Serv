@@ -170,29 +170,59 @@ int main(int argc, const char* argv[])
                     {
                         switch (strKey.second)
                         {
-                        case 1: HostParam.m_vstrRewriteRule = vValues; break;
-                        case 2: HostParam.m_vstrAliasMatch = vValues; break;
-                        case 3: HostParam.m_vstrForceTyp = vValues; break;
-                        case 4:
+                        case 1: // RewriteRule
                             for (auto& strValue : vValues)
                             {
                                 wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
                                 if (token != wsregex_token_iterator())
-                                    HostParam.m_mFileTypeAction.insert(make_pair(token->str(), strValue.substr(token->str().size() + 1)));
+                                    HostParam.m_mstrRewriteRule.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                            }
+                        case 2: // AliasMatch
+                            for (auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                if (token != wsregex_token_iterator())
+                                    HostParam.m_mstrAliasMatch.emplace(token->str(), next(token)->str());//HostParam.m_mstrAliasMatch.emplace(token->str(), strValue.substr(token->str().size() + 1));
+                            }
+                        case 3: // ForceType
+                            for (auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                if (token != wsregex_token_iterator())
+                                    HostParam.m_mstrForceTyp.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
                             }
                             break;
-                        case 5:
+                        case 4: // FileTyps
+                            for (auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                if (token != wsregex_token_iterator())
+                                    HostParam.m_mFileTypeAction.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                            }
+                            break;
+                        case 5: // SetEnvIf
                             for (auto& strValue : vValues)
                             {
                                 wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
                                 vector<wstring> vecTmp;
                                 while (token != wsregex_token_iterator())
                                     vecTmp.push_back(token++->str());
+                                while (vecTmp.size() > 3)
+                                {
+                                    vecTmp[1] += vecTmp[2];
+                                    vecTmp.erase(begin(vecTmp) + 2);
+                                }
                                 if (vecTmp.size() == 3)
+                                {
+                                    transform(begin(vecTmp[0]), end(vecTmp[0]), begin(vecTmp[0]), toupper);
+                                    transform(begin(vecTmp[2]), end(vecTmp[2]), begin(vecTmp[2]), toupper);
+                                    vecTmp[1].erase(vecTmp[1].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                    vecTmp[1].erase(0, vecTmp[1].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
                                     HostParam.m_vEnvIf.emplace_back(make_tuple(vecTmp[0], vecTmp[1], vecTmp[2]));
+                                }
                             }
                             break;
-                        case 6:
+                        case 6: // RedirectMatch
                             for (auto& strValue : vValues)
                             {
                                 wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);

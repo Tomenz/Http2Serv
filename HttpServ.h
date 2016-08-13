@@ -14,8 +14,9 @@
 #include <regex>
 #include <map>
 #include <algorithm>
-#include <iterator>
 #include <iomanip>
+#include <chrono>
+#include <codecvt>
 
 #include "socketlib/SslSocket.h"
 #include "Timer.h"
@@ -143,10 +144,10 @@ class CHttpServ : public Http2Protocol
         string  m_strHostCertificate;
         string  m_strHostKey;
         string  m_strDhParam;
-        vector<wstring> m_vstrRewriteRule;
-        vector<wstring> m_vstrAliasMatch;
-        vector<wstring> m_vstrForceTyp;
-        map<wstring, wstring> m_mFileTypeAction;
+        unordered_map<wstring, wstring> m_mstrRewriteRule;
+        unordered_map<wstring, wstring> m_mstrAliasMatch;
+        unordered_map<wstring, wstring> m_mstrForceTyp;
+        unordered_map<wstring, wstring> m_mFileTypeAction;
         vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;
         vector<tuple<wstring, wstring, wstring>> m_vEnvIf;
     } HOSTPARAM;
@@ -227,7 +228,7 @@ public:
 
         return m_vHostParam[szHostName == nullptr ? L"" : szHostName];
     }
-
+/*
     CHttpServ& SetDefaultItem(const wstring& strDefItem, const wchar_t* szHostName = nullptr)
     {
         if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
@@ -247,13 +248,13 @@ public:
         m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strRootPath = strRootDir;
         return *this;
     }
-
+*/
     CHttpServ& SetBindAdresse(const char* szBindIp)
     {
         m_strBindIp = szBindIp;
         return *this;
     }
-
+/*
     CHttpServ& SetPort(const short& sPort)
     {
         m_sPort = sPort;
@@ -348,10 +349,10 @@ public:
     {
         if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
             m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_vstrForceTyp = vstrForceTyp;
+        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_mstrForceTyp = vstrForceTyp;
         return *this;
     }
-
+*/
 private:
     void OnNewConnection(TcpServer* pTcpServer, int nCountNewConnections)
     {
@@ -626,7 +627,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 {
                     *iter->second = true;   // Stop the DoAction thread
                     m_ActThrMutex.unlock();
-                    this_thread::sleep_for(milliseconds(10));
+                    this_thread::sleep_for(chrono::milliseconds(10));
                     m_ActThrMutex.lock();
                     iter = begin(m_umActionThreads);
                     continue;
@@ -932,15 +933,15 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return;
         }
 
-        // Check for redirekt
-        for (auto& tuRedirekt : m_vHostParam[szHost].m_vRedirMatch)    // RedirectMatch
+        // Check for redirect
+        for (auto& tuRedirect : m_vHostParam[szHost].m_vRedirMatch)    // RedirectMatch
         {
-            wregex rx(get<1>(tuRedirekt));
+            wregex rx(get<1>(tuRedirect));
             wsmatch match;
             wstring strNewPath = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itPath->second);
             if (regex_match(strNewPath.cbegin(), strNewPath.cend(), match, rx) == true)
             {
-                wstring strLokation = regex_replace(strNewPath, rx, get<2>(tuRedirekt), regex_constants::format_first_only);
+                wstring strLokation = regex_replace(strNewPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
                 strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
 
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HEADERWRAPPER{ { { "Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation) } } }, 0);
@@ -1018,12 +1019,35 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             strItemPath.erase(nPos);
         }
 
-        for (auto& strRule : m_vHostParam[szHost].m_vstrRewriteRule)    // RewriteRule
+        for (auto& strEnvIf : m_vHostParam[szHost].m_vEnvIf)    // SetEnvIf
         {
-            nPos = strRule.find(L" ");
-            wregex rx(strRule.substr(0, nPos));
-            nPos += strRule.substr(nPos + 1).find_first_not_of(L" \t");
-            strItemPath = regex_replace(strItemPath, rx, strRule.substr(nPos + 1), regex_constants::format_first_only);
+            const static map<wstring, int> mKeyWord = { {L"REMOTE_HOST", 1 }, { L"REMOTE_ADDR", 2 },{ L"SERVER_ADDR", 3 },{ L"REQUEST_METHOD", 4 },{ L"REQUEST_PROTOCOL", 5 },{ L"REQUEST_URI", 6 } };
+            auto& itKeyWord = mKeyWord.find(get<0>(strEnvIf));
+            if (itKeyWord != mKeyWord.end())
+            {
+                bool bFound = false;
+
+                switch (itKeyWord->second)
+                {
+                case 2: // REMOTE_ADDR
+                    bFound = regex_match(begin(soMetaDa.strIpClient), end(soMetaDa.strIpClient), regex(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<1>(strEnvIf))));
+                    break;
+                case 6: // REQUEST_URI
+                    bFound = regex_match(begin(strItemPath), end(strItemPath), wregex(get<1>(strEnvIf)));
+                    break;
+                }
+
+                if (bFound == true)
+                {
+                    if (get<2>(strEnvIf).compare(L"DONTLOG") == 0)
+                        CLogFile::SetDontLog();
+                }
+            }
+        }
+
+        for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)    // RewriteRule
+        {
+            strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
         }
 
         // Test for forbidden element /.. /aux /lpt /com .htaccess .htpasswd .htgroup
@@ -1088,34 +1112,24 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
 
         bool bNewRootSet = false;
-        for (auto& strAlias : m_vHostParam[szHost].m_vstrAliasMatch)    // AliasMatch
+        for (auto& strAlias : m_vHostParam[szHost].m_mstrAliasMatch)    // AliasMatch
         {
-            nPos = strAlias.find(L" ");
-            if (nPos != string::npos)
+            wregex rx(strAlias.first);
+            wstring strNewPath = regex_replace(strItemPath, rx, strAlias.second, regex_constants::format_first_only);
+            if (strNewPath.compare(strItemPath) != 0)
             {
-                wregex rx(strAlias.substr(0, nPos));
-                nPos += strAlias.substr(nPos + 1).find_first_not_of(L" \t");
-                wstring strNewPath = regex_replace(strItemPath, rx, strAlias.substr(nPos + 1), regex_constants::format_first_only);
-                if (strNewPath.compare(strItemPath) != 0)
-                {
-                    strItemPath = strNewPath;
-                    bNewRootSet = true;
-                    break;
-                }
+                strItemPath = strNewPath;
+                bNewRootSet = true;
+                break;
             }
-        }
+       }
 
         string strMineType("application/octet-stream");
-        for (auto& strTyp : m_vHostParam[szHost].m_vstrForceTyp)    // DefaultType
+        for (auto& strTyp : m_vHostParam[szHost].m_mstrForceTyp)    // DefaultType
         {
-            nPos = strTyp.find(L" ");
-            wregex rx(strTyp.substr(0, nPos));
-            nPos += strTyp.substr(nPos + 1).find_first_not_of(L" \t");
+            wregex rx(strTyp.first);
             if (regex_search(strItemPath, rx, regex_constants::format_first_only) == true)
-            {
-                wstring strTmp(strTyp.substr(nPos + 1));
-                strMineType = string(strTmp.begin(), strTmp.end());
-            }
+                strMineType = string(begin(strTyp.second), end(strTyp.second));
         }
 
         // Get base directory and build filename
