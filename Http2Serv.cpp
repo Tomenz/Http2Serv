@@ -214,8 +214,8 @@ int main(int argc, const char* argv[])
                                 }
                                 if (vecTmp.size() == 3)
                                 {
-                                    transform(begin(vecTmp[0]), end(vecTmp[0]), begin(vecTmp[0]), toupper);
-                                    transform(begin(vecTmp[2]), end(vecTmp[2]), begin(vecTmp[2]), toupper);
+                                    transform(begin(vecTmp[0]), end(vecTmp[0]), begin(vecTmp[0]), ::toupper);
+                                    transform(begin(vecTmp[2]), end(vecTmp[2]), begin(vecTmp[2]), ::toupper);
                                     vecTmp[1].erase(vecTmp[1].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
                                     vecTmp[1].erase(0, vecTmp[1].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
                                     HostParam.m_vEnvIf.emplace_back(make_tuple(vecTmp[0], vecTmp[1], vecTmp[2]));

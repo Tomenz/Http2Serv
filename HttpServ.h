@@ -1022,7 +1022,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         for (auto& strEnvIf : m_vHostParam[szHost].m_vEnvIf)    // SetEnvIf
         {
             const static map<wstring, int> mKeyWord = { {L"REMOTE_HOST", 1 }, { L"REMOTE_ADDR", 2 },{ L"SERVER_ADDR", 3 },{ L"REQUEST_METHOD", 4 },{ L"REQUEST_PROTOCOL", 5 },{ L"REQUEST_URI", 6 } };
-            auto& itKeyWord = mKeyWord.find(get<0>(strEnvIf));
+            const auto& itKeyWord = mKeyWord.find(get<0>(strEnvIf));
             if (itKeyWord != mKeyWord.end())
             {
                 bool bFound = false;
