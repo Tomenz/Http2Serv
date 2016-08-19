@@ -412,9 +412,9 @@ public:
         }
 #endif
         if (m_bIsHttp2 == true)
-            Http2Goaway(soMetaDa.fSocketWrite, 0, StreamList.rbegin()->first, 0);  // GOAWAY
-
-        m_pcClientCon->Close();
+            m_bDone = true, Http2Goaway(soMetaDa.fSocketWrite, 0, StreamList.rbegin()->first, 0);  // GOAWAY
+        else
+            m_pcClientCon->Close();
     }
 
     bool RequestFinished()
