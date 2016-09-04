@@ -73,6 +73,7 @@ const wchar_t* PIPETYPE = L"rb";
 #define _stat64 stat64
 #define _wstat64 stat64
 #define _waccess access
+#define _S_IFDIR S_IFDIR
 #ifndef _UTFCONVERTER
 #define _UTFCONVERTER
 std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
@@ -883,8 +884,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 szHost = strHost.c_str();
         }
 
-        auto version = lstHeaderFields.find(":version");
-        if (version != end(lstHeaderFields) && version->second.compare("1") == 0)
+        auto itVersion = lstHeaderFields.find(":version");
+        if (itVersion != end(lstHeaderFields) && itVersion->second.compare("1") == 0)
             iHeaderFlag = HTTPVERSION11;
 
         auto connection = lstHeaderFields.find("connection");
@@ -900,7 +901,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         auto itMethode = lstHeaderFields.find(":method");
         auto itPath = lstHeaderFields.find(":path");
-        if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields))
+        if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields) || itVersion == end(lstHeaderFields) || itVersion->second.find_first_not_of("01") != string::npos)
         {
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 400, HEADERWRAPPER{ HEADERLIST() }, 0);
             if (nStreamId != 0)
@@ -1060,7 +1061,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
 
-            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - " << itMethode->second << " \"" << lstHeaderFields.find(":path")->second << "\" 403 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
+                << "\" 403" << "-" << " \""
+                << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                << CLogFile::LOGTYPES::END;
             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] forbidden element: ", itPath->second);
 
             fuExitDoAction();
@@ -1101,7 +1108,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (version != end(lstHeaderFields) ? version->second : "0")
+                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
                 << "\" 200 -" << " \""
                 << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                 << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
@@ -1154,9 +1161,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
 
         struct _stat64 stFileInfo;
-        if (::_wstat64(FN_CA(strItemPath), &stFileInfo) != 0)
+        if (::_wstat64(FN_CA(strItemPath), &stFileInfo) != 0 || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
         {
-            if (errno == ENOENT)
+            if (errno == ENOENT || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
             {
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 404, HEADERWRAPPER{ HEADERLIST() }, 0);
                 if (nStreamId != 0)
@@ -1166,7 +1173,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                     << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (version != end(lstHeaderFields) ? version->second : "0")
+                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
                     << "\" 404 " << "-" << " \""
                     << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                     << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
@@ -1185,7 +1192,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                     << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (version != end(lstHeaderFields) ? version->second : "0")
+                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
                     << "\" 500 " << "-" << " \""
                     << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                     << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
@@ -1220,7 +1227,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                     ss << ENV << "SERVER_SOFTWARE=Http2Util/0.1" << ENVJOIN << ENV << L"REDIRECT_STATUS=200" << ENVJOIN << ENV << L"REMOTE_ADDR=" << soMetaDa.strIpClient.c_str() << ENVJOIN << ENV << L"SERVER_PORT=" << soMetaDa.sPortInterFace;
                     ss << ENVJOIN << ENV << L"SERVER_ADDR=" << soMetaDa.strIpInterface.c_str() << ENVJOIN << ENV << L"REMOTE_PORT=" << soMetaDa.sPortClient;
-                    ss << ENVJOIN << ENV << L"SERVER_PROTOCOL=" << (nStreamId != 0 ? L"HTTP/2." : L"HTTP/1.") << (version != end(lstHeaderFields) ? version->second : string("0")).c_str();
+                    ss << ENVJOIN << ENV << L"SERVER_PROTOCOL=" << (nStreamId != 0 ? L"HTTP/2." : L"HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : string("0")).c_str();
                     ss << ENVJOIN << ENV << L"DOCUMENT_ROOT=" << QUOTES << m_vHostParam[szHost].m_strRootPath << QUOTES << ENVJOIN << ENV << L"GATEWAY_INTERFACE=CGI/1.1" << ENVJOIN << ENV << L"SCRIPT_NAME=" << QUOTES << itPath->second.substr(0, itPath->second.find("?")).c_str() << QUOTES;
                     ss << ENVJOIN << ENV << L"REQUEST_METHOD=" << itMethode->second.c_str() << ENVJOIN << ENV << L"REQUEST_URI=" << QUOTES << FIXENVSTR(itPath->second).c_str() << QUOTES;
                     if (soMetaDa.bIsSsl == true)
@@ -1378,7 +1385,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                         CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                             << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                            << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (version != end(lstHeaderFields) ? version->second : "0")
+                            << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
                             << "\" 200 " << nTotal << " \""
                             << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                             << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
@@ -1556,7 +1563,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (version != end(lstHeaderFields) ? version->second : "0")
+                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
                 << "\" 200 " << nFSize << " \""
                 << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                 << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
@@ -1572,7 +1579,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (version != end(lstHeaderFields) ? version->second : "0")
+                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
                 << "\" 404 " << "-" << " \""
                 << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                 << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
