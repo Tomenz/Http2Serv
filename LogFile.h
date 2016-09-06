@@ -58,7 +58,6 @@ public:
 private:
     CLogFile() = delete;
     explicit CLogFile(const wstring& strLogfileName) : m_strFileName(strLogfileName), m_atThrRunning(false) {}
-    CLogFile(CLogFile&&) = delete;
     CLogFile& operator=(CLogFile&&) = delete;
     CLogFile& operator=(const CLogFile&) = delete;
 

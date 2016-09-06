@@ -35,7 +35,6 @@ public:
 private:
     ConfFile() = delete;
     explicit ConfFile(const wstring& strConfigFile) : m_strFileName(strConfigFile), m_tFileTime(0) {}
-    ConfFile(ConfFile&&) = delete;
     ConfFile& operator=(ConfFile&&) = delete;
     ConfFile& operator=(const ConfFile&) = delete;
 
