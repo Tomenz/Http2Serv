@@ -28,6 +28,11 @@ OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o #OBJ = $(patsubst %.cpp,%.o,$(wil
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
 LIB = -l zlib -l socketlib -l crypto -l ssl
 
+all: mDnsServ $(TARGET)
+
+mDnsServ: mDnsServ.o
+	$(CC) -o mDnsServ mDnsServ.o $(LIB_PATH) $(LIB) $(LDFLAGS)
+
 $(TARGET): $(BUILDDIRS) $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(LIB_PATH) $(LIB) $(LDFLAGS)
 

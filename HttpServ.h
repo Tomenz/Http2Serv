@@ -952,6 +952,14 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 soMetaDa.fResetTimer();
                 soMetaDa.fSocketClose();
 
+                CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                    << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
+                    << "\" 301 -" << " \""
+                    << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                    << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                    << CLogFile::LOGTYPES::END;
+
                 fuExitDoAction();
                 return;
             }
@@ -1064,11 +1072,14 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second
                 << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
-                << "\" 403" << "-" << " \""
+                << "\" 403 " << "-" << " \""
                 << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                 << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
                 << CLogFile::LOGTYPES::END;
             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] forbidden element: ", itPath->second);
+
+            if (nCloseConnection != 0)
+                soMetaDa.fSocketClose();
 
             fuExitDoAction();
             return;
@@ -1209,6 +1220,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         wstring strFileExtension(strItemPath.substr(strItemPath.rfind(L'.') + 1));
         transform(begin(strFileExtension), end(strFileExtension), begin(strFileExtension), ::tolower);
 
+        uint32_t iStatus = 200;
+
         for (const auto& strFileTyp : m_vHostParam[szHost].m_mFileTypeAction)
         {
             if (strFileExtension.compare(strFileTyp.first) == 0)
@@ -1266,7 +1279,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                                         if (nPosStart == 0)
                                         {
-                                            int iStatus = 200;
                                             // Build response header
                                             auto status = umPhpHeaders.find("Status");
                                             if (status != end(umPhpHeaders))
@@ -1386,7 +1398,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                             << itMethode->second << " " << lstHeaderFields.find(":path")->second
                             << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
-                            << "\" 200 " << nTotal << " \""
+                            << "\" " << iStatus << " " << nTotal << " \""
                             << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                             << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
                             << CLogFile::LOGTYPES::END;
@@ -1431,11 +1443,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
         }
 
+        uint64_t nFSize = 0;
+
         // Load file
         fstream fin(FN_CA(strItemPath), ios_base::in | ios_base::binary);
         if (fin.is_open() == true)
         {
-            uint64_t nFSize = stFileInfo.st_size;
+            nFSize = stFileInfo.st_size;
 
             auto acceptencoding = lstHeaderFields.find("accept-encoding");
             if (acceptencoding != end(lstHeaderFields) && acceptencoding->second.find("gzip") != string::npos)
@@ -1494,7 +1508,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 strMineType = MIMESTRING(*it);
 
             // Build response header
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 200, HEADERWRAPPER{ { {"Content-Type", strMineType} } }, nFSize);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, HEADERWRAPPER{ { {"Content-Type", strMineType} } }, nFSize);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1558,35 +1572,29 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 }
             }
             fin.close();
-            if (nCloseConnection != 0)
-                soMetaDa.fSocketClose();
-
-            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
-                << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
-                << "\" 200 " << nFSize << " \""
-                << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
-                << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
-                << CLogFile::LOGTYPES::END;
         }
         else
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 404, HEADERWRAPPER{ HEADERLIST() }, 0);
+            iStatus = 404;
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] File does not exist: ", itPath->second);
+
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, iStatus, HEADERWRAPPER{ HEADERLIST() }, 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
-
-            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
-                << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
-                << "\" 404 " << "-" << " \""
-                << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
-                << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
-                << CLogFile::LOGTYPES::END;
-
-            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] File does not exist: ", itPath->second);
         }
+
+        CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+            << itMethode->second << " " << lstHeaderFields.find(":path")->second
+            << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
+            << "\" " << iStatus << " " << (nFSize == 0 ? "-" : to_string(nFSize)) << " \""
+            << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+            << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+            << CLogFile::LOGTYPES::END;
+
+        if (nCloseConnection != 0)
+            soMetaDa.fSocketClose();
 
         fuExitDoAction();
     }
