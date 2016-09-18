@@ -30,7 +30,7 @@ LIB = -l zlib -l socketlib -l crypto -l ssl
 
 all: mDnsServ $(TARGET)
 
-mDnsServ: mDnsServ.o
+mDnsServ: $(BUILDDIRS) mDnsServ.o
 	$(CC) -o mDnsServ mDnsServ.o $(LIB_PATH) $(LIB) $(LDFLAGS)
 
 $(TARGET): $(BUILDDIRS) $(OBJ)
