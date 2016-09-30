@@ -15,6 +15,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UPnPServ", "UPnPServ.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mDnsServ", "mDnsServ.vcxproj", "{4448EA04-04EE-442A-BC38-69B848E25D5F}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "webdav", "webdav\webdav.vcxproj", "{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -71,6 +73,14 @@ Global
 		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Release|x64.Build.0 = Release|x64
 		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Release|x86.ActiveCfg = Release|Win32
 		{4448EA04-04EE-442A-BC38-69B848E25D5F}.Release|x86.Build.0 = Release|Win32
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Debug|x64.ActiveCfg = Debug|x64
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Debug|x64.Build.0 = Debug|x64
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Debug|x86.ActiveCfg = Debug|Win32
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Debug|x86.Build.0 = Debug|Win32
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Release|x64.ActiveCfg = Release|x64
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Release|x64.Build.0 = Release|x64
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Release|x86.ActiveCfg = Release|Win32
+		{E952C5C2-F44D-4939-ABCF-28FB23F7B16C}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
