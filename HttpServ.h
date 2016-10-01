@@ -901,7 +901,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         auto itMethode = lstHeaderFields.find(":method");
         auto itPath = lstHeaderFields.find(":path");
-        if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields) || (itVersion == end(lstHeaderFields) || itVersion->second.find_first_not_of("01") != string::npos) && nStreamId == 0)
+        if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields) || ((itVersion == end(lstHeaderFields) || itVersion->second.find_first_not_of("01") != string::npos) && nStreamId == 0))
         {
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 400, HEADERWRAPPER{ HEADERLIST() }, 0);
             if (nStreamId != 0)
