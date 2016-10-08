@@ -29,9 +29,6 @@
 using namespace std;
 using namespace std::placeholders;
 
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-
 #if defined(_WIN32) || defined(_WIN64)
 
 #if _MSC_VER < 1700
@@ -91,65 +88,7 @@ const char* PIPETYPE = "r";
 #define WFIXENVSTR(x) x
 #endif
 
-class CHttpPlugin
-{
-protected:
-    CHttpPlugin()
-    {
-        if (s_atRefCount == 0)
-        {
-            for (auto& p : fs::directory_iterator(L"./Debug"))
-            {
-                if (fs::is_regular_file(p.status()) && p.path().extension().compare(L".dll") == 0)
-                {
-                    //wcout << p.path().filename() << endl;
-                    HMODULE HdlModul = LoadLibrary(p.path().filename().c_str());
-                    if (HdlModul != nullptr)
-                    {
-                        int(*HandleRequest)(const char*, const wchar_t*) = (int(*)(const char*, const wchar_t*))GetProcAddress(HdlModul, "HandleRequest");
-                        if (HandleRequest == nullptr)
-                        {
-                            FreeLibrary(HdlModul);
-                            continue;
-                        }
-                        s_vFunctions.push_back(make_pair(HdlModul, HandleRequest));
-                    }
-                }
-            }
-        }
-        s_atRefCount++;
-    }
-
-    virtual ~CHttpPlugin()
-    {
-        if (--s_atRefCount == 0)
-        {
-            for (auto& hLib : s_vFunctions)
-                FreeLibrary(hLib.first);
-        }
-    }
-
-    int CallPlugins(const string& strMethode, const wstring& strPath)
-    {
-        int iRet = 0;
-        for (auto& fnHandleRequest : s_vFunctions)
-        {
-            iRet = fnHandleRequest.second(strMethode.c_str(), strPath.c_str());
-            if (iRet == 1)
-                break;
-        }
-        return iRet;
-    }
-
-private:
-    static atomic_uint s_atRefCount;
-    static vector<pair<HMODULE, int(*)(const char*, const wchar_t*)>> s_vFunctions;
-};
-atomic_uint CHttpPlugin::s_atRefCount = 0;
-vector<pair<HMODULE, int(*)(const char*, const wchar_t*)>> CHttpPlugin::s_vFunctions;
-
-
-class CHttpServ : public Http2Protocol, CHttpPlugin
+class CHttpServ : public Http2Protocol
 {
     //typedef tuple<unique_ptr<Timer>, string, bool, uint64_t, uint64_t, unique_ptr<TempFile>, HEADERLIST, deque<HEADERENTRY>, unique_ptr<mutex>, STREAMLIST, STREAMSETTINGS, atomic<bool>> CONNECTIONDETAILS;
     typedef struct
@@ -192,7 +131,8 @@ class CHttpServ : public Http2Protocol, CHttpPlugin
         HTTPVERSION11 = 8,
         ADDCONENTLENGTH = 16,
         GZIPENCODING = 32,
-        HSTSHEADER = 64,
+        DEFLATEENCODING = 64,
+        HSTSHEADER = 128,
     };
 
     typedef struct
@@ -789,6 +729,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 return 0;
             nHeaderSize += nReturn;
         }
+        else if (iFlag & DEFLATEENCODING)
+        {
+            nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "content-encoding", "deflate");
+            if (nReturn == SIZE_MAX)
+                return 0;
+            nHeaderSize += nReturn;
+        }
 
         if (iFlag & HSTSHEADER)
         {
@@ -881,6 +828,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         if (iFlag & GZIPENCODING)
             strRespons += "Content-Encoding: gzip\r\n";
+        else if (iFlag & DEFLATEENCODING)
+            strRespons += "Content-Encoding: deflate\r\n";
 
         if (iFlag & HSTSHEADER)
             strRespons += "Strict-Transport-Security: max-age = 631138519; includeSubdomains; preload\r\n";
@@ -1163,8 +1112,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 break;
             }
         }
-
-        CallPlugins(itMethode->second, strItemPath);
 
         transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), ::toupper);
         auto aritMethode = arMethoden.find(itMethode->second);
@@ -1515,21 +1462,21 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             nFSize = stFileInfo.st_size;
 
             auto acceptencoding = lstHeaderFields.find("accept-encoding");
-            if (acceptencoding != end(lstHeaderFields) && acceptencoding->second.find("gzip") != string::npos)
+            if (acceptencoding != end(lstHeaderFields) && (acceptencoding->second.find("gzip") != string::npos || acceptencoding->second.find("deflate") != string::npos))
             {
-                iHeaderFlag |= GZIPENCODING;
+                iHeaderFlag |= acceptencoding->second.find("gzip") != string::npos ? GZIPENCODING : DEFLATEENCODING;
 
                 // http://www.filesignatures.net/index.php?page=all
                 const static wstring strNoZip(L"zip|rar|7z|iso|png|jpg|gif|mp3|wma|avi|mpg|gz|tar");
                 if (strNoZip.find(strFileExtension) != string::npos)
-                    iHeaderFlag &= ~GZIPENCODING;
+                    iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
             }
 
-            //iHeaderFlag &= ~GZIPENCODING;
-            if (iHeaderFlag & GZIPENCODING)
+            //iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
+            if (iHeaderFlag & GZIPENCODING || iHeaderFlag & DEFLATEENCODING)
             {
                 GZipPack gzipEncoder;
-                if (gzipEncoder.Init() == Z_OK)
+                if (gzipEncoder.Init((iHeaderFlag & DEFLATEENCODING) ? true : false) == Z_OK)
                 {
                     unique_ptr<TempFile> pDestFile = make_unique<TempFile>();
                     unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
