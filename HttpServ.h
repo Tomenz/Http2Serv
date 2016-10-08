@@ -131,7 +131,8 @@ class CHttpServ : public Http2Protocol
         HTTPVERSION11 = 8,
         ADDCONENTLENGTH = 16,
         GZIPENCODING = 32,
-        HSTSHEADER = 64,
+        DEFLATEENCODING = 64,
+        HSTSHEADER = 128,
     };
 
     typedef struct
@@ -162,9 +163,6 @@ public:
         //hp.m_strLogFile = L"access.log";
         //hp.m_strErrLog = L"error.log";
         hp.m_bSSL = bSSL;
-        hp.m_strCAcertificate = "";
-        hp.m_strHostCertificate = "";
-        hp.m_strHostKey = "";
         m_vHostParam.emplace(L"", hp);
     }
 
@@ -731,6 +729,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 return 0;
             nHeaderSize += nReturn;
         }
+        else if (iFlag & DEFLATEENCODING)
+        {
+            nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "content-encoding", "deflate");
+            if (nReturn == SIZE_MAX)
+                return 0;
+            nHeaderSize += nReturn;
+        }
 
         if (iFlag & HSTSHEADER)
         {
@@ -823,6 +828,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         if (iFlag & GZIPENCODING)
             strRespons += "Content-Encoding: gzip\r\n";
+        else if (iFlag & DEFLATEENCODING)
+            strRespons += "Content-Encoding: deflate\r\n";
 
         if (iFlag & HSTSHEADER)
             strRespons += "Strict-Transport-Security: max-age = 631138519; includeSubdomains; preload\r\n";
@@ -916,55 +923,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return;
         }
 
-        transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), ::toupper);
-
-        auto aritMethode = arMethoden.find(itMethode->second);
-
-        if (aritMethode == arMethoden.end())
-        {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 405, HEADERWRAPPER{ HEADERLIST() }, 0);
-            if (nStreamId != 0)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-            soMetaDa.fResetTimer();
-
-            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "]  Method Not Allowed: ", itMethode->second);
-
-            fuExitDoAction();
-            return;
-        }
-
-        // Check for redirect
-        for (auto& tuRedirect : m_vHostParam[szHost].m_vRedirMatch)    // RedirectMatch
-        {
-            wregex rx(get<1>(tuRedirect));
-            wsmatch match;
-            wstring strNewPath = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itPath->second);
-            if (regex_match(strNewPath.cbegin(), strNewPath.cend(), match, rx) == true)
-            {
-                wstring strLokation = regex_replace(strNewPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
-                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
-
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HEADERWRAPPER{ { { "Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation) } } }, 0);
-                if (nStreamId != 0)
-                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                soMetaDa.fResetTimer();
-                soMetaDa.fSocketClose();
-
-                CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
-                    << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
-                    << "\" 301 -" << " \""
-                    << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
-                    << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
-                    << CLogFile::LOGTYPES::END;
-
-                fuExitDoAction();
-                return;
-            }
-        }
-
         // Decode URL (%20 -> ' ')
         wstring strItemPath;
         size_t nLen = itPath->second.size();
@@ -1028,7 +986,38 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             strItemPath.erase(nPos);
         }
 
-        for (auto& strEnvIf : m_vHostParam[szHost].m_vEnvIf)    // SetEnvIf
+        // Check for redirect
+        for (auto& tuRedirect : m_vHostParam[szHost].m_vRedirMatch)    // RedirectMatch
+        {
+            wregex rx(get<1>(tuRedirect));
+            wsmatch match;
+            if (regex_match(strItemPath.cbegin(), strItemPath.cend(), match, rx) == true)
+            {
+                wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
+                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
+
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HEADERWRAPPER{ { { "Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation) } } }, 0);
+                if (nStreamId != 0)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                soMetaDa.fResetTimer();
+                soMetaDa.fSocketClose();
+
+                CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                    << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
+                    << "\" 301 -" << " \""
+                    << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                    << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                    << CLogFile::LOGTYPES::END;
+
+                fuExitDoAction();
+                return;
+            }
+        }
+
+        // Check for SetEnvIf
+        for (auto& strEnvIf : m_vHostParam[szHost].m_vEnvIf)
         {
             const static map<wstring, int> mKeyWord = { {L"REMOTE_HOST", 1 }, { L"REMOTE_ADDR", 2 },{ L"SERVER_ADDR", 3 },{ L"REQUEST_METHOD", 4 },{ L"REQUEST_PROTOCOL", 5 },{ L"REQUEST_URI", 6 } };
             const auto& itKeyWord = mKeyWord.find(get<0>(strEnvIf));
@@ -1054,7 +1043,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
         }
 
-        for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)    // RewriteRule
+        // Check for RewriteRule
+        for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)
         {
             strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
         }
@@ -1109,9 +1099,41 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         //    return;
         //}
 
-        if (aritMethode->second == 3)  // OPTION
+        // AliasMatch
+        bool bNewRootSet = false;
+        for (auto& strAlias : m_vHostParam[szHost].m_mstrAliasMatch)
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, HEADERWRAPPER{ { {"Allow", "GET, HEAD, POST"} } }, 0);
+            wregex rx(strAlias.first);
+            wstring strNewPath = regex_replace(strItemPath, rx, strAlias.second, regex_constants::format_first_only);
+            if (strNewPath.compare(strItemPath) != 0)
+            {
+                strItemPath = strNewPath;
+                bNewRootSet = true;
+                break;
+            }
+        }
+
+        transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), ::toupper);
+        auto aritMethode = arMethoden.find(itMethode->second);
+
+        if (aritMethode == arMethoden.end())
+        {
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 405, HEADERWRAPPER{ HEADERLIST() }, 0);
+            if (nStreamId != 0)
+                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            soMetaDa.fResetTimer();
+
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "]  Method Not Allowed: ", itMethode->second);
+
+            fuExitDoAction();
+            return;
+        }
+
+        // OPTION
+        if (aritMethode->second == 3)
+        {
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, HEADERWRAPPER{ { { "Allow", "GET, HEAD, POST" } } }, 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1129,21 +1151,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return;
         }
 
-        bool bNewRootSet = false;
-        for (auto& strAlias : m_vHostParam[szHost].m_mstrAliasMatch)    // AliasMatch
-        {
-            wregex rx(strAlias.first);
-            wstring strNewPath = regex_replace(strItemPath, rx, strAlias.second, regex_constants::format_first_only);
-            if (strNewPath.compare(strItemPath) != 0)
-            {
-                strItemPath = strNewPath;
-                bNewRootSet = true;
-                break;
-            }
-       }
-
+        // DefaultType
         string strMineType("application/octet-stream");
-        for (auto& strTyp : m_vHostParam[szHost].m_mstrForceTyp)    // DefaultType
+        for (auto& strTyp : m_vHostParam[szHost].m_mstrForceTyp)
         {
             wregex rx(strTyp.first);
             if (regex_search(strItemPath, rx, regex_constants::format_first_only) == true)
@@ -1452,21 +1462,21 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             nFSize = stFileInfo.st_size;
 
             auto acceptencoding = lstHeaderFields.find("accept-encoding");
-            if (acceptencoding != end(lstHeaderFields) && acceptencoding->second.find("gzip") != string::npos)
+            if (acceptencoding != end(lstHeaderFields) && (acceptencoding->second.find("gzip") != string::npos || acceptencoding->second.find("deflate") != string::npos))
             {
-                iHeaderFlag |= GZIPENCODING;
+                iHeaderFlag |= acceptencoding->second.find("gzip") != string::npos ? GZIPENCODING : DEFLATEENCODING;
 
                 // http://www.filesignatures.net/index.php?page=all
                 const static wstring strNoZip(L"zip|rar|7z|iso|png|jpg|gif|mp3|wma|avi|mpg|gz|tar");
                 if (strNoZip.find(strFileExtension) != string::npos)
-                    iHeaderFlag &= ~GZIPENCODING;
+                    iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
             }
 
-            //iHeaderFlag &= ~GZIPENCODING;
-            if (iHeaderFlag & GZIPENCODING)
+            //iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
+            if (iHeaderFlag & GZIPENCODING || iHeaderFlag & DEFLATEENCODING)
             {
                 GZipPack gzipEncoder;
-                if (gzipEncoder.Init() == Z_OK)
+                if (gzipEncoder.Init((iHeaderFlag & DEFLATEENCODING) ? true : false) == Z_OK)
                 {
                     unique_ptr<TempFile> pDestFile = make_unique<TempFile>();
                     unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);

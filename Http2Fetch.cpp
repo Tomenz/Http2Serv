@@ -150,7 +150,7 @@ public:
         }
         else
         {
-            string strRequest = "GET " + m_strPath + " HTTP/1.1\r\nHost: " + m_strServer + "\r\nUpgrade: h2c\r\nHTTP2-Settings: " + Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true) + "\r\nAccept: */*\r\nAccept-Encoding: gzip;q=1.0, identity; q=0.5, *;q=0\r\n\r\n";
+            string strRequest = "GET " + m_strPath + " HTTP/1.1\r\nHost: " + m_strServer + "\r\nUpgrade: h2c\r\nHTTP2-Settings: " + Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true) + "\r\nAccept: */*\r\nAccept-Encoding: gzip;q=1.0, deflate;q=0.8, identity; q=0.5, *;q=0\r\n\r\n";
             pTcpSocket->Write(strRequest.c_str(), strRequest.size());
         }
 
@@ -251,7 +251,7 @@ public:
                                 transform(begin(strHeader), end(strHeader), begin(strHeader), tolower);
                                 auto parResult = m_umRespHeader.insert(make_pair(strHeader, string(pColums + 1, pEndOfLine - pColums - 1)));
                                 if (parResult != m_umRespHeader.end())
-                                    while (parResult->second.at(0) == ' ') parResult->second.replace(parResult->second.find(' '), 1, "");
+                                    parResult->second.erase(0, parResult->second.find_first_not_of(" "));
                             }
 
                             if (m_nContentLength == 0)
@@ -367,7 +367,7 @@ public:
             m_uiStatus = stoul(status->second);
 
         auto encoding = m_umRespHeader.find("content-encoding");
-        if (encoding != m_umRespHeader.end() && encoding->second.find("gzip") != string::npos)
+        if (encoding != m_umRespHeader.end() && (encoding->second.find("gzip") != string::npos || encoding->second.find("deflate") != string::npos))
         {
             GZipUnpack gzipDecoder;
             if (gzipDecoder.Init() == Z_OK)
@@ -465,7 +465,10 @@ int main(int argc, const char* argv[])
     //fetch.Fetch(L"https://www.microsoft.com/de-de");
     //fetch.Fetch(L"https://192.168.161.1/");
     //fetch.Fetch(L"https://192.66.65.226/");
-    fetch.Fetch(L"https://www.google.de/");
+    //fetch.Fetch(L"https://www.google.de/");
+    //fetch.Fetch(L"http://www.heise.de/");
+    fetch.Fetch(L"http://www.avm.de/");
+    //fetch.Fetch(L"https://www.elumatec.de/");
 
     while (fetch.RequestFinished() == false)
         this_thread::sleep_for(chrono::milliseconds(10));
