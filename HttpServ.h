@@ -575,7 +575,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
                     pConDetails->mutStreams->lock();
-                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(pConDetails->StreamParam))));
+                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(pConDetails->StreamParam))));
                     pConDetails->mutStreams->unlock();
                     DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
                     if (nStreamId != 0)
@@ -664,7 +664,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         stringstream strTemp;
         strTemp.imbue(m_cLocal);
-        strTemp << put_time(::gmtime(&in_time_t), "%a, %d %b %Y %H:%M:%S GMT\r\n");
+        strTemp << put_time(::gmtime(&in_time_t), "%a, %d %b %Y %H:%M:%S GMT");
 
         nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "date", strTemp.str().c_str());
         if (nReturn == SIZE_MAX)
@@ -683,7 +683,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 return 0;
             nHeaderSize += nReturn;
         }
-
+/*
         if ((iRespCode / 100) == 2 || (iRespCode / 100) == 3)
         {
             nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "last-modified", strTemp.str().c_str());
@@ -691,7 +691,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 return 0;
             nHeaderSize += nReturn;
         }
-
+*/
         for (const auto& item : hw.umHeaderList)
         {
             string strHeaderFiled(item.first);
@@ -876,7 +876,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         int iHeaderFlag = 0;
 
         pmtxStream->lock();
-        HEADERLIST& lstHeaderFields = GETHEADERLIST(hw2.StreamList.find(nStreamId)->second);
+        HEADERLIST& lstHeaderFields = GETHEADERLIST(hw2.StreamList.find(nStreamId));
         pmtxStream->unlock();
 
         const wchar_t* szHost = L"";
@@ -1356,16 +1356,16 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                         auto StreamItem = hw2.StreamList.find(nStreamId);
                                         if (StreamItem != end(hw2.StreamList))
                                         {
-                                            (*WINDOWSIZE(StreamItem->second).get()) -= nRead;
-                                            nStreamWndSize = (*WINDOWSIZE(StreamItem->second).get());
+                                            WINDOWSIZE(StreamItem) -= nRead;
+                                            nStreamWndSize = WINDOWSIZE(StreamItem);
                                         }
                                         else
                                             break;  // Stream Item was removed, properly the stream was reseted
                                         StreamItem = hw2.StreamList.find(0);
                                         if (StreamItem != end(hw2.StreamList))
                                         {
-                                            (*WINDOWSIZE(StreamItem->second).get()) -= nRead;
-                                            nTotaleWndSize = (*WINDOWSIZE(StreamItem->second).get());
+                                            WINDOWSIZE(StreamItem) -= nRead;
+                                            nTotaleWndSize = WINDOWSIZE(StreamItem);
                                         }
                                         else
                                             break;  // Stream Item was removed, properly the stream was reseted
@@ -1538,12 +1538,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         lock_guard<mutex> lock0(*pmtxStream);
                         auto StreamItem = hw2.StreamList.find(nStreamId);
                         if (StreamItem != end(hw2.StreamList))
-                            nStreamWndSize = (*WINDOWSIZE(StreamItem->second).get());
+                            nStreamWndSize = WINDOWSIZE(StreamItem);
                         else
                             break;  // Stream Item was removed, properly the stream was reseted
                         StreamItem = hw2.StreamList.find(0);
                         if (StreamItem != end(hw2.StreamList))
-                            nTotaleWndSize = (*WINDOWSIZE(StreamItem->second).get());
+                            nTotaleWndSize = WINDOWSIZE(StreamItem);
                         else
                             break;  // Stream Item was removed, properly the stream was reseted
                     }
@@ -1570,12 +1570,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         lock_guard<mutex> lock0(*pmtxStream);
                         auto StreamItem = hw2.StreamList.find(nStreamId);
                         if (StreamItem != end(hw2.StreamList))
-                            (*WINDOWSIZE(StreamItem->second).get()) -= nSendBufLen;
+                            WINDOWSIZE(StreamItem) -= nSendBufLen;
                         else
                             break;  // Stream Item was removed, properly the stream was reseted
                         StreamItem = hw2.StreamList.find(0);
                         if (StreamItem != end(hw2.StreamList))
-                            (*WINDOWSIZE(StreamItem->second).get()) -= nSendBufLen;
+                            WINDOWSIZE(StreamItem) -= nSendBufLen;
                         else
                             break;  // Stream Item was removed, properly the stream was reseted
                     }
@@ -1629,7 +1629,7 @@ private:
     unordered_multimap<thread::id, atomic<bool>*> m_umActionThreads;
     mutex                  m_ActThrMutex;
 
-    const array<MIMEENTRY, 110>  MimeListe = { {
+    const array<MIMEENTRY, 111>  MimeListe = { {
         MIMEENTRY(L"txt", "text/plain"),
         MIMEENTRY(L"rtx", "text/richtext"),
         MIMEENTRY(L"css", "text/css"),
@@ -1650,6 +1650,7 @@ private:
         MIMEENTRY(L"jpg", "image/jpeg"),
         MIMEENTRY(L"jpe", "image/jpeg"),
         MIMEENTRY(L"png", "image/png"),
+        MIMEENTRY(L"svg", "image/svg+xml"),
         MIMEENTRY(L"tiff", "image/tiff"),
         MIMEENTRY(L"tif", "image/tiff"),
         MIMEENTRY(L"ras", "image/cmu-raster"),

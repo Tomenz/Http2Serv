@@ -26,13 +26,13 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #define BUFFER(x) get<0>(x)
 #define BUFLEN(x) get<1>(x)
 
-typedef tuple<uint32_t, deque<DATAITEM>, HEADERLIST, uint64_t, uint64_t, shared_ptr<atomic<int32_t>>> STREAMITEM;
-#define STREAMSTATE(x) get<0>(x)
-#define DATALIST(x) get<1>(x)
-#define GETHEADERLIST(x) get<2>(x)
-#define CONTENTLENGTH(x) get<3>(x)
-#define CONTENTRESCIV(x) get<4>(x)
-#define WINDOWSIZE(x) get<5>(x)
+typedef tuple<uint32_t, deque<DATAITEM>, HEADERLIST, uint64_t, uint64_t, shared_ptr<atomic_uint32_t>> STREAMITEM;
+#define STREAMSTATE(x) get<0>(x->second)
+#define DATALIST(x) get<1>(x->second)
+#define GETHEADERLIST(x) get<2>(x->second)
+#define CONTENTLENGTH(x) get<3>(x->second)
+#define CONTENTRESCIV(x) get<4>(x->second)
+#define WINDOWSIZE(x) *get<5>(x->second).get()
 
 typedef map<unsigned long, STREAMITEM> STREAMLIST;
 
@@ -88,6 +88,9 @@ public:
         ::memcpy(&caBuffer[9], &ulLastStream, 4);
         ::memcpy(&caBuffer[13], &ulErrCode, 4);
         Write(caBuffer, 9 + 8);
+
+        if (ulErrorCode != 0)
+            MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
     size_t Http2StreamProto(MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
@@ -118,7 +121,7 @@ public:
             auto streamData = umStreamCache.find(h2f.streamId);
             if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
             {
-                umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(tuStreamSettings)))));
+                umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(tuStreamSettings)))));
                 streamData = umStreamCache.find(h2f.streamId);
             }
 
@@ -140,13 +143,13 @@ public:
 
                     if (pTmpFile.get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                     {
-                        auto contentLength = GETHEADERLIST(streamData->second).find("content-length");
+                        auto contentLength = GETHEADERLIST(streamData).find("content-length");
 
-                        if (contentLength != end(GETHEADERLIST(streamData->second)))
+                        if (contentLength != end(GETHEADERLIST(streamData)))
                         {
-                            CONTENTLENGTH(streamData->second) = stoull(contentLength->second);
+                            CONTENTLENGTH(streamData) = stoull(contentLength->second);
 
-                            Http2WindowUpdate(soMetaDa.fSocketWrite, 0, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
+                            Http2WindowUpdate(soMetaDa.fSocketWrite, 0, static_cast<unsigned long>(CONTENTLENGTH(streamData)));
                             //Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
                         }
 
@@ -155,7 +158,7 @@ public:
                     }
 
                     pTmpFile.get()->Write(szBuf, min(static_cast<size_t>(h2f.size), nLen) - PadLen);
-                    CONTENTRESCIV(streamData->second) += min(static_cast<size_t>(h2f.size), nLen);
+                    CONTENTRESCIV(streamData) += min(static_cast<size_t>(h2f.size), nLen);
 
                     mapWindUodate[h2f.streamId] += static_cast<size_t>(h2f.size) - PadLen;
 
@@ -163,7 +166,7 @@ public:
                     {
                         pTmpFile.get()->Close();
 
-                        STREAMSTATE(streamData->second) |= 2;
+                        STREAMSTATE(streamData) |= 2;
                         EndOfStreamAction(soMetaDa, h2f.streamId, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
                     }
                 }
@@ -206,7 +209,7 @@ public:
                         // The header is finished, we safe it for later, but there must come some DATA frames for this request
                         if (streamData == end(umStreamCache))
                         {
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(0, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(tuStreamSettings)))));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(0, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(tuStreamSettings)))));
                             if (insert.second == false)
                             {
                                 // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
@@ -219,23 +222,23 @@ public:
                         }
                         else
                         {
-                            GETHEADERLIST(streamData->second) = lstHeaderFields;
+                            GETHEADERLIST(streamData) = lstHeaderFields;
                         }
 
                         if ((h2f.flag & 0x1) == 0x1)    // END_STREAM
                         {
-                            STREAMSTATE(umStreamCache.find(h2f.streamId)->second) |= 2;
+                            STREAMSTATE(umStreamCache.find(h2f.streamId)) |= 2;
                             EndOfStreamAction(soMetaDa, h2f.streamId, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
                         }
                     }
                     else
                     {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                        auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(1, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(tuStreamSettings)))));
+                        auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(1, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(tuStreamSettings)))));
                         if (insert.second == true)
                         {
                             auto data = shared_ptr<char>(new char[h2f.size - PadLen]);
-                            ::memcpy(data.get(), szBuf, h2f.size - PadLen);
-                            DATALIST(streamData->second).emplace_back(data, (h2f.size - PadLen));
+                            copy(&szBuf[0], &szBuf[h2f.size - PadLen], data.get());
+                            DATALIST(insert.first).emplace_back(data, (h2f.size - PadLen));
                         }
                     }
                 }
@@ -264,10 +267,10 @@ public:
                     pTmpFile.reset();
                     if (streamData != end(umStreamCache))
                     {
-                        if ((STREAMSTATE(streamData->second) & 2) == 0)
+                        if ((STREAMSTATE(streamData) & 2) == 0)
                             umStreamCache.erase(streamData);
                         else
-                            STREAMSTATE(streamData->second) |= 4;
+                            STREAMSTATE(streamData) |= 4;
                     }
                 }
                 pmtxStream->unlock();
@@ -379,8 +382,10 @@ public:
                     bool R = (lValue & 0x80000000) == 0x80000000 ? true : false;
                     lValue &= 0x7fffffff;
                     MyTrace("    Value = ", lValue, " R = ", R);
-                    if (streamData != end(umStreamCache) && lValue >= 1 && lValue <= 2147483647)
-                        (*WINDOWSIZE(streamData->second).get()) += lValue;
+                    if (streamData != end(umStreamCache) && lValue >= 1 && lValue <= 2147483647)    // 2^31 - 1
+                    {
+                        WINDOWSIZE(streamData) += lValue;
+                    }
                     else
                     {   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
                         if (lValue == 0 || lValue > 2147483647)
@@ -401,11 +406,11 @@ public:
                     break;
                 }
 
-                if (STREAMSTATE(streamData->second) == 1)    // We had a Header frame before
+                if (STREAMSTATE(streamData) == 1)    // We had a Header frame before
                 {
                     auto data = shared_ptr<char>(new char[h2f.size]);
                     ::memcpy(data.get(), szBuf, h2f.size);
-                    DATALIST(streamData->second).emplace_back(data, h2f.size);
+                    DATALIST(streamData).emplace_back(data, h2f.size);
                 }
                 else
                 {   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
@@ -418,15 +423,15 @@ public:
                 if ((h2f.flag & 0x4) == 0x4)    // END_HEADERS
                 {
                     size_t nHeaderLen = 0;
-                    for (DATAITEM chunk : DATALIST(streamData->second))
+                    for (DATAITEM chunk : DATALIST(streamData))
                         nHeaderLen += BUFLEN(chunk);
 
                     auto ptHeaderBuf = make_unique<char[]>(nHeaderLen);
                     size_t nOffset = 0;
-                    for (DATAITEM chunk : DATALIST(streamData->second))
+                    for (DATAITEM chunk : DATALIST(streamData))
                         ::memcpy(ptHeaderBuf.get() + nOffset, BUFFER(chunk).get(), BUFLEN(chunk)), nOffset += BUFLEN(chunk);
 
-                    if (Http2DecodeHeader(ptHeaderBuf.get(), nHeaderLen, qDynTable, GETHEADERLIST(streamData->second)) != 0)
+                    if (Http2DecodeHeader(ptHeaderBuf.get(), nHeaderLen, qDynTable, GETHEADERLIST(streamData)) != 0)
                     {   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
                         Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1); // 1 = // PROTOCOL_ERROR
                         umStreamCache.erase(streamData);
@@ -434,12 +439,12 @@ public:
                         break;
                     }
 
-                    DATALIST(streamData->second).clear();
-                    STREAMSTATE(streamData->second) = 0;
+                    DATALIST(streamData).clear();
+                    STREAMSTATE(streamData) = 0;
 
                     if ((h2f.flag & 0x1) == 0x1)    // END_STREAM
                     {
-                        STREAMSTATE(streamData->second) |= 2;
+                        STREAMSTATE(streamData) |= 2;
                         EndOfStreamAction(soMetaDa, h2f.streamId, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
                     }
                 }

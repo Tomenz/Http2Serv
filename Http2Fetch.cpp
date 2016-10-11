@@ -227,7 +227,7 @@ public:
 
                         if (m_nContentLength == 0)    // Server send a content-lentgh from 0 to signal end of header we are done!
                         {
-                            m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                            m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                             EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
                             return;
                         }
@@ -325,7 +325,7 @@ public:
                     || (m_nChuncked == 0 && m_nNextChunk == 0))
                 {
                     m_pTmpFile.get()->Flush();
-                    m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                    m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                     EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
                 }
 
@@ -356,7 +356,7 @@ public:
 
     void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
     {
-        m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)->second));
+        m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)));
 
         for (const auto& Header : m_umRespHeader)
             wcerr << Header.first.c_str() << L": " << Header.second.c_str() << endl;
@@ -467,8 +467,9 @@ int main(int argc, const char* argv[])
     //fetch.Fetch(L"https://192.66.65.226/");
     //fetch.Fetch(L"https://www.google.de/");
     //fetch.Fetch(L"http://www.heise.de/");
-    fetch.Fetch(L"http://www.avm.de/");
+    //fetch.Fetch(L"http://www.avm.de/");
     //fetch.Fetch(L"https://www.elumatec.de/");
+    fetch.Fetch(L"https://http2.golang.org/gophertiles?latency=0");
 
     while (fetch.RequestFinished() == false)
         this_thread::sleep_for(chrono::milliseconds(10));
