@@ -31,7 +31,7 @@ thread_local bool CLogFile::s_bDontLog = false;
 
 CLogFile& CLogFile::GetInstance(const wstring& strLogfileName)
 {
-    if (m_ssMsg.getloc().name().compare("C") != 0)
+    if (m_ssMsg.getloc().name() != "C")
         m_ssMsg.imbue(locale("C"));
 
     auto instance = s_lstLogFiles.find(strLogfileName);

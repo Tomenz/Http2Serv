@@ -158,7 +158,7 @@ int main(int argc, const char* argv[])
                         case 7: HostParam.m_strHostCertificate = Utf8Converter.to_bytes(strValue); break;
                         case 8: HostParam.m_strCAcertificate = Utf8Converter.to_bytes(strValue); break;
                         case 9: transform(begin(strValue), end(strValue), begin(strValue), ::toupper);
-                                HostParam.m_bSSL = strValue.compare(L"TRUE") == 0 ? true : false; break;
+                                HostParam.m_bSSL = strValue == L"TRUE" ? true : false; break;
                         }
                     }
                 }

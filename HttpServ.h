@@ -182,7 +182,7 @@ public:
 
             for (auto& Item : m_vHostParam)
             {
-                if (Item.first.compare(L"") != 0 && Item.second.m_bSSL == true)
+                if (Item.first != L"" && Item.second.m_bSSL == true)
                 {
                     pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str());
                     pSocket->SetDHParameter(Item.second.m_strDhParam.c_str());
@@ -548,7 +548,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                 uint32_t nStreamId = 0;
                 auto upgradeHeader = pConDetails->HeaderList.find("upgrade");
-                if (upgradeHeader != end(pConDetails->HeaderList) && upgradeHeader->second.compare("h2c") == 0)
+                if (upgradeHeader != end(pConDetails->HeaderList) && upgradeHeader->second == "h2c")
                 {
                     auto http2SettingsHeader = pConDetails->HeaderList.find("http2-settings");
                     if (http2SettingsHeader != end(pConDetails->HeaderList))
@@ -696,7 +696,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             string strHeaderFiled(item.first);
             transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), ::tolower);
-            if (strHeaderFiled.compare("pragma") == 0 || strHeaderFiled.compare("cache-control") == 0)
+            if (strHeaderFiled =="pragma" || strHeaderFiled == "cache-control")
                 iFlag &= ~ADDNOCACHE;
             nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, strHeaderFiled.c_str(), item.second.c_str());
             if (nReturn == SIZE_MAX)
@@ -813,7 +813,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         for (const auto& item : hw.umHeaderList)
         {
-            if (item.first.compare("Pragma") == 0 || item.first.compare("Cache-Control") == 0)
+            if (item.first == "Pragma" || item.first == "Cache-Control")
                 iFlag &= ~ADDNOCACHE;
             strRespons += item.first + ": " + item.second + "\r\n";
         }
@@ -892,11 +892,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
 
         auto itVersion = lstHeaderFields.find(":version");
-        if (itVersion != end(lstHeaderFields) && itVersion->second.compare("1") == 0)
+        if (itVersion != end(lstHeaderFields) && itVersion->second == "1")
             iHeaderFlag = HTTPVERSION11;
 
         auto connection = lstHeaderFields.find("connection");
-        if (connection != end(lstHeaderFields) && connection->second.compare("close") == 0)
+        if (connection != end(lstHeaderFields) && connection->second == "close")
             iHeaderFlag |= ADDCONNECTIONCLOSE;
 
         uint32_t nCloseConnection = ((iHeaderFlag & HTTPVERSION11) == 0 || (iHeaderFlag & ADDCONNECTIONCLOSE) == ADDCONNECTIONCLOSE) && nStreamId == 0 ? 1 : 0; // if HTTP/1.0 and not HTTP/2.0 close connection after data is send
@@ -1037,7 +1037,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                 if (bFound == true)
                 {
-                    if (get<2>(strEnvIf).compare(L"DONTLOG") == 0)
+                    if (get<2>(strEnvIf) == L"DONTLOG")
                         CLogFile::SetDontLog();
                 }
             }
@@ -1084,8 +1084,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 string strCredenial = Base64::Decode(itAuth->second.substr(nPos + 1));
                 //string strBase64 = Base64::Encode(strCredenial.c_str(), strCredenial.size());
                 //if (strBase64.compare(itAuth->second.substr(nPos + 1)) == 0)
+                //if (itAuth->second.compare(nPos + 1, -1, strBase64) == 0)
                 //    MessageBeep(-1);
-                //if (strCredenial.compare("Thomas:lanier") == 0)
+                //if (strCredenial == "Thomas:lanier")
                 //    MessageBeep(-1);
             }
         }
@@ -1105,7 +1106,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             wregex rx(strAlias.first);
             wstring strNewPath = regex_replace(strItemPath, rx, strAlias.second, regex_constants::format_first_only);
-            if (strNewPath.compare(strItemPath) != 0)
+            if (strNewPath != strItemPath)
             {
                 strItemPath = strNewPath;
                 bNewRootSet = true;
@@ -1168,7 +1169,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         replace(begin(strItemPath), end(strItemPath), L'\\', L'/');
 
         // supplement default item
-        if (strItemPath.substr(strItemPath.size() - 1).compare(L"/") == 0 && m_vHostParam[szHost].m_vstrDefaultItem.empty() == false)
+        if (strItemPath.compare(strItemPath.size() - 1, -1, L"/") == 0 && m_vHostParam[szHost].m_vstrDefaultItem.empty() == false)
         {
             for (auto& strDefItem : m_vHostParam[szHost].m_vstrDefaultItem)
             {
@@ -1234,7 +1235,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         for (const auto& strFileTyp : m_vHostParam[szHost].m_mFileTypeAction)
         {
-            if (strFileExtension.compare(strFileTyp.first) == 0)
+            if (strFileExtension == strFileTyp.first)
             {
                 if (strFileTyp.second.empty() == false)
                 {
@@ -1318,9 +1319,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                                     while (iter->second.find(' ') == 0) iter->second.erase(0, 1);
                                             }
 
-                                            if (nPosEnd - nPosStart > 2 && strBuffer.substr(nPosStart, 2).compare("\r\n") == 0)
+                                            if (nPosEnd - nPosStart > 2 && strBuffer.compare(nPosStart, 2, "\r\n") == 0)
                                                 nPosEnd -= 2;
-                                            else if (nPosEnd - nPosStart > 1 && strBuffer.substr(nPosStart, 2).compare("\n\n") == 0)
+                                            else if (nPosEnd - nPosStart > 1 && strBuffer.compare(nPosStart, 2, "\n\n") == 0)
                                                 nPosEnd -= 1;
 
                                             nRead -= nPosEnd;
@@ -1524,7 +1525,17 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
 
-            if (aritMethode->second == 0 || aritMethode->second == 2) // GET or POST
+            if (aritMethode->second == 1) // HEAD
+            {
+                if (nStreamId != 0)
+                {
+                    auto apBuf = make_unique<char[]>(nHttp2Offset);
+                    BuildHttp2Frame(apBuf.get(), 0, 0x0, 0x1, nStreamId);
+                    soMetaDa.fSocketWrite(apBuf.get(), nHttp2Offset);
+                    soMetaDa.fResetTimer();
+                }
+            }
+            else if (aritMethode->second == 0 || aritMethode->second == 2) // GET or POST
             {
                 auto apBuf = make_unique<char[]>(nSizeSendBuf + nHttp2Offset + 2);
 
@@ -1546,16 +1557,18 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             nTotaleWndSize = WINDOWSIZE(StreamItem);
                         else
                             break;  // Stream Item was removed, properly the stream was reseted
+                        nStreamWndSize = min(nStreamWndSize, nTotaleWndSize);
                     }
 
                     size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
-                    if (nInQue >= 0x200000 || nStreamWndSize < nSizeSendBuf || nTotaleWndSize < nSizeSendBuf)
+                    if (nInQue >= 0x200000 || nStreamWndSize == 0)
                     {
                         this_thread::sleep_for(chrono::milliseconds(1));
                         continue;
                     }
 
                     uint32_t nSendBufLen = static_cast<uint32_t>(min(static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered));
+                    nSendBufLen = min(nSendBufLen, nStreamWndSize);
 
                     nBytesTransfered += nSendBufLen;
 
