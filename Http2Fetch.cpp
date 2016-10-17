@@ -172,7 +172,7 @@ public:
         shared_ptr<char> spBuffer(new char[m_strBuffer.size() + nAvalible + 1]);
         copy(begin(m_strBuffer), begin(m_strBuffer) + m_strBuffer.size(), spBuffer.get());
 
-        uint32_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvalible);
+        size_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvalible);
 
         if (nRead > 0)
         {
@@ -194,7 +194,7 @@ public:
             }
             else
             {
-                uint32_t nWriteOffset = 0;
+                size_t nWriteOffset = 0;
 
                 if (m_bEndOfHeader == false)
                 {
@@ -227,7 +227,7 @@ public:
 
                         if (m_nContentLength == 0)    // Server send a content-lentgh from 0 to signal end of header we are done!
                         {
-                            m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                            m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                             EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
                             return;
                         }
@@ -325,7 +325,7 @@ public:
                     || (m_nChuncked == 0 && m_nNextChunk == 0))
                 {
                     m_pTmpFile.get()->Flush();
-                    m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                    m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                     EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
                 }
 

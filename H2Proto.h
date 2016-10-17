@@ -26,7 +26,7 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #define BUFFER(x) get<0>(x)
 #define BUFLEN(x) get<1>(x)
 
-typedef tuple<uint32_t, deque<DATAITEM>, HEADERLIST, uint64_t, uint64_t, shared_ptr<atomic_uint32_t>> STREAMITEM;
+typedef tuple<uint32_t, deque<DATAITEM>, HEADERLIST, uint64_t, uint64_t, shared_ptr<atomic_size_t>> STREAMITEM;
 #define STREAMSTATE(x) get<0>(x->second)
 #define DATALIST(x) get<1>(x->second)
 #define GETHEADERLIST(x) get<2>(x->second)
@@ -47,7 +47,7 @@ typedef struct
     string strIpInterface;
     short sPortInterFace;
     bool bIsSsl;
-    function<uint32_t(const void*, uint32_t)> fSocketWrite;
+    function<size_t(const void*, size_t)> fSocketWrite;
     function<void()> fSocketClose;
     function<uint32_t()> fSockGetOutBytesInQue;
     function<void()> fResetTimer;
@@ -59,7 +59,7 @@ public:
     Http2Protocol() {}
     virtual ~Http2Protocol() {}
 
-    void Http2WindowUpdate(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulStreamSize) const noexcept
+    void Http2WindowUpdate(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulStreamSize) const noexcept
     {
         char caBuffer[20];
         unsigned long ulSizeStream = htonl(ulStreamSize);
@@ -68,7 +68,7 @@ public:
         Write(caBuffer, 9 + 4);
     }
 
-    void Http2StreamError(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulErrorCode) const noexcept
+    void Http2StreamError(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulErrorCode) const noexcept
     {
         char caBuffer[20];
         unsigned long ulErrCode = htonl(ulErrorCode);
@@ -79,7 +79,7 @@ public:
         MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
-    void Http2Goaway(function<uint32_t(const void*, uint32_t)> Write, unsigned long ulStreamID, unsigned long ulLastStreamID, unsigned long ulErrorCode) const noexcept
+    void Http2Goaway(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulLastStreamID, unsigned long ulErrorCode) const noexcept
     {
         char caBuffer[20];
         unsigned long ulLastStream = htonl(ulLastStreamID);
@@ -121,7 +121,7 @@ public:
             auto streamData = umStreamCache.find(h2f.streamId);
             if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
             {
-                umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
                 streamData = umStreamCache.find(h2f.streamId);
             }
 
@@ -209,7 +209,7 @@ public:
                         // The header is finished, we safe it for later, but there must come some DATA frames for this request
                         if (streamData == end(umStreamCache))
                         {
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(0, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(0, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
                             if (insert.second == false)
                             {
                                 // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
@@ -233,7 +233,7 @@ public:
                     }
                     else
                     {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                        auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(1, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                        auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(1, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
                         if (insert.second == true)
                         {
                             auto data = shared_ptr<char>(new char[h2f.size - PadLen]);

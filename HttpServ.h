@@ -123,7 +123,7 @@ class CHttpServ : public Http2Protocol
     #define MIMEEXTENSION(x) get<0>(x)
     #define MIMESTRING(x) get<1>(x)
 
-    enum
+    enum HEADERFLAGS : uint32_t
     {
         TERMINATEHEADER = 1,
         ADDCONNECTIONCLOSE = 2,
@@ -419,7 +419,7 @@ private:
                     }
                     else if (pConDetails->nContentsSoll != 0 && pConDetails->nContentRecv < pConDetails->nContentsSoll)  // File Download in progress
                     {
-                        uint32_t nBytesToWrite = static_cast<uint32_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
+                        size_t nBytesToWrite = static_cast<size_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
                         pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
                         pConDetails->nContentRecv += nBytesToWrite;
                         pConDetails->strBuffer.erase(0, nBytesToWrite);
@@ -523,7 +523,7 @@ auto dwStart = chrono::high_resolution_clock::now();
 
                             if ( pConDetails->strBuffer.size() > 0)
                             {
-                                uint32_t nBytesToWrite = static_cast<uint32_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
+                                size_t nBytesToWrite = static_cast<size_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
                                 pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
                                 pConDetails->nContentRecv += nBytesToWrite;
                                 pConDetails->strBuffer.erase(0, nBytesToWrite);
@@ -575,7 +575,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
                     pConDetails->mutStreams->lock();
-                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic_uint32_t>(INITWINDOWSIZE(pConDetails->StreamParam))));
+                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(pConDetails->StreamParam))));
                     pConDetails->mutStreams->unlock();
                     DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
                     if (nStreamId != 0)
@@ -1352,8 +1352,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     (*pmtxStream).lock();
                                     for (;;)
                                     {
-                                        uint32_t nStreamWndSize = UINT32_MAX;
-                                        uint32_t nTotaleWndSize = UINT32_MAX;
+                                        size_t nStreamWndSize = SIZE_MAX;
+                                        size_t nTotaleWndSize = SIZE_MAX;
                                         auto StreamItem = hw2.StreamList.find(nStreamId);
                                         if (StreamItem != end(hw2.StreamList))
                                         {
@@ -1506,7 +1506,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         } while (iRet == Z_OK && nBytesConverted == 0);
                     } while (iRet == Z_OK);
 
-                    nFSize = static_cast<uint32_t>(pDestFile->GetFileLength());
+                    nFSize = static_cast<uint64_t>(pDestFile->GetFileLength());
                     pDestFile.get()->Rewind();
                     fin.swap((*pDestFile.get())());
                     pDestFile->Close();
@@ -1542,8 +1542,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 uint64_t nBytesTransfered = 0;
                 while (nBytesTransfered < nFSize && (*patStop).load() == false)
                 {
-                    uint32_t nStreamWndSize = UINT32_MAX;
-                    uint32_t nTotaleWndSize = UINT32_MAX;
+                    size_t nStreamWndSize = SIZE_MAX;
+                    size_t nTotaleWndSize = SIZE_MAX;
                     if (nStreamId != 0)
                     {
                         lock_guard<mutex> lock0(*pmtxStream);
@@ -1567,7 +1567,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         continue;
                     }
 
-                    uint32_t nSendBufLen = static_cast<uint32_t>(min(static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered));
+                    size_t nSendBufLen = static_cast<size_t>(min(static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered));
                     nSendBufLen = min(nSendBufLen, nStreamWndSize);
 
                     nBytesTransfered += nSendBufLen;
