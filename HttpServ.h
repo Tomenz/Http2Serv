@@ -1624,6 +1624,14 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
     virtual void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop) override
     {
+        auto StreamPara = StreamList.find(streamId);
+        if (StreamPara != end(StreamList))
+        {
+            HEADERLIST& lstHeaderFields = GETHEADERLIST(StreamPara);
+            if (find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HEADERLIST::const_reference cIter) { return ":status" == cIter.first; }) != end(lstHeaderFields))
+                throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+        }
+
         thread(&CHttpServ::DoAction, this, soMetaDa, streamId, HEADERWRAPPER2{ ref(StreamList)}, ref(tuStreamSettings), pmtxStream, move(pTmpFile), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop).detach();
     }
 
