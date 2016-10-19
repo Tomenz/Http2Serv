@@ -941,7 +941,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                     soMetaDa.fResetTimer();
 
-                    CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - " << itMethode->second << " \"" << lstHeaderFields.find(":path")->second << "\" 400 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \"" << itMethode->second << " " << lstHeaderFields.find(":path")->second << "\" 400 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] bad request: ", itPath->second);
 
                     fuExitDoAction();
