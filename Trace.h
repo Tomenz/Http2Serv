@@ -41,7 +41,7 @@ template<typename T, typename ...Args>
 void MyTrace(const T& value, const Args&... rest)
 {
 #ifdef _DEBUG
-    if (ssTrace.getloc().name().compare("C") != 0)
+    if (ssTrace.getloc().name() != "C")
         ssTrace.imbue(locale("C"));
 
     MyTraceAdd(value);

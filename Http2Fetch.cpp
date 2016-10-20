@@ -50,7 +50,7 @@ public:
         m_strServer = string(begin(strAdresse), end(strAdresse));
         transform(begin(m_strServer), begin(m_strServer) + 5, begin(m_strServer), tolower);
 
-        if (m_strServer.substr(0, 4).compare("http") != 0)
+        if (m_strServer.compare(0, 4, "http") != 0)
             return false;
 
         m_strServer.erase(0, 4);
@@ -64,7 +64,7 @@ public:
         else
             m_pcClientCon = reinterpret_cast<SslTcpSocket*>(new TcpSocket());
 
-        if (m_strServer.substr(0, 3).compare("://") != 0)
+        if (m_strServer.compare(0, 3, "://") != 0)
             return false;
         m_strServer.erase(0, 3);
 
@@ -113,7 +113,7 @@ public:
             //wcerr << Protocoll.c_str() << endl;
         }
 
-        if (Protocoll.compare("h2") == 0)
+        if (Protocoll == "h2")
         {
             m_bIsHttp2 = true;
             pTcpSocket->Write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24);
@@ -172,7 +172,7 @@ public:
         shared_ptr<char> spBuffer(new char[m_strBuffer.size() + nAvalible + 1]);
         copy(begin(m_strBuffer), begin(m_strBuffer) + m_strBuffer.size(), spBuffer.get());
 
-        uint32_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvalible);
+        size_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvalible);
 
         if (nRead > 0)
         {
@@ -194,7 +194,7 @@ public:
             }
             else
             {
-                uint32_t nWriteOffset = 0;
+                size_t nWriteOffset = 0;
 
                 if (m_bEndOfHeader == false)
                 {
@@ -212,7 +212,7 @@ public:
 
                         auto status = m_umRespHeader.find(":status");
                         auto upgrade = m_umRespHeader.find("upgrade");
-                        if (status != m_umRespHeader.end() && stoi(status->second) == 101 && upgrade != m_umRespHeader.end() && upgrade->second.compare("h2c") == 0)
+                        if (status != m_umRespHeader.end() && stoi(status->second) == 101 && upgrade != m_umRespHeader.end() && upgrade->second == "h2c")
                         {
                             m_bIsHttp2 = true;
                             copy(pEndOfLine + 2, pEndOfLine + 2 + nRead + 1, spBuffer.get());
@@ -227,7 +227,7 @@ public:
 
                         if (m_nContentLength == 0)    // Server send a content-lentgh from 0 to signal end of header we are done!
                         {
-                            m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                            m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                             EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
                             return;
                         }
@@ -268,7 +268,7 @@ public:
                                 {
                                     string strTmp(pHeader->second.size(), 0);
                                     transform(begin(pHeader->second), end(pHeader->second), begin(strTmp), tolower);
-                                    m_nChuncked = strTmp.compare("chunked");
+                                    m_nChuncked = strTmp == "chunked";
                                 }
                             }
                         }
@@ -325,7 +325,7 @@ public:
                     || (m_nChuncked == 0 && m_nNextChunk == 0))
                 {
                     m_pTmpFile.get()->Flush();
-                    m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic<int32_t>>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                    m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                     EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
                 }
 
@@ -356,7 +356,7 @@ public:
 
     void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
     {
-        m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)->second));
+        m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)));
 
         for (const auto& Header : m_umRespHeader)
             wcerr << Header.first.c_str() << L": " << Header.second.c_str() << endl;
@@ -463,12 +463,13 @@ int main(int argc, const char* argv[])
 	Http2Fetch fetch;
 	//fetch.Fetch(L"https://twitter.com/");
     //fetch.Fetch(L"https://www.microsoft.com/de-de");
-    //fetch.Fetch(L"https://192.168.161.1/");
+    fetch.Fetch(L"https://192.168.161.1/index.htm");
     //fetch.Fetch(L"https://192.66.65.226/");
     //fetch.Fetch(L"https://www.google.de/");
     //fetch.Fetch(L"http://www.heise.de/");
-    fetch.Fetch(L"http://www.avm.de/");
+    //fetch.Fetch(L"http://www.avm.de/");
     //fetch.Fetch(L"https://www.elumatec.de/");
+    //fetch.Fetch(L"https://http2.golang.org/gophertiles?latency=0");
 
     while (fetch.RequestFinished() == false)
         this_thread::sleep_for(chrono::milliseconds(10));

@@ -403,25 +403,25 @@ int main()
                     vector<wstring>&& vParaValue = ConfFile::GetInstance(L"server.cfg").get(strListenAddr + L":" + strPort, strParamKey);
                     if (vParaValue.empty() == false)
                     {
-                        if (strParamKey.compare(L"DefaultItem") == 0)
+                        if (strParamKey == L"DefaultItem")
                             vServers.back().SetDefaultItem(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                        if (strParamKey.compare(L"RootDir") == 0)
+                        if (strParamKey == L"RootDir")
                             vServers.back().SetRootDirectory(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                        if (strParamKey.compare(L"LogFile") == 0)
+                        if (strParamKey == L"LogFile")
                             vServers.back().SetAccessLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
-                        if (strParamKey.compare(L"ErrorLog") == 0)
+                        if (strParamKey == L"ErrorLog")
                             vServers.back().SetErrorLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
 
-                        if (strParamKey.compare(L"SSL") == 0 && vParaValue.begin()->compare(L"true") == 0)
+                        if (strParamKey == L"SSL" && vParaValue.begin() == L"true")
                             get<0>(tuSSLParam) = true;
-                        if (strParamKey.compare(L"KeyFile") == 0)
+                        if (strParamKey == L"KeyFile")
                             get<1>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
-                        if (strParamKey.compare(L"CertFile") == 0)
+                        if (strParamKey == L"CertFile")
                             get<2>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
-                        if (strParamKey.compare(L"CaBundle") == 0)
+                        if (strParamKey == L"CaBundle")
                             get<3>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());
 
-                        if (strParamKey.compare(L"VirtualHost") == 0 && IsVHost == false)
+                        if (strParamKey == L"VirtualHost" && IsVHost == false)
                         {
                             size_t nPos = vParaValue.begin()->find_first_of(L','), nStart = 0;
                             while (nPos != string::npos)

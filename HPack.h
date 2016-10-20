@@ -93,13 +93,15 @@ public:
         return strRet;
     }
 
-    uint32_t DecodeInteger(const char** pszBuf, size_t* const pnLen) const noexcept
+    uint32_t DecodeInteger(const char** pszBuf, size_t* const pnLen) const
     {
         uint32_t nRet = 0;
         uint32_t nBitCount = 0; // M = 0
         uint8_t b;
         do
         {
+            if (*pnLen == 0)
+                throw H2ProtoException(H2ProtoException::BUFFSIZE_ERROR);
             b = *((*pszBuf)++), (*pnLen)--; // B = next octet
             nRet += (b & 0x7f) * (1 << nBitCount); // I = I + (B & 127) * 2 ^ M
             nBitCount += 7; // M = M + 7
@@ -108,8 +110,11 @@ public:
         return nRet;
     }
 
-    string DecodeString(const char** pszBuf, size_t* const pnLen) const noexcept
+    string DecodeString(const char** pszBuf, size_t* const pnLen) const
     {
+        if (*pnLen == 0)
+            throw H2ProtoException(H2ProtoException::BUFFSIZE_ERROR);
+
         bool bEncoded = (*(*pszBuf) & 0x80) == 0x80 ? true : false;
         size_t nStrLen = (*((*pszBuf)++) & 0x7f);
         (*pnLen)--;
@@ -117,14 +122,20 @@ public:
         if ((nStrLen & 0x7f) == 0x7f)    // 7 Bit prefix
             nStrLen += DecodeInteger(pszBuf, pnLen);// , ::OutputDebugString(L"Integer decoden\r\n");
 
+        if (*pnLen < nStrLen)
+            throw H2ProtoException(H2ProtoException::BUFFSIZE_ERROR);
+
         string strReturn = bEncoded == true ? HufmanDecode(*pszBuf, nStrLen) : string(*pszBuf, nStrLen);
         (*pnLen) -= nStrLen, (*pszBuf) += nStrLen;
 
         return strReturn;
     }
 
-    size_t DecodeIndex(const char** pszBuf, size_t* const pnLen, uint32_t nBitMask) const noexcept
+    size_t DecodeIndex(const char** pszBuf, size_t* const pnLen, uint32_t nBitMask) const
     {
+        if (*pnLen == 0)
+            throw H2ProtoException(H2ProtoException::BUFFSIZE_ERROR);
+
         size_t iIndex = *((*pszBuf)++) & nBitMask;
         (*pnLen)--;
 
@@ -134,7 +145,7 @@ public:
         return iIndex;
     }
 
-    size_t HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qDynTable, string& strHeaderName, string& strHeaderValue) const noexcept
+    size_t HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qDynTable, string& strHeaderName, string& strHeaderValue, uint32_t& nHeaderCount) const
     {
         //basic_fstream<char> fout("header.bin", ios_base::out | ios_base::binary);
         //if (fout.is_open() == true)
@@ -162,7 +173,7 @@ public:
 
         size_t iIndex = DecodeIndex(&szBuf, &nLen, cBitMask);
         bool bUseDynTbl = false;
-        if (iIndex > StaticHeaderListe.size())
+        if (iIndex > StaticHeaderListe.size() && cBitMask != 0x1f)
             iIndex -= StaticHeaderListe.size(), bUseDynTbl = true;
 
         if (cBitMask == 0x7f)       // Indexed Header Field Representation
@@ -182,6 +193,10 @@ public:
         }
         else if (cBitMask == 0x1f)  // Dynamic Table Size Update
         {
+            if (nHeaderCount-- != 0)
+                throw H2ProtoException(H2ProtoException::DYNTABLE_UPDATE);
+            if (iIndex == 0)
+                qDynTable.clear();
 #if defined(_WIN32) || defined(_WIN64)
             ::OutputDebugString(L"*** Dynamic Table Size Update not yet implemented ***\r\n");
 #endif
@@ -192,6 +207,12 @@ public:
             if (iIndex == 0)    // without Indexing
             {
                 strHeaderName = strHeaderValue;
+                if (strHeaderName[0] == ':' && find_if(begin(StaticHeaderListe), end(StaticHeaderListe), [&](HEADERENTRY he) { return strHeaderName == get<1>(he); }) == end(StaticHeaderListe))
+                    throw H2ProtoException(H2ProtoException::FALSE_PSEUDO_HEADER);
+                if (none_of(begin(strHeaderName), end(strHeaderName), [](char c) { return islower(c); }))
+                    throw H2ProtoException(H2ProtoException::UPPERCASE_HEADER);
+                if (strHeaderName == "connection")
+                    throw H2ProtoException(H2ProtoException::INVALID_HEADER);
                 strHeaderValue = DecodeString(&szBuf, &nLen);
             }
             else
@@ -205,7 +226,6 @@ public:
             }
 
             if (cBitMask == 0x3f)
-                //qDynTable.push_front(HEADERENTRY(0, strHeaderName, strHeaderValue));
                 qDynTable.emplace_front(0, strHeaderName, strHeaderValue);
         }
 
@@ -354,7 +374,7 @@ public:
 
         for (HEADERENTRY HeItem : StaticHeaderListe)
         {
-            if (::_stricmp(HEADERNAME(HeItem).c_str(), strHeaderId) == 0 && (HEADERVALUE(HeItem).empty() == true || HEADERVALUE(HeItem).compare(strHeaderValue) == 0))
+            if (::_stricmp(HEADERNAME(HeItem).c_str(), strHeaderId) == 0 && (HEADERVALUE(HeItem).empty() == true || HEADERVALUE(HeItem) == strHeaderValue))
             {
                 nIndex = HEADERINDEX(HeItem);
                 strValue = HEADERVALUE(HeItem);
@@ -389,35 +409,97 @@ public:
     void BuildHttp2Frame(char* const szBuf, size_t nDataLen, uint8_t cTyp, uint8_t cFlag, uint32_t nStreamId) const noexcept
     {
         H2FRAME h2f = { static_cast<unsigned long>(nDataLen), cTyp, cFlag, nStreamId, false };
-        h2f.size = ::htonl(h2f.size) & 0xffffff00;
+        h2f.size = htonl(h2f.size) & 0xffffff00;
         ::memcpy(szBuf, ((char*)&h2f.size) + 1, 3);
         szBuf[3] = h2f.typ;
         szBuf[4] = h2f.flag;
-        h2f.streamId = ::htonl(h2f.streamId) & 0xfffffff7;
+        h2f.streamId = htonl(h2f.streamId) & 0xfffffff7;
         ::memcpy(&szBuf[5], &h2f.streamId, 4);
     }
 
-    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HEADERLIST& lstHeaderFields) const noexcept
+    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HEADERLIST& lstHeaderFields) const
     {
+        uint32_t nHeaderCount = 0;
         while (nHeaderLen != 0)
         {
             string strHeaderName;
             string strHeaderValue;
-            size_t nRet = HPackDecode(szHeaderStart, nHeaderLen, qDynTable, strHeaderName, strHeaderValue);
+            size_t nRet = HPackDecode(szHeaderStart, nHeaderLen, qDynTable, strHeaderName, strHeaderValue, nHeaderCount);
             if (nRet == SIZE_MAX)
                 return nRet;
-            unordered_map<string, string>::iterator iter;
-            if (strHeaderName.compare("cookie") == 0 && (iter = lstHeaderFields.find("cookie")) != end(lstHeaderFields))
-                iter->second += "; " + strHeaderValue;
-            else
-                lstHeaderFields.insert(make_pair(strHeaderName, strHeaderValue));
-
             MyTrace("    ", strHeaderName.c_str(), " : ", (strHeaderValue.empty() == false ? strHeaderValue.c_str() : ""));
+            unordered_map<string, string>::iterator iter;
+            if (strHeaderName == "cookie" && (iter = lstHeaderFields.find("cookie")) != end(lstHeaderFields))
+                iter->second += "; " + strHeaderValue;
+            else if (strHeaderName.empty() == false)    // if no Header name is returned, and no error, we had a dynamic table size update
+            {
+                if (lstHeaderFields.find(strHeaderName) != end(lstHeaderFields))
+                    throw H2ProtoException(H2ProtoException::DOUBLE_HEADER);
+                if (strHeaderName[0] == ':' && find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HEADERLIST::const_reference item) { return item.first[0] != ':'; }) != end(lstHeaderFields))
+                    throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+                if (strHeaderName == "te" && strHeaderValue != "trailers")
+                    throw H2ProtoException(H2ProtoException::INVALID_TE_HEADER);
+                lstHeaderFields.insert(make_pair(strHeaderName, strHeaderValue));
+            }
+
             szHeaderStart += nRet, nHeaderLen -= nRet;
+            ++nHeaderCount;
         }
 
         return nHeaderLen;
     }
+
+    class H2ProtoException : exception
+    {
+    public:
+        enum HPACKEXCODE : uint32_t
+        {
+            BUFFSIZE_ERROR      = 1,
+            DYNTABLE_UPDATE     = 2,
+            DOUBLE_HEADER       = 3,
+            UPPERCASE_HEADER    = 4,
+            WRONG_HEADER        = 5,
+            FALSE_PSEUDO_HEADER = 6,
+            INVALID_HEADER      = 7,
+            INVALID_TE_HEADER   = 8,
+            WRONG_STREAM_ID     = 9,
+            HEADER_OTHER_STREAM = 10,
+            DATA_WITHOUT_STREAM = 11,
+            STREAM_HALF_CLOSED  = 12,
+            MAX_FRAME_SIZE      = 13,
+            FRAME_SIZE_VALUE    = 14,
+            MISSING_STREAMID    = 15,
+            WRONG_PAD_LENGTH    = 16,
+            SAME_STREAMID       = 17,
+            COMMON_DECODE_ERROR = 18,
+            HEADER_NO_STREAMEND = 19,
+            CONT_WITHOUT_HEADER = 20,
+            UNDEF_AFTER_HEADER  = 21,
+            FRAME_SIZE_ERROR    = 22,
+            STREAMID_MUST_NULL  = 23,
+            DATASIZE_MISSMATCH  = 24,
+            INVALID_PUSH_SET    = 25,
+            WINDOW_SIZE_SETTING = 26,
+            MAX_FRAME_SIZE_SET  = 27,
+            WINDOW_SIZE_TO_HIGH = 28,
+            INVALID_WINDOW_SIZE = 29,
+            INERNAL_ERROR       = 30
+        };
+
+        H2ProtoException(HPACKEXCODE eCode) : m_eCode(eCode) {}
+        H2ProtoException(HPACKEXCODE eCode, uint32_t nStreamId) : m_eCode(eCode), m_nStreamId(nStreamId) {}
+        virtual ~H2ProtoException() throw() {}
+        const char* what() const throw() {
+            return m_strError.c_str();
+        }
+        const HPACKEXCODE GetCode() { return m_eCode; }
+        const uint32_t GetStreamId() { return m_nStreamId; }
+
+    private:
+        string      m_strError;
+        HPACKEXCODE m_eCode;
+        uint32_t    m_nStreamId;
+    };
 
 protected:
 #pragma  pack(1)
