@@ -72,7 +72,8 @@ class Http2Protocol : public HPack
         HEADER_RECEIVED = 0x1,
         STREAM_END      = 0x2,
         HEADER_END      = 0x4,
-        RESET_STREAM    = 0x8
+        RESET_STREAM    = 0x8,
+        ACTION_CALLED   = 0x16
     };
 
 public:
@@ -121,6 +122,7 @@ public:
         {
             char* szBufStart = szBuf;
             map<uint32_t, uint32_t> mapWindUodate;
+            vector<uint32_t> CallAction;
 
             while (nLen >= 9)   // Settings ACK Frame is 9 Bytes long
             {
@@ -200,8 +202,8 @@ public:
                             if (CONTENTLENGTH(streamData) > 0 && CONTENTLENGTH(streamData) != CONTENTRESCIV(streamData))
                                 throw H2ProtoException(H2ProtoException::DATASIZE_MISSMATCH, h2f.streamId);
 
-                            STREAMSTATE(streamData) |= STREAM_END;
-                            EndOfStreamAction(soMetaDa, h2f.streamId, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
+                            STREAMSTATE(streamData) |= STREAM_END | ACTION_CALLED;
+                            CallAction.push_back(h2f.streamId);
                         }
                     }
                     pmtxStream->unlock();
@@ -275,7 +277,8 @@ public:
                                 STREAMSTATE(streamData) |= STREAM_END;
                                 if (GETHEADERLIST(streamData).find(":scheme") == end(GETHEADERLIST(streamData)))
                                     throw H2ProtoException(H2ProtoException::WRONG_HEADER);
-                                EndOfStreamAction(soMetaDa, h2f.streamId, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
+                                STREAMSTATE(streamData) |= ACTION_CALLED;
+                                CallAction.push_back(h2f.streamId);
                             }
                         }
                         else
@@ -484,6 +487,8 @@ public:
                             throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
                         if ((STREAMSTATE(streamData) & HEADER_RECEIVED) == 0)    // We had a Header frame before
                             throw H2ProtoException(H2ProtoException::CONT_WITHOUT_HEADER);
+                        if ((STREAMSTATE(streamData) & ACTION_CALLED) == ACTION_CALLED)
+                            throw H2ProtoException(H2ProtoException::STREAM_HALF_CLOSED, h2f.streamId);
 
                         auto data = shared_ptr<char>(new char[h2f.size]);
                         copy(&szBuf[0], &szBuf[h2f.size], data.get());
@@ -514,7 +519,10 @@ public:
                             STREAMSTATE(streamData) |= HEADER_END;
 
                             if ((STREAMSTATE(streamData) & STREAM_END) == STREAM_END)
-                                EndOfStreamAction(soMetaDa, h2f.streamId, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
+                            {
+                                STREAMSTATE(streamData) |= ACTION_CALLED;
+                                CallAction.push_back(h2f.streamId);
+                            }
                         }
                     }
                     pmtxStream->unlock();
@@ -537,6 +545,14 @@ public:
 
             for (auto item : mapWindUodate)
                 Http2WindowUpdate(soMetaDa.fSocketWrite, item.first, item.second);
+
+            for (auto item : CallAction)
+            {
+                pmtxStream->lock();
+                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
+                pmtxStream->unlock();
+            }
+
         }
 
         catch (H2ProtoException& ex)

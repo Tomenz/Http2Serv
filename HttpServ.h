@@ -152,6 +152,7 @@ class CHttpServ : public Http2Protocol
         unordered_map<wstring, wstring> m_mFileTypeAction;
         vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;
         vector<tuple<wstring, wstring, wstring>> m_vEnvIf;
+        vector<string> m_vDeflateTyps;
     } HOSTPARAM;
 
 public:
@@ -941,7 +942,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                     soMetaDa.fResetTimer();
 
-                    CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \"" << itMethode->second << " " << lstHeaderFields.find(":path")->second << "\" 400 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \"" << itMethode->second << " " << lstHeaderFields.find(":path")->second << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0") << "\" 400 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] bad request: ", itPath->second);
 
                     fuExitDoAction();
@@ -1196,7 +1197,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                     << itMethode->second << " " << lstHeaderFields.find(":path")->second
                     << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << (itVersion != end(lstHeaderFields) ? itVersion->second : "0")
-                    << "\" 404 " << "-" << " \""
+                    << "\" 404 - \""
                     << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                     << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
                     << CLogFile::LOGTYPES::END;
@@ -1291,7 +1292,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                         if (nPosStart == 0)
                                         {
                                             // Build response header
-                                            auto status = umPhpHeaders.find("Status");
+                                            auto status = umPhpHeaders.find("status");
                                             if (status != end(umPhpHeaders))
                                             {
                                                 iStatus = stoi(status->second);
@@ -1314,9 +1315,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                             size_t nPos2 = strBuffer.substr(0, nPosStart).find(":");
                                             if (nPos2 != string::npos)
                                             {
+                                                if (nStreamId != 0)
+                                                    transform(&strBuffer[0], &strBuffer[nPos2], begin(strBuffer), tolower);
                                                 auto iter = umPhpHeaders.emplace(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1)));
                                                 if (iter != end(umPhpHeaders))
-                                                    while (iter->second.find(' ') == 0) iter->second.erase(0, 1);
+                                                {
+                                                    iter->second.erase(0, iter->second.find_first_not_of(" "));
+                                                }
                                             }
 
                                             if (nPosEnd - nPosStart > 2 && strBuffer.compare(nPosStart, 2, "\r\n") == 0)
@@ -1340,52 +1345,61 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                         continue;
                                 }
 
-                                if (nStreamId != 0)
-                                    BuildHttp2Frame(psBuffer, nRead, 0x0, 0x0, nStreamId);
-                                soMetaDa.fSocketWrite(psBuffer, nRead + nHttp2Offset);
-                                soMetaDa.fResetTimer();
-                                nTotal += nRead;
-
-                                // Check if we can send more Data in HTTP/2 - Window-sizes large enough for the next chunk
-                                if (nStreamId != 0)
+                                size_t nBytesTransfered = 0;
+                                while (nBytesTransfered < nRead && (*patStop).load() == false)
                                 {
-                                    (*pmtxStream).lock();
-                                    for (;;)
+                                    size_t nStreamWndSize = SIZE_MAX;
+                                    size_t nTotaleWndSize = SIZE_MAX;
+                                    if (nStreamId != 0)
                                     {
-                                        size_t nStreamWndSize = SIZE_MAX;
-                                        size_t nTotaleWndSize = SIZE_MAX;
+                                        lock_guard<mutex> lock0(*pmtxStream);
                                         auto StreamItem = hw2.StreamList.find(nStreamId);
                                         if (StreamItem != end(hw2.StreamList))
-                                        {
-                                            WINDOWSIZE(StreamItem) -= nRead;
                                             nStreamWndSize = WINDOWSIZE(StreamItem);
-                                        }
                                         else
                                             break;  // Stream Item was removed, properly the stream was reseted
                                         StreamItem = hw2.StreamList.find(0);
                                         if (StreamItem != end(hw2.StreamList))
-                                        {
-                                            WINDOWSIZE(StreamItem) -= nRead;
                                             nTotaleWndSize = WINDOWSIZE(StreamItem);
-                                        }
                                         else
                                             break;  // Stream Item was removed, properly the stream was reseted
-
-                                        nRead = 0;
-
-                                        if (nStreamWndSize < 4096 || nTotaleWndSize < 4096)
-                                        {
-                                            (*pmtxStream).unlock();
-                                            this_thread::sleep_for(chrono::milliseconds(1));
-                                            (*pmtxStream).lock();
-                                            continue;
-                                        }
-                                        else
-                                            break;
+                                        nStreamWndSize = min(nStreamWndSize, nTotaleWndSize);
                                     }
-                                    (*pmtxStream).unlock();
+
+                                    size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
+                                    if (nInQue >= 0x200000 || nStreamWndSize == 0)
+                                    {
+                                        this_thread::sleep_for(chrono::milliseconds(1));
+                                        continue;
+                                    }
+
+                                    size_t nSendBufLen = static_cast<size_t>(min(static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nRead - nBytesTransfered));
+                                    nSendBufLen = min(nSendBufLen, nStreamWndSize);
+
+                                    nBytesTransfered += nSendBufLen;
+
+                                    if (nStreamId != 0)
+                                        BuildHttp2Frame(psBuffer, nSendBufLen, 0x0, 0x0, nStreamId);
+                                    soMetaDa.fSocketWrite(psBuffer, nSendBufLen + nHttp2Offset);
+                                    soMetaDa.fResetTimer();
+
+                                    if (nStreamId != 0)
+                                    {
+                                        lock_guard<mutex> lock0(*pmtxStream);
+                                        auto StreamItem = hw2.StreamList.find(nStreamId);
+                                        if (StreamItem != end(hw2.StreamList))
+                                            WINDOWSIZE(StreamItem) -= nSendBufLen;
+                                        else
+                                            break;  // Stream Item was removed, properly the stream was reseted
+                                        StreamItem = hw2.StreamList.find(0);
+                                        if (StreamItem != end(hw2.StreamList))
+                                            WINDOWSIZE(StreamItem) -= nSendBufLen;
+                                        else
+                                            break;  // Stream Item was removed, properly the stream was reseted
+                                    }
                                 }
 
+                                nTotal += nBytesTransfered;
                             }
                             else if (ferror(hPipe) != 0)
                             {
@@ -1396,14 +1410,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 this_thread::sleep_for(chrono::milliseconds(1));
                         }
 
-                        if (nTotal > 0)
+                        if (nStreamId != 0)
                         {
-                            if (nStreamId != 0)
-                                BuildHttp2Frame(psBuffer, 0, 0x0, 0x1, nStreamId);
+                            BuildHttp2Frame(psBuffer, 0, 0x0, 0x1, nStreamId);
                             soMetaDa.fSocketWrite(psBuffer, nHttp2Offset);
                             soMetaDa.fResetTimer();
-                            if (nStreamId == 0)
-                                soMetaDa.fSocketClose();
                         }
 
                         CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -1414,16 +1425,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
                             << CLogFile::LOGTYPES::END;
 
-                        /* Close pipe and print return value of pPipe. */
-                        if (feof(hPipe))
-                        {
-                            auto PipeExit = _pclose(hPipe);
-                            MyTrace("Process returned ", PipeExit, " mit errno ", errno);
-                        }
-                        else
-                        {
+                        if (feof(hPipe) == 0)
                             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Failed to read the pipe to the end for: ", itPath->second);
-                        }
+
+                        /* Close pipe and print return value of pPipe. */
+                        auto PipeExit = _pclose(hPipe);
+                        if (PipeExit != 0)
+                            MyTrace("Process returned ", PipeExit, " mit errno ", errno);
                     }
                     else
                     {
@@ -1462,15 +1470,17 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             nFSize = stFileInfo.st_size;
 
+            // MimeType
+            auto it = find_if(begin(MimeListe), end(MimeListe), [strFileExtension](const MIMEENTRY & item) { return strFileExtension == MIMEEXTENSION(item); });
+            if (it != end(MimeListe))
+                strMineType = MIMESTRING(*it);
+
             auto acceptencoding = lstHeaderFields.find("accept-encoding");
             if (acceptencoding != end(lstHeaderFields) && (acceptencoding->second.find("gzip") != string::npos || acceptencoding->second.find("deflate") != string::npos))
             {
-                iHeaderFlag |= acceptencoding->second.find("gzip") != string::npos ? GZIPENCODING : DEFLATEENCODING;
-
                 // http://www.filesignatures.net/index.php?page=all
-                const static wstring strNoZip(L"zip|rar|7z|iso|png|jpg|gif|mp3|wma|avi|mpg|gz|tar");
-                if (strNoZip.find(strFileExtension) != string::npos)
-                    iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
+                if (find_if(begin(m_vHostParam[szHost].m_vDeflateTyps), end(m_vHostParam[szHost].m_vDeflateTyps), [&](const string& strType) { return strType == strMineType ? true : false; }) != end(m_vHostParam[szHost].m_vDeflateTyps))
+                    iHeaderFlag |= acceptencoding->second.find("gzip") != string::npos ? GZIPENCODING : DEFLATEENCODING;
             }
 
             //iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
@@ -1512,11 +1522,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     pDestFile->Close();
                 }
             }
-
-            // MimeType
-            auto it = find_if(begin(MimeListe), end(MimeListe), [strFileExtension](const MIMEENTRY & item) { return strFileExtension == MIMEEXTENSION(item); });
-            if (it != end(MimeListe))
-                strMineType = MIMESTRING(*it);
 
             // Build response header
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, HEADERWRAPPER{ { {"Content-Type", strMineType} } }, nFSize);
