@@ -58,6 +58,7 @@ typedef struct
 
 class Http2Protocol : public HPack
 {
+protected:
     enum HTTP2FLAGS : int
     {
         END_OF_STREAM = 0x1,
@@ -326,8 +327,6 @@ public:
                 case 3: // RST_STREAM frame
                     MyTrace("RST_STREAM frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
                     {
-                        if (streamData == end(umStreamCache) || h2f.streamId == 0)
-                            throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
                         if (h2f.size != 4)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_ERROR);
 
@@ -336,6 +335,9 @@ public:
                         lError = ntohl(lError);
                         MyTrace("    Error = 0x", hex, lError, "");
                         pTmpFile.reset();
+
+                        if (streamData == end(umStreamCache) || h2f.streamId == 0)
+                            throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
 
                         if ((STREAMSTATE(streamData) & STREAM_END) == 0)
                             umStreamCache.erase(streamData);
