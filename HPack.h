@@ -13,7 +13,7 @@
 
 #include <array>
 #include <tuple>
-#include <unordered_map>
+#include <vector>
 
 #include "Trace.h"
 
@@ -29,7 +29,24 @@ typedef tuple<uint8_t, string, string> HEADERENTRY;
 #define HEADERNAME(x) get<1>(x)
 #define HEADERVALUE(x) get<2>(x)
 
-typedef unordered_multimap<string, string> HEADERLIST;
+class HeadList : public vector<pair<string, string>>
+{
+public:
+    HeadList() : vector<pair<string, string>>() {}
+    HeadList(pair<string, string> p) : vector<pair<string, string>>()
+    {
+        push_back(p);
+    }
+    vector::iterator find(string strSearch)
+    {
+        auto iter = find_if(begin(), end(), [&](auto item) { return strSearch == item.first ? true : false; });
+        if (iter == end())
+            return end();
+        return iter;
+    }
+};
+
+typedef HeadList HEADERLIST;
 
 class HPack
 {
@@ -428,7 +445,7 @@ public:
             if (nRet == SIZE_MAX)
                 return nRet;
             MyTrace("    ", strHeaderName.c_str(), " : ", (strHeaderValue.empty() == false ? strHeaderValue.c_str() : ""));
-            unordered_map<string, string>::iterator iter;
+            HEADERLIST::iterator iter;
             if (strHeaderName == "cookie" && (iter = lstHeaderFields.find("cookie")) != end(lstHeaderFields))
                 iter->second += "; " + strHeaderValue;
             else if (strHeaderName.empty() == false)    // if no Header name is returned, and no error, we had a dynamic table size update
@@ -439,7 +456,7 @@ public:
                     throw H2ProtoException(H2ProtoException::WRONG_HEADER);
                 if (strHeaderName == "te" && strHeaderValue != "trailers")
                     throw H2ProtoException(H2ProtoException::INVALID_TE_HEADER);
-                lstHeaderFields.insert(make_pair(strHeaderName, strHeaderValue));
+                lstHeaderFields.emplace_back(make_pair(strHeaderName, strHeaderValue));
             }
 
             szHeaderStart += nRet, nHeaderLen -= nRet;

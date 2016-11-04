@@ -24,7 +24,7 @@ CLEANDIRS = $(DIRS:%=clean-%)
 INC_PATH = -I ../openssl-1.0.2f/include
 LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f
 
-OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
+OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o TemFile.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
 LIB = -l zlib -l socketlib -l crypto -l ssl
 

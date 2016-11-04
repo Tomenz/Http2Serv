@@ -110,11 +110,6 @@ class CHttpServ : public Http2Protocol
 
     typedef struct
     {
-        const HEADERLIST& umHeaderList;
-    }HEADERWRAPPER;
-
-    typedef struct
-    {
         STREAMLIST& StreamList;
     }HEADERWRAPPER2;
 
@@ -481,12 +476,12 @@ auto dwStart = chrono::high_resolution_clock::now();
                             const static regex SpaceSeperator(" ");
                             sregex_token_iterator token(begin(strLine), end(strLine), SpaceSeperator, -1);
                             if (token != sregex_token_iterator())
-                                pConDetails->HeaderList.emplace(":method", token++->str());
+                                pConDetails->HeaderList.emplace_back(make_pair(":method", token++->str()));
                             if (token != sregex_token_iterator())
-                                pConDetails->HeaderList.emplace(":path", token++->str());
+                                pConDetails->HeaderList.emplace_back(make_pair(":path", token++->str()));
                             if (token != sregex_token_iterator())
                             {
-                                auto parResult = pConDetails->HeaderList.emplace(":version", token++->str());
+                                auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(":version", token++->str()));
                                 if (parResult != end(pConDetails->HeaderList))
                                     parResult->second.erase(0, parResult->second.find_first_of('.') + 1);
                             }
@@ -499,7 +494,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                                 string strTmp = line->str().substr(0, nPos1);
                                 transform(begin(strTmp), begin(strTmp) + nPos1, begin(strTmp), ::tolower);
 
-                                auto parResult = pConDetails->HeaderList.emplace(strTmp, line->str().substr(nPos1 + 1));
+                                auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(strTmp, line->str().substr(nPos1 + 1)));
                                 if (parResult != end(pConDetails->HeaderList))
                                 {
                                     parResult->second.erase(parResult->second.find_last_not_of(" \r\n\t")  + 1);
@@ -654,7 +649,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
     }
 
-    size_t BuildH2ResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, HEADERWRAPPER hw, uint64_t nContentSize = 0)
+    size_t BuildH2ResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HEADERLIST& umHeaderList, uint64_t nContentSize = 0)
     {
         size_t nHeaderSize = 0;
         size_t nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, ":status", to_string(iRespCode).c_str());
@@ -694,7 +689,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             nHeaderSize += nReturn;
         }
 */
-        for (const auto& item : hw.umHeaderList)
+        for (const auto& item : umHeaderList)
         {
             string strHeaderFiled(item.first);
             transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), ::tolower);
@@ -750,7 +745,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         return nHeaderSize;
     }
 
-    size_t BuildResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, HEADERWRAPPER hw, uint64_t nContentSize = 0)
+    size_t BuildResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HEADERLIST& umHeaderList, uint64_t nContentSize = 0)
     {
         string strRespons;
         strRespons.reserve(2048);
@@ -813,7 +808,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         if (nContentSize != 0 || iFlag & ADDCONENTLENGTH)
             strRespons += "Content-Length: " + to_string(nContentSize) + "\r\n";
 
-        for (const auto& item : hw.umHeaderList)
+        for (const auto& item : umHeaderList)
         {
             if (item.first == "Pragma" || item.first == "Cache-Control")
                 iFlag &= ~ADDNOCACHE;
@@ -848,7 +843,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         return nRet;
     }
 
-    void DoAction(MetaSocketData soMetaDa, uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, HEADERWRAPPER, uint64_t)> BuildRespHeader, atomic<bool>* patStop)
+    void DoAction(MetaSocketData soMetaDa, uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, HEADERLIST, uint64_t)> BuildRespHeader, atomic<bool>* patStop)
     {
         const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
@@ -922,7 +917,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         auto itPath = lstHeaderFields.find(":path");
         if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields) || ((itVersion == end(lstHeaderFields) || itVersion->second.find_first_not_of("01") != string::npos) && nStreamId == 0))
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 400, HEADERWRAPPER{ HEADERLIST() }, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 400, HEADERLIST(), 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -947,7 +942,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             {
                 if (n + 2 >= nLen || isxdigit(itPath->second.at(n + 1)) == 0 || isxdigit(itPath->second.at(n + 2)) == 0)
                 {
-                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 400, HEADERWRAPPER{ HEADERLIST() }, 0);
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 400, HEADERLIST(), 0);
                     if (nStreamId != 0)
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1008,7 +1003,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
                 strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
 
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HEADERWRAPPER{ { { "Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation) } } }, 0);
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, { make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation)) }, 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1065,7 +1060,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         const static wregex rxForbidden(L"/\\.\\.|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);
         if (regex_search(strItemPath.c_str(), rxForbidden) == true)
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 403, HEADERWRAPPER{ HEADERLIST() }, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 403, HEADERLIST(), 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1131,7 +1126,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         if (aritMethode == arMethoden.end())
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 405, HEADERWRAPPER{ HEADERLIST() }, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 405, HEADERLIST(), 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1146,7 +1141,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         // OPTION
         if (aritMethode->second == 3)
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, HEADERWRAPPER{ { { "Allow", "OPTIONS, GET, HEAD, POST" } } }, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, { make_pair("Allow", "OPTIONS, GET, HEAD, POST") }, 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1199,7 +1194,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             if (errno == ENOENT || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
             {
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 404, HEADERWRAPPER{ HEADERLIST() }, 0);
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 404, HEADERLIST(), 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1217,7 +1212,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
             else //EINVAL
             {
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERWRAPPER{ HEADERLIST() }, 0);
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERLIST(), 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1329,7 +1324,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                                 iStatus = stoi(itCgiHeader->second);
                                                 umPhpHeaders.erase(itCgiHeader);
                                             }
-                                            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, HEADERWRAPPER{ umPhpHeaders }, 0);
+                                            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
                                             if (nStreamId != 0)
                                                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
                                             if (fnIsStreamReset(nStreamId) == false)
@@ -1349,7 +1344,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                             {
                                                 if (nStreamId != 0)
                                                     transform(&strBuffer[0], &strBuffer[nPos2], begin(strBuffer), ::tolower);
-                                                auto iter = umPhpHeaders.emplace(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1)));
+                                                auto iter = umPhpHeaders.emplace(umPhpHeaders.end(), make_pair(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1))));
                                                 if (iter != end(umPhpHeaders))
                                                 {
                                                     iter->second.erase(0, iter->second.find_first_not_of(" "));
@@ -1449,9 +1444,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             soMetaDa.fSocketWrite(psBuffer, nHttp2Offset);
                             soMetaDa.fResetTimer();
                         }
-                        else
+                        else if (bEndOfHeader == false)
                         {   // Noch kein Header gesendet
-                            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERWRAPPER{ HEADERLIST() }, 0);
+                            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERLIST(), 0);
                             if (nStreamId != 0)
                                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1477,7 +1472,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     }
                     else
                     {
-                        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERWRAPPER{ HEADERLIST() }, 0);
+                        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERLIST(), 0);
                         if (nStreamId != 0)
                             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                         soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1489,7 +1484,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 }
                 else
                 {
-                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERWRAPPER{ HEADERLIST() }, 0);
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HEADERLIST(), 0);
                     if (nStreamId != 0)
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1566,7 +1561,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
 
             // Build response header
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, HEADERWRAPPER{ { {"Content-Type", strMineType} } }, nFSize);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, { make_pair("Content-Type", strMineType) }, nFSize);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             if (fnIsStreamReset(nStreamId) == false)
@@ -1649,7 +1644,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             iStatus = 404;
             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] File does not exist: ", itPath->second);
 
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, iStatus, HEADERWRAPPER{ HEADERLIST() }, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, iStatus, HEADERLIST(), 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);

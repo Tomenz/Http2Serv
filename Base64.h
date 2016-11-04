@@ -4,6 +4,9 @@
 
 using namespace std;
 
+#define base64_chars "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+#define base64url_chars "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
 class Base64
 {
 public:
@@ -83,11 +86,4 @@ public:
 
         return move(strRet);
     }
-
-private:
-    static const string base64_chars;
-    static const string base64url_chars;
 };
-
-const string Base64::base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const string Base64::base64url_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
