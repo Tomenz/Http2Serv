@@ -37,16 +37,16 @@ public:
     {
         push_back(p);
     }
-    vector::iterator find(string strSearch)
+    HeadList::iterator find(string strSearch)
+    {   // Search strings as of now are always lower case
+        return find_if(begin(), end(), [&](auto item) { return strSearch == item.first ? true : false; });
+    }
+    HeadList::iterator ifind(string strSearch)
     {
-        auto iter = find_if(begin(), end(), [&](auto item) { return strSearch == item.first ? true : false; });
-        if (iter == end())
-            return end();
-        return iter;
+        transform(strSearch.begin(), strSearch.end(), strSearch.begin(), ::tolower);
+        return find_if(begin(), end(), [&](auto item) { string strTmp(item.first.size(), 0);  transform(item.first.begin(), item.first.end(), strTmp.begin(), ::tolower);  return strSearch == strTmp ? true : false; });
     }
 };
-
-typedef HeadList HEADERLIST;
 
 class HPack
 {
@@ -434,7 +434,7 @@ public:
         ::memcpy(&szBuf[5], &h2f.streamId, 4);
     }
 
-    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HEADERLIST& lstHeaderFields) const
+    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HeadList& lstHeaderFields) const
     {
         uint32_t nHeaderCount = 0;
         while (nHeaderLen != 0)
@@ -445,14 +445,14 @@ public:
             if (nRet == SIZE_MAX)
                 return nRet;
             MyTrace("    ", strHeaderName.c_str(), " : ", (strHeaderValue.empty() == false ? strHeaderValue.c_str() : ""));
-            HEADERLIST::iterator iter;
+            HeadList::iterator iter;
             if (strHeaderName == "cookie" && (iter = lstHeaderFields.find("cookie")) != end(lstHeaderFields))
                 iter->second += "; " + strHeaderValue;
             else if (strHeaderName.empty() == false)    // if no Header name is returned, and no error, we had a dynamic table size update
             {
                 if (lstHeaderFields.find(strHeaderName) != end(lstHeaderFields))
                     throw H2ProtoException(H2ProtoException::DOUBLE_HEADER);
-                if (strHeaderName[0] == ':' && find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HEADERLIST::const_reference item) { return item.first[0] != ':'; }) != end(lstHeaderFields))
+                if (strHeaderName[0] == ':' && find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HeadList::const_reference item) { return item.first[0] != ':'; }) != end(lstHeaderFields))
                     throw H2ProtoException(H2ProtoException::WRONG_HEADER);
                 if (strHeaderName == "te" && strHeaderValue != "trailers")
                     throw H2ProtoException(H2ProtoException::INVALID_TE_HEADER);

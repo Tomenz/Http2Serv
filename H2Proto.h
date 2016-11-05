@@ -29,7 +29,7 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #if !defined(_WIN32) && !defined(_WIN64)
 typedef atomic<size_t> atomic_size_t;
 #endif
-typedef tuple<uint32_t, deque<DATAITEM>, HEADERLIST, uint64_t, uint64_t, shared_ptr<atomic_size_t>> STREAMITEM;
+typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, shared_ptr<atomic_size_t>> STREAMITEM;
 #define STREAMSTATE(x) get<0>(x->second)
 #define DATALIST(x) get<1>(x->second)
 #define GETHEADERLIST(x) get<2>(x->second)
@@ -150,7 +150,7 @@ public:
                 auto streamData = umStreamCache.find(h2f.streamId);
                 if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
                 {
-                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
                     streamData = umStreamCache.find(h2f.streamId);
                 }
 
@@ -246,7 +246,7 @@ public:
 
                         if ((h2f.flag & END_OF_HEADER) == END_OF_HEADER)    // END_HEADERS
                         {
-                            HEADERLIST lstHeaderFields;
+                            HeadList lstHeaderFields;
                             if (streamData != end(umStreamCache))
                                 lstHeaderFields = GETHEADERLIST(streamData);
 
@@ -284,7 +284,7 @@ public:
                         }
                         else
                         {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HEADERLIST(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
                             if (insert.second == true)
                             {
                                 auto data = shared_ptr<char>(new char[h2f.size - PadLen]);
