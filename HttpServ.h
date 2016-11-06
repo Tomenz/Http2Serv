@@ -910,8 +910,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         if (connection != end(lstHeaderFields) && connection->second == "close")
             iHeaderFlag |= ADDCONNECTIONCLOSE;
 
-        uint32_t nCloseConnection = ((iHeaderFlag & HTTPVERSION11) == 0 || (iHeaderFlag & ADDCONNECTIONCLOSE) == ADDCONNECTIONCLOSE) && nStreamId == 0 ? 1 : 0; // if HTTP/1.0 and not HTTP/2.0 close connection after data is send
-        if (nCloseConnection != 0)
+        bool bCloseConnection = ((iHeaderFlag & HTTPVERSION11) == 0 || (iHeaderFlag & ADDCONNECTIONCLOSE) == ADDCONNECTIONCLOSE) && nStreamId == 0 ? true : false; // if HTTP/1.0 and not HTTP/2.0 close connection after data is send
+        if (bCloseConnection == true)
             iHeaderFlag |= ADDCONNECTIONCLOSE;
 
         if (soMetaDa.bIsSsl == true)
@@ -926,7 +926,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
-            soMetaDa.fSocketClose();
+            if (nStreamId == 0)
+                soMetaDa.fSocketClose();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "]  Method or Path is not defined in the request");
 
@@ -946,11 +947,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             {
                 if (n + 2 >= nLen || isxdigit(itPath->second.at(n + 1)) == 0 || isxdigit(itPath->second.at(n + 2)) == 0)
                 {
-                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 400, HeadList(), 0);
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 400, HeadList(), 0);
                     if (nStreamId != 0)
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                     soMetaDa.fResetTimer();
+                    if (nStreamId == 0)
+                        soMetaDa.fSocketClose();
 
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \"" << itMethode->second << " " << lstHeaderFields.find(":path")->second << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << strHttpVersion << "\" 400 - \"" << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \"" << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\"" << CLogFile::LOGTYPES::END;
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] bad request: ", itPath->second);
@@ -1012,7 +1015,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                 soMetaDa.fResetTimer();
-                soMetaDa.fSocketClose();
+                if (nStreamId == 0)
+                    soMetaDa.fSocketClose();
 
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                     << itMethode->second << " " << lstHeaderFields.find(":path")->second
@@ -1064,7 +1068,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         const static wregex rxForbidden(L"/\\.\\.|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);
         if (regex_search(strItemPath.c_str(), rxForbidden) == true)
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 403, HeadList(), 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 403, HeadList(), 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1079,7 +1083,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 << CLogFile::LOGTYPES::END;
             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] forbidden element: ", itPath->second);
 
-            if (nCloseConnection != 0)
+            if (bCloseConnection == true && nStreamId == 0)
                 soMetaDa.fSocketClose();
 
             fuExitDoAction();
@@ -1130,11 +1134,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         if (aritMethode == arMethoden.end())
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 405, HeadList(), 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 405, HeadList(), 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
+            if (nStreamId == 0)
+                soMetaDa.fSocketClose();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "]  Method Not Allowed: ", itMethode->second);
 
@@ -1150,6 +1156,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
+            if (bCloseConnection == true)
+                soMetaDa.fSocketClose();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second
@@ -1198,7 +1206,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             if (errno == ENOENT || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
             {
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 404, HeadList(), 0);
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 404, HeadList(), 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1233,6 +1241,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] internal server error: ", itPath->second);
             }
+
+            if (nStreamId == 0)
+                soMetaDa.fSocketClose();
 
             fuExitDoAction();
             return;
@@ -1469,7 +1480,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                             soMetaDa.fResetTimer();
-                            soMetaDa.fSocketClose();
+                            if (nStreamId == 0)
+                                bCloseConnection = true;
                         }
 
                         CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -1495,7 +1507,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                         soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                         soMetaDa.fResetTimer();
-                        soMetaDa.fSocketClose();
+                        if (nStreamId == 0)
+                            bCloseConnection = true;
 
                         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Server error handling: ", itPath->second);
                     }
@@ -1507,10 +1520,14 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                     soMetaDa.fResetTimer();
-                    soMetaDa.fSocketClose();
+                    if (nStreamId == 0)
+                        bCloseConnection = true;
 
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Server error handling: ", itPath->second);
                 }
+
+                if (bCloseConnection == true)
+                    soMetaDa.fSocketClose();
 
                 fuExitDoAction();
                 return;
@@ -1677,7 +1694,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
             << CLogFile::LOGTYPES::END;
 
-        if (nCloseConnection != 0)
+        if (bCloseConnection == true)
             soMetaDa.fSocketClose();
 
         fuExitDoAction();
