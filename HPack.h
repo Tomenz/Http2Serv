@@ -33,10 +33,7 @@ class HeadList : public vector<pair<string, string>>
 {
 public:
     HeadList() : vector<pair<string, string>>() {}
-    HeadList(pair<string, string> p) : vector<pair<string, string>>()
-    {
-        push_back(p);
-    }
+    HeadList(vector<pair<string, string>> v) : vector<pair<string, string>>(v) {}
     HeadList::iterator find(string strSearch)
     {   // Search strings as of now are always lower case
         return find_if(begin(), end(), [&](auto item) { return strSearch == item.first ? true : false; });
@@ -450,7 +447,7 @@ public:
                 iter->second += "; " + strHeaderValue;
             else if (strHeaderName.empty() == false)    // if no Header name is returned, and no error, we had a dynamic table size update
             {
-                if (lstHeaderFields.find(strHeaderName) != end(lstHeaderFields))
+                if (strHeaderName != "set-cookie" && lstHeaderFields.find(strHeaderName) != end(lstHeaderFields))
                     throw H2ProtoException(H2ProtoException::DOUBLE_HEADER);
                 if (strHeaderName[0] == ':' && find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HeadList::const_reference item) { return item.first[0] != ':'; }) != end(lstHeaderFields))
                     throw H2ProtoException(H2ProtoException::WRONG_HEADER);

@@ -201,7 +201,7 @@ public:
                             pTmpFile.get()->Close();
 
                             if (CONTENTLENGTH(streamData) > 0 && CONTENTLENGTH(streamData) != CONTENTRESCIV(streamData))
-                                throw H2ProtoException(H2ProtoException::DATASIZE_MISSMATCH, h2f.streamId);
+                                Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1);   // 1 = PROTOCOL_ERROR       throw H2ProtoException(H2ProtoException::DATASIZE_MISSMATCH, h2f.streamId);
 
                             STREAMSTATE(streamData) |= STREAM_END | ACTION_CALLED;
                             CallAction.push_back(h2f.streamId);

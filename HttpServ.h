@@ -1010,7 +1010,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
                 strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
 
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, { make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation)) }, 0);
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, { {make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation))} }, 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1151,7 +1151,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         // OPTION
         if (aritMethode->second == 3)
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, { make_pair("Allow", "OPTIONS, GET, HEAD, POST") }, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, { {make_pair("Allow", "OPTIONS, GET, HEAD, POST")} }, 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1188,7 +1188,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         replace(begin(strItemPath), end(strItemPath), L'\\', L'/');
 
         // supplement default item
-        if (strItemPath.compare(strItemPath.size() - 1, -1, L"/") == 0 && m_vHostParam[szHost].m_vstrDefaultItem.empty() == false)
+        struct _stat64 stFileInfo;
+        int iRet = ::_wstat64(FN_CA(strItemPath), &stFileInfo);
+        if (iRet == 0 && (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
         {
             for (auto& strDefItem : m_vHostParam[szHost].m_vstrDefaultItem)
             {
@@ -1199,10 +1201,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     break;
                 }
             }
+            iRet = ::_wstat64(FN_CA(strItemPath), &stFileInfo);
         }
 
-        struct _stat64 stFileInfo;
-        if (::_wstat64(FN_CA(strItemPath), &stFileInfo) != 0 || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR || (stFileInfo.st_mode & _S_IFREG) == 0)
+        if (iRet != 0 || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR || (stFileInfo.st_mode & _S_IFREG) == 0)
         {
             if (errno == ENOENT || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
             {
@@ -1534,6 +1536,29 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
         }
 
+        // Static Content, check if we have a Modified Since Header
+        auto ifmodifiedsince = lstHeaderFields.find("if-modified-since");
+        if (ifmodifiedsince != end(lstHeaderFields))
+        {
+            tm tmIfModified = { 0 };
+            stringstream ss(ifmodifiedsince->second);
+            ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
+            double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
+            if (fabs(dTimeDif) < 0.001)
+            {
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, HeadList(), 0);
+                if (nStreamId != 0)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                soMetaDa.fResetTimer();
+                if (bCloseConnection == true)
+                    soMetaDa.fSocketClose();
+
+                fuExitDoAction();
+                return;
+            }
+        }
+
         uint64_t nFSize = 0;
 
         // Load file
@@ -1596,7 +1621,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
 
             // Build response header
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, { make_pair("Content-Type", strMineType) }, nFSize);
+            stringstream strLastModTime; strLastModTime << put_time(::gmtime(&stFileInfo.st_mtime), "%a, %d %b %Y %H:%M:%S GMT");
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, { {make_pair("Content-Type", strMineType), make_pair("Last-Modified", strLastModTime.str()), make_pair("Cache-control", "must-revalidate") } }, nFSize);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             if (fnIsStreamReset(nStreamId) == false)
