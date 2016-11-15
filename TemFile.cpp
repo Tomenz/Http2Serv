@@ -1,10 +1,11 @@
 
-#include <io.h>
 #include <thread>
 #include "TempFile.h"
 
-#if !defined (_WIN32) && !defined (_WIN64)
-#define _tempnam tempnam
+#if defined (_WIN32) || defined (_WIN64)
+#include <io.h>
+#else
+#include <stdlib.h>
 #endif
 
 
