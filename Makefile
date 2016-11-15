@@ -24,7 +24,7 @@ CLEANDIRS = $(DIRS:%=clean-%)
 INC_PATH = -I ../openssl-1.0.2f/include
 LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f
 
-OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o TemFile.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
+OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o TempFile.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
 LIB = -l zlib -l socketlib -l crypto -l ssl
 
@@ -36,10 +36,10 @@ mDnsServ: $(BUILDDIRS) mDnsServ.o DnsProtokol.o
 $(TARGET): $(BUILDDIRS) $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(LIB_PATH) $(LIB) $(LDFLAGS)
 
-%.o: %.cpp
+%.o: %.cpp HttpServ.h HPack.h H2Proto.h Base64.h
 	$(CC) $(CFLAGS) $(INC_PATH) -c $<
 
- $(DIRS): $(BUILDDIRS)
+$(DIRS): $(BUILDDIRS)
 $(BUILDDIRS):
 	$(MAKE) -C $(@:build-%=%)
 

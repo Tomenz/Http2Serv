@@ -158,7 +158,7 @@
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <ClCompile Include="LogFile.cpp" />
-    <ClCompile Include="TemFile.cpp" />
+    <ClCompile Include="TempFile.cpp" />
     <ClCompile Include="Trace.cpp" />
   </ItemGroup>
   <ItemGroup>

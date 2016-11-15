@@ -15,10 +15,10 @@
     <ClCompile Include="Trace.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="TemFile.cpp">
+    <ClCompile Include="HttpFetch.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="HttpFetch.cpp">
+    <ClCompile Include="TempFile.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>

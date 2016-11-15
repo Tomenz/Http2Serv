@@ -5,12 +5,27 @@
 #if defined (_WIN32) || defined (_WIN64)
 #include <io.h>
 #else
-#include <stdlib.h>
+#include <stdio.h>
+#define _tempnam tempnam
 #endif
 
+mutex TempFile::s_mxFileName;
+string TempFile::s_strTempDir;
 
 TempFile::TempFile() : m_bIsFile(false)
 {
+    if (s_strTempDir.empty() == true)
+    {
+#if defined (_WIN32) || defined (_WIN64)
+        const char* szTmpDir = getenv("TMP");
+        if (szTmpDir == nullptr)
+            szTmpDir = getenv("TEMP");
+        if (szTmpDir != nullptr)
+            s_strTempDir = szTmpDir;
+#else
+        s_strTempDir = "/tmp";
+#endif
+    }
 }
 
 TempFile::~TempFile()
@@ -32,25 +47,14 @@ void TempFile::Open()
 {
     do
     {
-        string strFileName;
-#if defined (_WIN32) || defined (_WIN64)
-        const char* szTmpDir = getenv("TMP");
-        if (szTmpDir == nullptr)
-            szTmpDir = getenv("TEMP");
-        if (szTmpDir != nullptr)
+        lock_guard<mutex> lock(s_mxFileName);
+        char* szTempFileName = _tempnam(s_strTempDir.c_str(), "H2U_");
+        if (szTempFileName != nullptr)
         {
-            strFileName = szTmpDir;
-            strFileName += "\\";
-        }
-#else
-        strFileName = "/tmp/";
-#endif
-        strFileName += "H2UXXXXXX";
-        if (_mktemp(&strFileName[0]))
-        {
-            strFileName += ".tmp";
-            m_theFile.open(strFileName.c_str(), ios::out | ios::in | ios::trunc | ios::binary);
-            m_strTmpFileName = strFileName;
+            m_strTmpFileName = szTempFileName;
+            free(szTempFileName);
+            m_strTmpFileName += ".tmp";
+            m_theFile.open(m_strTmpFileName.c_str(), ios::out | ios::in | ios::trunc | ios::binary);
         }
     } while (m_theFile.is_open() == false);
 

@@ -12,6 +12,7 @@
 #pragma once
 
 #include <fstream>
+#include <mutex>
 
 using namespace std;
 
@@ -37,4 +38,7 @@ private:
     string  m_strTmpFileName;
     fstream m_theFile;
     bool    m_bIsFile;
+
+    static mutex  s_mxFileName;
+    static string s_strTempDir;
 };

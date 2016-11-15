@@ -155,7 +155,7 @@
   <ItemGroup>
     <ClCompile Include="Http2Fetch.cpp" />
     <ClCompile Include="HttpFetch.cpp" />
-    <ClCompile Include="TemFile.cpp" />
+    <ClCompile Include="TempFile.cpp" />
     <ClCompile Include="Trace.cpp" />
   </ItemGroup>
   <ItemGroup>
