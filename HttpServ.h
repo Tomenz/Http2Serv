@@ -66,6 +66,7 @@ const wchar_t* PIPETYPE = L"rb";
 #endif
 #include <sys/stat.h>
 #include <unistd.h>
+#include <math.h>
 #define _wpopen popen
 #define _pclose pclose
 #define _stat stat

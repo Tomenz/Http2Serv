@@ -1,4 +1,5 @@
 
+#include <io.h>
 #include <thread>
 #include "TempFile.h"
 
@@ -30,10 +31,23 @@ void TempFile::Open()
 {
     do
     {
-        string strFileName(L_tmpnam, 0);
-        if (std::tmpnam(&strFileName[0]))
+        string strFileName;
+#if defined (_WIN32) || defined (_WIN64)
+        const char* szTmpDir = getenv("TMP");
+        if (szTmpDir == nullptr)
+            szTmpDir = getenv("TEMP");
+        if (szTmpDir != nullptr)
         {
-            strFileName.erase(strFileName.find_first_of('\0'));
+            strFileName = szTmpDir;
+            strFileName += "\\";
+        }
+#else
+        strFileName = "/tmp/";
+#endif
+        strFileName += "H2UXXXXXX";
+        if (_mktemp(&strFileName[0]))
+        {
+            strFileName += ".tmp";
             m_theFile.open(strFileName.c_str(), ios::out | ios::in | ios::trunc | ios::binary);
             m_strTmpFileName = strFileName;
         }
