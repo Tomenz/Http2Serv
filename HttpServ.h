@@ -1207,7 +1207,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         if (iRet != 0 || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR || (stFileInfo.st_mode & _S_IFREG) == 0)
         {
-            if (errno == ENOENT || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
+            if (errno == ENOENT || errno == ENAMETOOLONG || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
             {
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 404, HeadList(), 0);
                 if (nStreamId != 0)
