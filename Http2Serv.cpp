@@ -718,14 +718,16 @@ int main(int argc, const char* argv[])
                     }
                     break;
                 case 'H':
+                case '?':
                     wcout << L"\r\n";
-                    wcout << L"-i   Istalliert den Systemdienst\r\n";
-                    wcout << L"-r   Entfernt den Systemdienst\r\n";
-                    wcout << L"-s   Startet den Systemdienst\r\n";
-                    wcout << L"-e   Beendet den Systemdienst\r\n";
-                    wcout << L"-p   Systemdienst wird angehaltet (Pause)\r\n";
-                    wcout << L"-c   Systemdienst wird fortgesetzt (Continue)\r\n";
+                    //wcout << L"-i   Istalliert den Systemdienst\r\n";
+                    //wcout << L"-r   Entfernt den Systemdienst\r\n";
+                    //wcout << L"-s   Startet den Systemdienst\r\n";
+                    //wcout << L"-e   Beendet den Systemdienst\r\n";
+                    //wcout << L"-p   Systemdienst wird angehaltet (Pause)\r\n";
+                    //wcout << L"-c   Systemdienst wird fortgesetzt (Continue)\r\n";
                     wcout << L"-f   Start die Anwendung als Konsolenanwendung\r\n";
+                    wcout << L"-h   Zeigt diese Hilfe an\r\n";
                     //wcout << L"-f x Start die Anwendung als Konsolenanwendung mit Verbosmeldungen(Siehe unten)\r\n";
                     //wcout << L"-v x Setzt den Level der Verbosemeldungen(Siehe unten)\r\n";
                     //wcout << L"\r\n";
