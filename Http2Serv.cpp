@@ -36,7 +36,8 @@ class CBaseSrv
 {
 public:
     CBaseSrv(wchar_t*) {}
-    virtual int Run(void) { Start(); }
+    virtual int Run(void) { Start(); return 0; }
+    virtual void Start(void) = 0;
 };
 #endif
 
@@ -51,10 +52,12 @@ public:
 
         m_bIsStopped = false;
 
-        wstring strModulePath(MAX_PATH, 0);
+        wstring strModulePath(FILENAME_MAX, 0);
 #ifndef _DEBUG
+#if defined(_WIN32) || defined(_WIN64)
         if (GetModuleFileName(NULL, &strModulePath[0], MAX_PATH) > 0)
             strModulePath.erase(strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
+#endif
 #else
         strModulePath = L"./";
 #endif
@@ -590,8 +593,10 @@ int main(int argc, const char* argv[])
     return 0;
 }
 */
+
 Service* pServ = 0;
 
+#if defined(_WIN32) || defined(_WIN64)
 BOOL CtrlHandler(DWORD fdwCtrlType)
 {
     switch (fdwCtrlType)
@@ -635,6 +640,7 @@ BOOL CtrlHandler(DWORD fdwCtrlType)
         return FALSE;
     }
 }
+#endif
 
 int main(int argc, const char* argv[])
 {
@@ -642,11 +648,12 @@ int main(int argc, const char* argv[])
     // Detect Memory Leaks
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF | _CRTDBG_CHECK_ALWAYS_DF | _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG));
     _setmode(_fileno(stdout), _O_U16TEXT);
+
+    wchar_t szDspName[] = { L"HTTP/2 Server" };
+    wchar_t szDescrip[] = { L"Http 2.0 Server by Thomas Hauck" };
 #endif
 
     wchar_t szSvrName[] = { L"Http2Serv" };
-    wchar_t szDspName[] = { L"HTTP/2 Server" };
-    wchar_t szDescrip[] = { L"Http 2.0 Server by Thomas Hauck" };
     int iRet = 0;
 
     if (argc > 1)
@@ -655,10 +662,11 @@ int main(int argc, const char* argv[])
         {
             if (argv[0][0] == '-')
             {
-                CSvrCtrl cSC;
+//                CSvrCtrl cSC;
 
                 switch ((argv[0][1] & 0xdf))
                 {
+#if defined(_WIN32) || defined(_WIN64)
                 case 'I':
                     iRet = cSC.Install(szSvrName, szDspName);
                     cSC.SetServiceDescription(szSvrName, szDescrip);
@@ -680,6 +688,9 @@ int main(int argc, const char* argv[])
                     break;
                 case 'F':
                     if (SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE))
+#else
+                case 'F':
+#endif
                     {
                         Service svr(szSvrName);
                         pServ = &svr;
