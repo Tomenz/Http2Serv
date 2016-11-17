@@ -167,6 +167,9 @@ public:
     virtual ~CHttpServ()
     {
         Stop();
+
+        while (IsStopped() == false)
+            this_thread::sleep_for(chrono::milliseconds(10));
     }
 
     bool Start()
@@ -212,10 +215,15 @@ public:
             item.first->Close();
         m_mtxConnections.unlock();
 
-        while (m_vConnections.size() != 0)
-            this_thread::sleep_for(chrono::milliseconds(10));
+        //while (m_vConnections.size() != 0)
+        //    this_thread::sleep_for(chrono::milliseconds(10));
 
         return true;
+    }
+
+    bool IsStopped()
+    {
+        return m_vConnections.size() == 0 ? true : false;
     }
 
     HOSTPARAM& GetParameterBlockRef(const wchar_t* szHostName = nullptr)
@@ -1744,6 +1752,7 @@ private:
 #pragma message("TODO!!! Folge Zeile wieder entfernen.")
     friend int main(int, const char*[]);
     friend void sigusr1_handler(int);
+    friend class Service;
     TcpServer*             m_pSocket;
     CONNECTIONLIST         m_vConnections;
     mutex                  m_mtxConnections;

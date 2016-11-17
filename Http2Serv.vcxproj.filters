@@ -31,6 +31,12 @@
     <ClInclude Include="TempFile.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
+    <ClInclude Include="SvrLib\BaseSvr.h">
+      <Filter>SvrLib</Filter>
+    </ClInclude>
+    <ClInclude Include="SvrLib\SvrCtrl.h">
+      <Filter>SvrLib</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Headerdateien">
@@ -38,6 +44,9 @@
     </Filter>
     <Filter Include="Quelldateien">
       <UniqueIdentifier>{5183d832-3686-4473-b7e4-79f80801237a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SvrLib">
+      <UniqueIdentifier>{c0cc47f4-391f-4e1e-8a16-f79e56ce3b02}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -55,6 +64,12 @@
     </ClCompile>
     <ClCompile Include="TempFile.cpp">
       <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="SvrLib\BaseSvr.cpp">
+      <Filter>SvrLib</Filter>
+    </ClCompile>
+    <ClCompile Include="SvrLib\SvrCtrl.cpp">
+      <Filter>SvrLib</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
