@@ -58,13 +58,15 @@ public:
         if (GetModuleFileName(NULL, &strModulePath[0], FILENAME_MAX) > 0)
             strModulePath.erase(strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
 #else
-        if (readlink(string("/proc/" + to_string(getpid()) + "/exe").c_str(), &strModulePath[0], FILENAME_MAX) > 0)
-            strModulePath.erase(strModulePath.find_last_of('/'));
+        string strTmpPath(FILENAME_MAX, 0);
+        if (readlink(string("/proc/" + to_string(getpid()) + "/exe").c_str(), &strTmpPath[0], FILENAME_MAX) > 0)
+            strTmpPath.erase(strTmpPath.find_last_of('/'));
 
         //Change Directory
         //If we cant find the directory we exit with failure.
-        if ((chdir(strModulePath.c_str())) < 0) // if ((chdir("/")) < 0)
-            strModulePath = L"./";
+        if ((chdir(strTmpPath.c_str())) < 0) // if ((chdir("/")) < 0)
+            strTmpPath = "./";
+        strModulePath = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strTmpPath);
 #endif
 #else
         strModulePath = L"./";
