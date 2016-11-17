@@ -55,8 +55,16 @@ public:
         wstring strModulePath(FILENAME_MAX, 0);
 #ifndef _DEBUG
 #if defined(_WIN32) || defined(_WIN64)
-        if (GetModuleFileName(NULL, &strModulePath[0], MAX_PATH) > 0)
+        if (GetModuleFileName(NULL, &strModulePath[0], FILENAME_MAX) > 0)
             strModulePath.erase(strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
+#else
+        if (readlink(string("/proc/" + to_string(getpid()) + "/exe").c_str(), &strModulePath[0], FILENAME_MAX) > 0)
+            strModulePath.erase(strModulePath.find_last_of('/'));
+
+        //Change Directory
+        //If we cant find the directory we exit with failure.
+        if ((chdir(strModulePath.c_str())) < 0) // if ((chdir("/")) < 0)
+            strModulePath = L"./";
 #endif
 #else
         strModulePath = L"./";
@@ -226,8 +234,18 @@ public:
         for (auto& HttpServer : vServers)
             HttpServer.Start();
 
+#if defined(_WIN32) || defined(_WIN64)
         while (m_bStop == false)
             this_thread::sleep_for(chrono::milliseconds(100));
+#else
+        sigset_t sigset;
+        sigemptyset(&sigset);
+        sigaddset(&sigset, SIGTERM);
+        sigprocmask(SIG_BLOCK, &sigset, NULL);
+
+        int sig;
+        sigwait(&sigset, &sig);
+#endif
 
         // Server stoppen
         for (auto& HttpServer : vServers)
@@ -651,6 +669,7 @@ int main(int argc, const char* argv[])
 
     wchar_t szDspName[] = { L"HTTP/2 Server" };
     wchar_t szDescrip[] = { L"Http 2.0 Server by Thomas Hauck" };
+    CSvrCtrl cSC;
 #endif
 
     wchar_t szSvrName[] = { L"Http2Serv" };
@@ -662,8 +681,6 @@ int main(int argc, const char* argv[])
         {
             if (argv[0][0] == '-')
             {
-//                CSvrCtrl cSC;
-
                 switch ((argv[0][1] & 0xdf))
                 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -725,6 +742,46 @@ int main(int argc, const char* argv[])
     }
     else
     {
+#if !defined(_WIN32) && !defined(_WIN64)
+        //Set our Logging Mask and open the Log
+        setlogmask(LOG_UPTO(LOG_NOTICE));
+        openlog("http2serv", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
+
+        syslog(LOG_NOTICE, "Starting Http2Serv");
+        pid_t pid, sid;
+        //Fork the Parent Process
+        pid = fork();
+
+        if (pid < 0)
+            exit(EXIT_FAILURE);
+
+        //We got a good pid, Close the Parent Process
+        if (pid > 0)
+            exit(EXIT_SUCCESS);
+
+        //Create a new Signature Id for our child
+        sid = setsid();
+        if (sid < 0)
+            exit(EXIT_FAILURE);
+
+        //Fork second time the Process
+        pid = fork();
+
+        if (pid < 0)
+            exit(EXIT_FAILURE);
+
+        //We got a good pid, Close the Parent Process
+        if (pid > 0)
+            exit(EXIT_SUCCESS);
+
+        //Change File Mask
+        umask(0);
+
+        //Close Standard File Descriptors
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+#endif
         Service svr(szSvrName);
         iRet = svr.Run();
     }
