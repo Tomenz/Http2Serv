@@ -44,6 +44,8 @@ void WINAPI CBaseSrv::ServiceStartCB(DWORD argc, LPTSTR *argv)
     s_stSrvStatus.dwWaitHint           = 0;
 
 	s_hSrvStatus = RegisterServiceCtrlHandler(argv[0], ServiceCtrlHandler);
+    if (s_hSrvStatus == static_cast<SERVICE_STATUS_HANDLE>(0))
+        return;
 
 	// The Installation of the User-Programm is called
 	// Should only take a few seconds
@@ -71,27 +73,27 @@ void WINAPI CBaseSrv::ServiceStartCB(DWORD argc, LPTSTR *argv)
 
 void WINAPI CBaseSrv::ServiceCtrlHandler(DWORD Opcode)
 {
-
 	switch(Opcode)
 	{
 	case SERVICE_CONTROL_PAUSE:
 	// Do whatever it takes to pause here.
 		s_This->Pause();
 		s_stSrvStatus.dwCurrentState = SERVICE_PAUSED;
-		break;
+        break;
 
 	case SERVICE_CONTROL_CONTINUE:
 	// Do whatever it takes to continue here.
 		s_This->Continue();
 		s_stSrvStatus.dwCurrentState = SERVICE_RUNNING;
-		break;
+        break;
 
 	case SERVICE_CONTROL_STOP:
 	case SERVICE_CONTROL_SHUTDOWN:
 	// Do whatever it takes to stop here.
 		s_This->Stop();
 		s_stSrvStatus.dwCurrentState  = SERVICE_STOP_PENDING;
-		return;
+        s_stSrvStatus.dwWaitHint = 3000;
+        return;
 
 	case SERVICE_CONTROL_INTERROGATE:
 	// Fall through to send current status.
@@ -101,7 +103,7 @@ void WINAPI CBaseSrv::ServiceCtrlHandler(DWORD Opcode)
 		;
 //		SvcDebugOut(" [MY_SERVICE] Unrecognized opcode %ld\n", Opcode);
 	}
-
+//OutputDebugStringA(string("ServiceCtrlHandler" + to_string(Opcode) + "\r\n").c_str());
 	// Send current status.
 	if (!SetServiceStatus (s_hSrvStatus,  &s_stSrvStatus))
 	{
