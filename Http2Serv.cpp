@@ -236,18 +236,8 @@ public:
         for (auto& HttpServer : vServers)
             HttpServer.Start();
 
-#if defined(_WIN32) || defined(_WIN64)
         while (m_bStop == false)
             this_thread::sleep_for(chrono::milliseconds(100));
-#else
-        sigset_t sigset;
-        sigemptyset(&sigset);
-        sigaddset(&sigset, SIGTERM);
-        sigprocmask(SIG_BLOCK, &sigset, NULL);
-
-        int sig;
-        sigwait(&sigset, &sig);
-#endif
 
         // Server stoppen
         for (auto& HttpServer : vServers)
@@ -390,6 +380,8 @@ int main(int argc, const char* argv[])
     }
     else
     {
+        Service svr(szSvrName);
+
 #if !defined(_WIN32) && !defined(_WIN64)
         //Set our Logging Mask and open the Log
         setlogmask(LOG_UPTO(LOG_NOTICE));
@@ -429,8 +421,21 @@ int main(int argc, const char* argv[])
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
+
+        thread([&]()
+        {
+            sigset_t sigset;
+            sigemptyset(&sigset);
+            sigaddset(&sigset, SIGTERM);
+            sigprocmask(SIG_BLOCK, &sigset, NULL);
+
+            int sig;
+            sigwait(&sigset, &sig);
+
+            svr.Stop();
+        }).detach();
+
 #endif
-        Service svr(szSvrName);
         iRet = svr.Run();
     }
 
