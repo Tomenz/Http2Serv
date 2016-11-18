@@ -53,7 +53,6 @@ public:
         m_bIsStopped = false;
 
         wstring strModulePath(FILENAME_MAX, 0);
-#ifndef _DEBUG
 #if defined(_WIN32) || defined(_WIN64)
         if (GetModuleFileName(NULL, &strModulePath[0], FILENAME_MAX) > 0)
             strModulePath.erase(strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
@@ -65,11 +64,8 @@ public:
         //Change Directory
         //If we cant find the directory we exit with failure.
         if ((chdir(strTmpPath.c_str())) < 0) // if ((chdir("/")) < 0)
-            strTmpPath = "./";
-        strModulePath = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strTmpPath);
-#endif
-#else
-        strModulePath = L"./";
+            strTmpPath = ".";
+        strModulePath = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strTmpPath) + L"/";
 #endif
         const ConfFile& conf = ConfFile::GetInstance(strModulePath + L"server.cfg");
 
