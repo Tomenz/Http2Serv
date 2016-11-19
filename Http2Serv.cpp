@@ -56,6 +56,9 @@ public:
 #if defined(_WIN32) || defined(_WIN64)
         if (GetModuleFileName(NULL, &strModulePath[0], FILENAME_MAX) > 0)
             strModulePath.erase(strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
+
+        if (_wchdir(strModulePath.c_str()) != 0)
+            strModulePath = L"./";
 #else
         string strTmpPath(FILENAME_MAX, 0);
         if (readlink(string("/proc/" + to_string(getpid()) + "/exe").c_str(), &strTmpPath[0], FILENAME_MAX) > 0)
