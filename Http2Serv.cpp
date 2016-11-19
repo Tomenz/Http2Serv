@@ -340,8 +340,14 @@ int main(int argc, const char* argv[])
                             svr.Start();
                         });
 
+                        const wchar_t caZeichen[] = L"\\|/-";
+                        int iIndex = 0;
                         while (_kbhit() == 0)
+                        {
+                            wcout << L'\r' << caZeichen[iIndex++] /*<< L"  Sockets:" << setw(3) << BaseSocket::s_atRefCount << L"  SSL-Pumpen:" << setw(3) << SslTcpSocket::s_atAnzahlPumps << L"  HTTP-Connections:" << setw(3) << nHttpCon*/ << flush;
+                            if (iIndex > 3) iIndex = 0;
                             this_thread::sleep_for(chrono::milliseconds(100));
+                        }
 
                         wcout << L"Http2Serv gestoppt" << endl;
                         svr.Stop();

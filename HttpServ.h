@@ -866,7 +866,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             lock_guard<mutex> lock1(*pmtxStream);
             auto StreamItem = hw2.StreamList.find(nStreamId);
             if (StreamItem != end(hw2.StreamList))
-                hw2.StreamList.erase(StreamItem);
+                STREAMSTATE(StreamItem) |= RESET_STREAM;    // hw2.StreamList.erase(StreamItem);
 
             if (patStop != nullptr)
             {
