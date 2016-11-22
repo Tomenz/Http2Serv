@@ -583,7 +583,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     pConDetails->mutStreams->lock();
                     pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(pConDetails->StreamParam))));
                     pConDetails->mutStreams->unlock();
+                    m_mtxConnections.unlock();
                     DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
+
+                    lock_guard<mutex> lock(m_mtxConnections);
+                    if (m_vConnections.find(pTcpSocket) == end(m_vConnections))
+                        return; // Sollte bei Socket Error oder Time auftreten
+
                     if (nStreamId != 0)
                     {
                         pConDetails->bIsH2Con = true;
@@ -593,10 +599,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     lock_guard<mutex> log(*pConDetails->mutStreams.get());
                     pConDetails->H2Streams.clear();
                     pConDetails->HeaderList.clear();
+                    return;
                 }
-
-                m_mtxConnections.unlock();
-                return;
             }
             m_mtxConnections.unlock();
         }
