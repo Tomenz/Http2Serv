@@ -9,10 +9,12 @@ class HttpFetch : public Http2Protocol
 public:
     HttpFetch(function<void(HttpFetch*, void*)>, void*);
     virtual ~HttpFetch();
-    bool Fetch(string strAdresse);
+    bool Fetch(string strAdresse, string strMethode = "GET");
+    void AddToHeader(string strHeader, string strHeaderValue) { m_umAddHeader.emplace_back(make_pair(strHeader, strHeaderValue)); };
+    bool AddContent(void* pBuffer, uint64_t nBufSize);
     uint32_t GetStatus() { return m_uiStatus; }
     HeadList GetHeaderList() { return m_umRespHeader; }
-    uint64_t GetContentSize() { return m_pTmpFile == nullptr ? 0 : m_pTmpFile->GetFileLength(); }
+    uint64_t GetContentSize() { return m_pTmpFileRec == nullptr ? 0 : m_pTmpFileRec->GetFileLength(); }
     bool GetContent(uint8_t Buffer[], uint64_t nBufSize);
 
     operator TempFile& ();
@@ -28,6 +30,7 @@ private:
 
 private:
     SslTcpSocket*        m_pcClientCon;
+    string               m_strMethode;
     string               m_strServer;
     short                m_sPort;
     string               m_strPath;
@@ -39,11 +42,13 @@ private:
     mutex                m_mtxStreams;
     STREAMLIST           m_umStreamCache;
     STREAMSETTINGS       m_tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX);
-    shared_ptr<TempFile> m_pTmpFile;
+    shared_ptr<TempFile> m_pTmpFileRec;
+    shared_ptr<TempFile> m_pTmpFileSend;
     unique_ptr<Timer>    m_Timer;
     MetaSocketData       m_soMetaDa;
     string               m_strBuffer;
     HeadList             m_umRespHeader;
+    HeadList             m_umAddHeader;
 
     bool                 m_bEndOfHeader;
     uint64_t             m_nContentLength;

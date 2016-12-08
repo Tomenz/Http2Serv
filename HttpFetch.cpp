@@ -25,10 +25,19 @@ HttpFetch::~HttpFetch()
         delete m_pcClientCon;
 }
 
-bool HttpFetch::Fetch(string strAdresse)
+bool HttpFetch::Fetch(string strAdresse, string strMethode /*= "GET"*/)
 {
     m_strServer = strAdresse;
+    m_strMethode = strMethode;
+
     transform(begin(m_strServer), begin(m_strServer) + 5, begin(m_strServer), tolower);
+    transform(begin(m_strMethode), end(m_strMethode), begin(m_strMethode), toupper);
+
+    if (m_pTmpFileSend.get() != 0)
+    {
+        m_pTmpFileSend.get()->Flush();
+        m_pTmpFileSend->Rewind();
+    }
 
     if (m_strServer.compare(0, 4, "http") != 0)
         return false;
@@ -77,6 +86,19 @@ bool HttpFetch::Fetch(string strAdresse)
     return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
 }
 
+bool HttpFetch::AddContent(void* pBuffer, uint64_t nBufSize)
+{
+    if (m_pTmpFileSend.get() == 0)
+    {
+        m_pTmpFileSend = make_shared<TempFile>();
+        m_pTmpFileSend.get()->Open();
+    }
+
+    m_pTmpFileSend.get()->Write(pBuffer, nBufSize);
+
+    return true;
+}
+
 void HttpFetch::Stop()
 {
     m_pcClientCon->Close();
@@ -102,7 +124,7 @@ void HttpFetch::Connected(TcpSocket* pTcpSocket)
         char caBuffer[2048];
         size_t nHeaderLen = 0;
 
-        size_t nReturn = HPackEncode(caBuffer + 9, 2048 - 9, ":method", "GET");
+        size_t nReturn = HPackEncode(caBuffer + 9, 2048 - 9, ":method", m_strMethode.c_str());
         if (nReturn != SIZE_MAX)
             nHeaderLen += nReturn;
         nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, ":path", m_strPath.c_str());
@@ -124,13 +146,36 @@ void HttpFetch::Connected(TcpSocket* pTcpSocket)
         if (nReturn != SIZE_MAX)
             nHeaderLen += nReturn;
 
+        for (auto& itPair : m_umAddHeader)
+        {
+            nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, itPair.first.c_str(), itPair.second.c_str());
+            if (nReturn == SIZE_MAX)
+                break;
+            nHeaderLen += nReturn;
+        }
+
         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, 1);
         pTcpSocket->Write(caBuffer, nHeaderLen + 9);
     }
     else
     {
-        string strRequest = "GET " + m_strPath + " HTTP/1.1\r\nHost: " + m_strServer + "\r\nUpgrade: h2c\r\nHTTP2-Settings: " + Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true) + "\r\nAccept: */*\r\nAccept-Encoding: gzip;q=1.0, deflate;q=0.8, identity; q=0.5, *;q=0\r\n\r\n";
+        string strRequest = m_strMethode + " " + m_strPath + " HTTP/1.1\r\nHost: " + m_strServer + "\r\nUpgrade: h2c\r\nHTTP2-Settings: " + Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true) + "\r\nAccept: */*\r\nAccept-Encoding: gzip;q=1.0, deflate;q=0.8, identity; q=0.5, *;q=0\r\n";
+        for (auto& itPair : m_umAddHeader)
+            strRequest += itPair.first + ": " + itPair.second + "\r\n";
+        strRequest += "\r\n";
         pTcpSocket->Write(strRequest.c_str(), strRequest.size());
+
+        if (m_pTmpFileSend.get() != 0)
+        {
+            auto apBuf = make_unique<unsigned char[]>(0x4000 + 9 + 2);
+            streamsize nBytesRead = m_pTmpFileSend.get()->Read(apBuf.get(), 0x4000);
+            while (nBytesRead != 0)
+            {
+                pTcpSocket->Write(apBuf.get(), static_cast<size_t>(nBytesRead));
+                nBytesRead = m_pTmpFileSend.get()->Read(apBuf.get(), 0x4000);
+            }
+            m_pTmpFileSend.get()->Close();
+        }
     }
 
     m_Timer = make_unique<Timer>(30000, bind(&HttpFetch::OnTimeout, this, _1));
@@ -162,7 +207,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
         if (m_bIsHttp2 == true)
         {
             size_t nRet;
-            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_pTmpFile, nullptr), nRet != SIZE_MAX)
+            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_pTmpFileRec, nullptr), nRet != SIZE_MAX)
             {
                 // no GOAWAY frame
                 if (nRet > 0)
@@ -195,7 +240,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                         m_bIsHttp2 = true;
                         copy(pEndOfLine + 2, pEndOfLine + 2 + nRead + 1, spBuffer.get());
                         size_t nRet;
-                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_pTmpFile, nullptr), nRet != SIZE_MAX)
+                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_pTmpFileRec, nullptr), nRet != SIZE_MAX)
                         {
                             if (nRet > 0)
                                 m_strBuffer.append(spBuffer.get(), nRet);
@@ -206,7 +251,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                     if (m_nContentLength == 0 && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
                     {
                         m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
-                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
+                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFileRec, nullptr);
                         return;
                     }
                 }
@@ -262,10 +307,10 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
 
             // Ab hier werden der Content in eine Temp Datei geschrieben
 
-            if (m_pTmpFile.get() == 0)
+            if (m_pTmpFileRec.get() == 0)
             {
-                m_pTmpFile = make_shared<TempFile>();
-                m_pTmpFile.get()->Open();
+                m_pTmpFileRec = make_shared<TempFile>();
+                m_pTmpFileRec.get()->Open();
 //                if (m_nChuncked == 0) // Chunked transfer ecoding ist enabled
 //                    nRead += 2, nWriteOffset -= 2;
             }
@@ -286,7 +331,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                     OutputDebugString(L"Buffer Fehler\r\n");
             }
 
-            m_pTmpFile.get()->Write(spBuffer.get() + nWriteOffset, m_nNextChunk != 0 ? min(nRead, m_nNextChunk) : nRead);
+            m_pTmpFileRec.get()->Write(spBuffer.get() + nWriteOffset, m_nNextChunk != 0 ? min(nRead, m_nNextChunk) : nRead);
             if (m_nNextChunk != 0)
             {
                 size_t nSaveRead = nRead;
@@ -304,12 +349,12 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
             else if (m_nChuncked == 0 && nRead != 2)
                 ;
 
-            if ((m_nContentLength != SIZE_MAX && m_nContentLength == m_pTmpFile->GetFileLength())
+            if ((m_nContentLength != SIZE_MAX && m_nContentLength == m_pTmpFileRec->GetFileLength())
                 || (m_nChuncked == 0 && m_nNextChunk == 0))
             {
-                m_pTmpFile.get()->Flush();
+                m_pTmpFileRec.get()->Flush();
                 m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
-                EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFile, nullptr);
+                EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFileRec, nullptr);
             }
         }
     }
@@ -389,11 +434,11 @@ void HttpFetch::EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, ST
 
 bool HttpFetch::GetContent(uint8_t Buffer[], uint64_t nBufSize)
 {
-    if (m_pTmpFile == nullptr)
+    if (m_pTmpFileRec == nullptr)
         return false;
 
-    m_pTmpFile.get()->Rewind();
-    if (m_pTmpFile.get()->Read(Buffer, nBufSize) != nBufSize)
+    m_pTmpFileRec.get()->Rewind();
+    if (m_pTmpFileRec.get()->Read(Buffer, nBufSize) != nBufSize)
         return false;
 
     return true;
@@ -401,5 +446,5 @@ bool HttpFetch::GetContent(uint8_t Buffer[], uint64_t nBufSize)
 
 HttpFetch::operator TempFile&()
 {
-    return (*m_pTmpFile.get());
+    return (*m_pTmpFileRec.get());
 }

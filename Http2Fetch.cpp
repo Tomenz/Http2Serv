@@ -4,6 +4,7 @@
 #include <conio.h>
 
 #include "HttpFetch.h"
+#include "Base64.h"
 
 int main(int argc, const char* argv[])
 {
@@ -23,10 +24,18 @@ int main(int argc, const char* argv[])
     //fetch.Fetch("https://192.66.65.226/");
     //fetch.Fetch("https://www.google.de/");
     //fetch.Fetch("http://www.heise.de/");
-    fetch.Fetch("https://avm.de/");
+    //fetch.Fetch("https://avm.de/");
     //fetch.Fetch("https://www.elumatec.de/");
     //fetch.Fetch("https://http2.golang.org/gophertiles?latency=0");
     //fetch.Fetch("https://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx");
+
+    string strBase64 = Base64::Encode("Tomenz@gmx.net:mazda123", 23);
+    fetch.AddToHeader("Authorization", "Basic " + strBase64);
+    fetch.AddToHeader("Depth", "1");
+    //fetch.AddContent("Hallo Welt", 10);
+    //fetch.AddToHeader("Content-Length", "10");
+    fetch.Fetch("https://webdav.magentacloud.de/", "PROPFIND");
+    //fetch.Fetch("http://192.66.65.226/", "POST");
 
     //while (fetch.RequestFinished() == false)
     while (bFertig == false)
@@ -37,7 +46,7 @@ int main(int argc, const char* argv[])
     {
         HeadList umRespHeader = fetch.GetHeaderList();
         auto contenttype = umRespHeader.find("content-type");
-        if (contenttype != umRespHeader.end() && contenttype->second.find("text/") != string::npos)
+        if (contenttype != umRespHeader.end() && (contenttype->second.find("text/") != string::npos || contenttype->second.find("xml") != string::npos))
         {
             cout << (TempFile&)fetch << flush;
         }
