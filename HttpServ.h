@@ -566,12 +566,18 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                         MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
+                        pTcpSocket->Write("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n", 71);
+                        pTcpSocket->Write("\x0\x0\x0\x4\x0\x0\x0\x0\x0", 9);    // empty SETTINGS frame (4)
+                        nStreamId = 1;
+
                         size_t nRet;
-                        if (nRet = Http2StreamProto(soMetaDa, upTmpBuffer.get(), nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->TmpFile, pConDetails->atStop.get()), nRet == 0)
+                        if (nRet = Http2StreamProto(soMetaDa, upTmpBuffer.get(), nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->TmpFile, pConDetails->atStop.get()), nRet == SIZE_MAX)
                         {
-                            pTcpSocket->Write("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n", 71);
-                            pTcpSocket->Write("\x0\x0\x0\x4\x0\x0\x0\x0\x0", 9);    // empty SETTINGS frame (4)
-                            nStreamId = 1;
+                            *pConDetails->atStop.get() = true;
+                            // After a GOAWAY we terminate the connection
+                            soMetaDa.fSocketClose();
+                            m_mtxConnections.unlock();
+                            return;
                         }
                     }
                 }
