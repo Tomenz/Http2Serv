@@ -18,6 +18,24 @@ int main(int argc, const char* argv[])
     //locale::global(std::locale(""));
     bool bFertig = false;
     HttpFetch fetch([&](HttpFetch* pFetch, void* vpUserData) { bFertig = true; }, 0);
+
+    fetch.AddToHeader("User-Agent", "http2 Util, webdav 0.1");
+//    fetch.AddToHeader("Upgrade", "h2c");
+//    fetch.AddToHeader("HTTP2-Settings", Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true));
+//    fetch.AddToHeader("Accept", "*/*");
+//    fetch.AddToHeader("Accept-Encoding", "gzip;q=1.0, deflate;q=0.8, identity; q=0.5, *;q=0\"");
+
+    fetch.AddToHeader("Authorization", "Basic " + Base64::Encode("Tomenz@gmx.net:mazda123", 23));
+    fetch.AddToHeader("Depth", "1");    // ("0" | "1" | "1,noroot" | "infinity" | "infinity,noroot")
+    fetch.AddToHeader("Content-Length", "0");
+//    fetch.AddContent("Hallo Welt", 10);
+//    fetch.AddToHeader("Content-Length", "10");
+//    fetch.AddToHeader("Content-Type", "application/octet-stream");
+//    fetch.AddContent("<?xml version=\"1.0\" encoding=\"UTF-8\" ?><D:propertyupdate xmlns:D=\"DAV:\" xmlns:Z=\"urn:schemas-microsoft-com:\"><D:set><D:prop><Z:Win32CreationTime>Sat, 19 Oct 2013 09:17:33 GMT</Z:Win32CreationTime><Z:Win32LastAccessTime>Sat, 19 Oct 2013 09:17:33 GMT</Z:Win32LastAccessTime><Z:Win32LastModifiedTime>Mon, 19 Oct 2015 13:36:03 GMT</Z:Win32LastModifiedTime></D:prop></D:set></D:propertyupdate>", 388);
+//    fetch.AddToHeader("Content-Length", "388");
+//    fetch.AddToHeader("Content-Type", "text/xml; charset=\"utf-8\"");
+//    fetch.AddToHeader("Expect", "100-continue");
+
 	//fetch.Fetch("https://twitter.com/");
     //fetch.Fetch("https://www.microsoft.com/de-de");
     //fetch.Fetch("https://192.168.161.1/index.htm");
@@ -29,11 +47,8 @@ int main(int argc, const char* argv[])
     //fetch.Fetch("https://http2.golang.org/gophertiles?latency=0");
     //fetch.Fetch("https://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx");
 
-    string strBase64 = Base64::Encode("Tomenz@gmx.net:mazda123", 23);
-    fetch.AddToHeader("Authorization", "Basic " + strBase64);
-    fetch.AddToHeader("Depth", "1");
-    //fetch.AddContent("Hallo Welt", 10);
-    //fetch.AddToHeader("Content-Length", "10");
+//    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PUT");
+//    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PROPPATCH");
     fetch.Fetch("https://webdav.magentacloud.de/", "PROPFIND");
     //fetch.Fetch("http://192.66.65.226/", "POST");
 

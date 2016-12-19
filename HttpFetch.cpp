@@ -159,7 +159,7 @@ void HttpFetch::Connected(TcpSocket* pTcpSocket)
     }
     else
     {
-        string strRequest = m_strMethode + " " + m_strPath + " HTTP/1.1\r\nHost: " + m_strServer + "\r\nUpgrade: h2c\r\nHTTP2-Settings: " + Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true) + "\r\nAccept: */*\r\nAccept-Encoding: gzip;q=1.0, deflate;q=0.8, identity; q=0.5, *;q=0\r\n";
+        string strRequest = m_strMethode + " " + m_strPath + " HTTP/1.1\r\nHost: " + m_strServer + "\r\n";
         for (auto& itPair : m_umAddHeader)
             strRequest += itPair.first + ": " + itPair.second + "\r\n";
         strRequest += "\r\n";
@@ -203,6 +203,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
 
         nRead += m_strBuffer.size();
         m_strBuffer.clear();
+        spBuffer.get()[nRead] = 0;
 
         if (m_bIsHttp2 == true)
         {
@@ -263,7 +264,14 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                         if (pFirstSpace != nullptr && pFirstSpace < pEndOfLine)
                             pSecondSpace = strchr(pFirstSpace + 1, ' ');
                         if (pSecondSpace != nullptr && pSecondSpace < pEndOfLine)
-                            m_umRespHeader.emplace_back(make_pair(":status", string(pFirstSpace + 1, pSecondSpace - pFirstSpace - 1)));
+                        {
+                            string strStatus(pFirstSpace + 1, pSecondSpace - pFirstSpace - 1);
+                            int iStatus = stoi(strStatus);
+                            if (iStatus >= 200)
+                                m_umRespHeader.emplace_back(make_pair(":status", strStatus));
+                            else if (iStatus < 200)
+                                pEndOfLine += 2;
+                        }
                     }
                     else
                     {

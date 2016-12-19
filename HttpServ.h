@@ -785,6 +785,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         case 204: strRespons += "No Content"; break;
         case 205: strRespons += "Reset Content"; break;
         case 206: strRespons += "Partial Content"; break;
+        case 207: strRespons += "Multi-Status"; break;
         case 300: strRespons += "Multiple Choices"; break;
         case 301: strRespons += "Moved Permanently"; break;
         case 302: strRespons += "Moved Temporarily"; break;
