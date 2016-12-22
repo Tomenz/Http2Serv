@@ -25,6 +25,7 @@
 #include "LogFile.h"
 #include "Base64.h"
 #include "GZip.h"
+#include <brotli/encode.h>
 
 using namespace std;
 using namespace std::placeholders;
@@ -47,14 +48,18 @@ const wchar_t* PIPETYPE = L"rb";
 #ifdef _DEBUG
 #ifdef _WIN64
 #pragma comment(lib, "x64/Debug/socketlib")
+#pragma comment(lib, "x64/Debug/brotli")
 #else
 #pragma comment(lib, "Debug/socketlib")
+#pragma comment(lib, "Debug/brotli")
 #endif
 #else
 #ifdef _WIN64
 #pragma comment(lib, "x64/Release/socketlib")
+#pragma comment(lib, "x64/Release/brotli")
 #else
 #pragma comment(lib, "Release/socketlib")
+#pragma comment(lib, "Release/brotli")
 #endif
 #endif
 
@@ -130,6 +135,7 @@ class CHttpServ : public Http2Protocol
         GZIPENCODING = 32,
         DEFLATEENCODING = 64,
         HSTSHEADER = 128,
+        BROTLICODING = 256,
     };
 
     typedef struct
@@ -754,6 +760,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 return 0;
             nHeaderSize += nReturn;
         }
+        else if (iFlag & BROTLICODING)
+        {
+            nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "content-encoding", "br");
+            if (nReturn == SIZE_MAX)
+                return 0;
+            nHeaderSize += nReturn;
+        }
 
         if (iFlag & HSTSHEADER)
         {
@@ -849,6 +862,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             strRespons += "Content-Encoding: gzip\r\n";
         else if (iFlag & DEFLATEENCODING)
             strRespons += "Content-Encoding: deflate\r\n";
+        else if (iFlag & BROTLICODING)
+            strRespons += "Content-Encoding: br\r\n";
 
         if (iFlag & TERMINATEHEADER)
             strRespons += "\r\n";
@@ -1593,11 +1608,15 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 strMineType = MIMESTRING(*it);
 
             auto acceptencoding = lstHeaderFields.find("accept-encoding");
-            if (acceptencoding != end(lstHeaderFields) && (acceptencoding->second.find("gzip") != string::npos || acceptencoding->second.find("deflate") != string::npos))
+            if (acceptencoding != end(lstHeaderFields))
             {
                 // http://www.filesignatures.net/index.php?page=all
                 if (find_if(begin(m_vHostParam[szHost].m_vDeflateTyps), end(m_vHostParam[szHost].m_vDeflateTyps), [&](const string& strType) { return strType == strMineType ? true : false; }) != end(m_vHostParam[szHost].m_vDeflateTyps))
-                    iHeaderFlag |= acceptencoding->second.find("gzip") != string::npos ? GZIPENCODING : DEFLATEENCODING;
+                {
+                    if (acceptencoding->second.find("br") != string::npos) iHeaderFlag |= BROTLICODING;
+                    else if (acceptencoding->second.find("gzip") != string::npos) iHeaderFlag |= GZIPENCODING;
+                    else if (acceptencoding->second.find("deflate") != string::npos) iHeaderFlag |= DEFLATEENCODING;
+                }
             }
 
             //iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
@@ -1638,6 +1657,58 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     fin.swap((*pDestFile.get())());
                     pDestFile->Close();
                 }
+            }
+            else if (iHeaderFlag & BROTLICODING)
+            {
+                BrotliEncoderState* s = BrotliEncoderCreateInstance(0, 0, 0);
+                BrotliEncoderSetParameter(s, BROTLI_PARAM_QUALITY, (uint32_t)9);
+                BrotliEncoderSetParameter(s, BROTLI_PARAM_LGWIN, (uint32_t)0);
+/*                if (dictionary_path != NULL) {
+                    size_t dictionary_size = 0;
+                    uint8_t* dictionary = ReadDictionary(dictionary_path, &dictionary_size);
+                    BrotliEncoderSetCustomDictionary(s, dictionary_size, dictionary);
+                    free(dictionary);
+                }
+*/
+                unique_ptr<TempFile> pDestFile = make_unique<TempFile>();
+                unique_ptr<unsigned char> srcBuf(new unsigned char[65536]);
+                unique_ptr<unsigned char> dstBuf(new unsigned char[65536]);
+
+                pDestFile->Open();
+
+                size_t nBytIn = 0;
+                const uint8_t* input;
+                size_t nBytOut = 65536;
+                uint8_t* output = dstBuf.get();
+
+                while (1)
+                {
+                    if (nBytIn == 0)
+                    {
+                        streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), 65536).gcount();
+                        nBytIn = static_cast<size_t>(nBytesRead);
+                        input = srcBuf.get();
+                    }
+
+                    if (!BrotliEncoderCompressStream(s, nBytIn == 0 ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_PROCESS, &nBytIn, &input, &nBytOut, &output, NULL))
+                        break;
+
+                    if (nBytOut != 65536)
+                    {
+                        pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), (65536 - nBytOut));
+                        nBytOut = 65536;
+                        output = dstBuf.get();
+                    }
+
+                    if (BrotliEncoderIsFinished(s)) break;
+                }
+
+                BrotliEncoderDestroyInstance(s);
+
+                nFSize = static_cast<uint64_t>(pDestFile->GetFileLength());
+                pDestFile.get()->Rewind();
+                fin.swap((*pDestFile.get())());
+                pDestFile->Close();
             }
 
             // Build response header
