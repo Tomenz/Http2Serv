@@ -19,15 +19,16 @@ int main(int argc, const char* argv[])
     bool bFertig = false;
     HttpFetch fetch([&](HttpFetch* pFetch, void* vpUserData) { bFertig = true; }, 0);
 
-    fetch.AddToHeader("User-Agent", "http2 Util, webdav 0.1");
+//    fetch.AddToHeader("User-Agent", "http2 Util, webdav 0.1");
+    fetch.AddToHeader("User-Agent", "http2fetch version 0.9 beta");
 //    fetch.AddToHeader("Upgrade", "h2c");
 //    fetch.AddToHeader("HTTP2-Settings", Base64::Encode("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x3\x38\x0\x4\x0\x60\x0\x0", 21, true));
-//    fetch.AddToHeader("Accept", "*/*");
-//    fetch.AddToHeader("Accept-Encoding", "gzip;q=1.0, deflate;q=0.8, identity; q=0.5, *;q=0\"");
+    fetch.AddToHeader("Accept", "*/*");
+    fetch.AddToHeader("Accept-Encoding", "br;q=1.0, gzip;q=0.8, deflate;q=0.7, identity;q=0.5, *;q=0");
 
-    fetch.AddToHeader("Authorization", "Basic " + Base64::Encode("Tomenz@gmx.net:mazda123", 23));
-    fetch.AddToHeader("Depth", "1");    // ("0" | "1" | "1,noroot" | "infinity" | "infinity,noroot")
-    fetch.AddToHeader("Content-Length", "0");
+//    fetch.AddToHeader("Authorization", "Basic " + Base64::Encode("Tomenz@gmx.net:mazda123", 23));
+//    fetch.AddToHeader("Depth", "1");    // ("0" | "1" | "1,noroot" | "infinity" | "infinity,noroot")
+//    fetch.AddToHeader("Content-Length", "0");
 //    fetch.AddContent("Hallo Welt", 10);
 //    fetch.AddToHeader("Content-Length", "10");
 //    fetch.AddToHeader("Content-Type", "application/octet-stream");
@@ -46,10 +47,11 @@ int main(int argc, const char* argv[])
     //fetch.Fetch("https://www.elumatec.de/");
     //fetch.Fetch("https://http2.golang.org/gophertiles?latency=0");
     //fetch.Fetch("https://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx");
+    fetch.Fetch("https://tools.keycdn.com/brotli-test");
 
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PUT");
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PROPPATCH");
-    fetch.Fetch("https://webdav.magentacloud.de/", "PROPFIND");
+//    fetch.Fetch("https://webdav.magentacloud.de/", "PROPFIND");
     //fetch.Fetch("http://192.66.65.226/", "POST");
 
     //while (fetch.RequestFinished() == false)

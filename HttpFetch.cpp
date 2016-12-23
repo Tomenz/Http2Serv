@@ -4,7 +4,7 @@
 #include "HttpFetch.h"
 #include "GZip.h"
 #include "Base64.h"
-
+#include <brotli/decode.h>
 
 #ifdef _DEBUG
 #ifdef _WIN64
@@ -26,7 +26,7 @@
 
 using namespace std::placeholders;
 
-HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_soMetaDa({ 0 }), m_bEndOfHeader(false), m_nContentLength(0), m_nChuncked(-1), m_nNextChunk(0)
+HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(0), m_nChuncked(-1), m_nNextChunk(0)
 {
 }
 
@@ -148,18 +148,10 @@ void HttpFetch::Connected(TcpSocket* pTcpSocket)
         nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, ":scheme", "https");
         if (nReturn != SIZE_MAX)
             nHeaderLen += nReturn;
-        nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, "user-agent", "http2fetch version 0.9 beta");
-        if (nReturn != SIZE_MAX)
-            nHeaderLen += nReturn;
-        nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, "accept-encoding", "gzip;q=1.0, identity; q=0.5, *;q=0");
-        if (nReturn != SIZE_MAX)
-            nHeaderLen += nReturn;
-        nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, "accept", "*/*");
-        if (nReturn != SIZE_MAX)
-            nHeaderLen += nReturn;
 
         for (auto& itPair : m_umAddHeader)
         {
+            transform(begin(itPair.first), end(itPair.first), begin(itPair.first), tolower);
             nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, itPair.first.c_str(), itPair.second.c_str());
             if (nReturn == SIZE_MAX)
                 break;
@@ -411,11 +403,53 @@ void HttpFetch::EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, ST
         m_uiStatus = stoul(status->second);
 
     auto encoding = m_umRespHeader.find("content-encoding");
-    if (encoding != m_umRespHeader.end() && (encoding->second.find("gzip") != string::npos || encoding->second.find("deflate") != string::npos))
+    if (encoding != m_umRespHeader.end())
     {
-        GZipUnpack gzipDecoder;
-        if (gzipDecoder.Init() == Z_OK)
+        if (encoding->second.find("gzip") != string::npos || encoding->second.find("deflate") != string::npos)
         {
+            GZipUnpack gzipDecoder;
+            if (gzipDecoder.Init() == Z_OK)
+            {
+                unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
+                unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
+
+                pTmpFile->Rewind();
+                shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
+                pDestFile->Open();
+
+                int iRet;
+                do
+                {
+                    int nBytesRead = static_cast<int>(pTmpFile->Read(srcBuf.get(), 4096));
+                    if (nBytesRead == 0)
+                        break;
+
+                    gzipDecoder.InitBuffer(srcBuf.get(), nBytesRead);
+
+                    uint32_t nBytesConverted;
+                    do
+                    {
+                        nBytesConverted = 4096;
+                        iRet = gzipDecoder.Deflate(dstBuf.get(), &nBytesConverted);
+                        if ((iRet == Z_OK || iRet == Z_STREAM_END) && nBytesConverted != 0)
+                            pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), nBytesConverted);
+                    } while (iRet == Z_OK && nBytesConverted == 4096);
+                } while (iRet == Z_OK);
+
+                pDestFile->Close();
+                swap(pDestFile, pTmpFile);
+            }
+        }
+        else if (encoding->second.find("br") != string::npos)
+        {
+            BrotliDecoderState* s = BrotliDecoderCreateInstance(NULL, NULL, NULL);
+
+            //if (dictionary_path != NULL) {
+            //    size_t dictionary_size = 0;
+            //    dictionary = ReadDictionary(dictionary_path, &dictionary_size);
+            //    BrotliDecoderSetCustomDictionary(s, dictionary_size, dictionary);
+            //}
+
             unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
             unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
 
@@ -423,27 +457,45 @@ void HttpFetch::EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, ST
             shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
             pDestFile->Open();
 
-            int iRet;
-            do
+            BrotliDecoderResult result = BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT;
+            const uint8_t* input = srcBuf.get();
+            uint8_t* next_out = dstBuf.get();
+            size_t nBytesRead = 1;
+            size_t nBytesOut = 4096;
+
+            while (1)
             {
-                int nBytesRead = static_cast<int>(pTmpFile->Read(srcBuf.get(), 4096));
-                if (nBytesRead == 0)
-                    break;
-
-                gzipDecoder.InitBuffer(srcBuf.get(), nBytesRead);
-
-                uint32_t nBytesConverted;
-                do
+                if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT)
                 {
-                    nBytesConverted = 4096;
-                    iRet = gzipDecoder.Deflate(dstBuf.get(), &nBytesConverted);
-                    if ((iRet == Z_OK || iRet == Z_STREAM_END) && nBytesConverted != 0)
-                        pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), nBytesConverted);
-                } while (iRet == Z_OK && nBytesConverted == 4096);
-            } while (iRet == Z_OK);
+                    if (nBytesRead == 0)
+                        break;
+                    nBytesRead = static_cast<size_t>(pTmpFile->Read(srcBuf.get(), 4096));
+                    input = srcBuf.get();
+                }
+                else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
+                {
+                    pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), 4096);
+                    nBytesOut = 4096;
+                    next_out = dstBuf.get();
+                }
+                else
+                    break; /* Error or success. */
+
+                result = BrotliDecoderDecompressStream(s, &nBytesRead, &input, &nBytesOut, &next_out, 0);
+            }
+            if (next_out != dstBuf.get())
+                pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), (next_out - dstBuf.get()));
+
+            BrotliDecoderDestroyInstance(s);
 
             pDestFile->Close();
             swap(pDestFile, pTmpFile);
+
+            if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
+                OutputDebugString(L"failed to write output\n");
+            else if (result != BROTLI_DECODER_RESULT_SUCCESS)
+                OutputDebugString(L"corrupt input\n"); /* Error or needs more input. */
+
         }
     }
 
