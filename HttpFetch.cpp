@@ -7,14 +7,26 @@
 
 
 #ifdef _DEBUG
-#pragma comment(lib, "Debug/socketlib.lib")
+#ifdef _WIN64
+#pragma comment(lib, "x64/Debug/socketlib")
+#pragma comment(lib, "x64/Debug/brotli")
 #else
-#pragma comment(lib, "Release/socketlib.lib")
+#pragma comment(lib, "Debug/socketlib")
+#pragma comment(lib, "Debug/brotli")
+#endif
+#else
+#ifdef _WIN64
+#pragma comment(lib, "x64/Release/socketlib")
+#pragma comment(lib, "x64/Release/brotli")
+#else
+#pragma comment(lib, "Release/socketlib")
+#pragma comment(lib, "Release/brotli")
+#endif
 #endif
 
 using namespace std::placeholders;
 
-HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(0), m_nChuncked(-1), m_nNextChunk(0)
+HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_soMetaDa({ 0 }), m_bEndOfHeader(false), m_nContentLength(0), m_nChuncked(-1), m_nNextChunk(0)
 {
 }
 
@@ -269,7 +281,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                             int iStatus = stoi(strStatus);
                             if (iStatus >= 200)
                                 m_umRespHeader.emplace_back(make_pair(":status", strStatus));
-                            else if (iStatus < 200)
+                            else // 1xx Statuscode
                                 pEndOfLine += 2;
                         }
                     }

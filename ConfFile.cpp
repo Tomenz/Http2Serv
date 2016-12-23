@@ -41,12 +41,8 @@ const ConfFile& ConfFile::GetInstance(const wstring& strConfigFile)
     return instance->second;
 }
 
-ConfFile::ConfFile(const ConfFile& src)
+ConfFile::ConfFile(const ConfFile& src) : m_strFileName(src.m_strFileName), m_tLastCheck(src.m_tLastCheck), m_tFileTime(src.m_tFileTime), m_mSections(src.m_mSections)
 {
-    m_strFileName = src.m_strFileName;
-    m_tLastCheck = src.m_tLastCheck;
-    m_tFileTime = src.m_tFileTime;
-    m_mSections = src.m_mSections;
 }
 
 ConfFile::~ConfFile() {}

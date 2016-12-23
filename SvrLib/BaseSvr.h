@@ -8,7 +8,7 @@ using namespace std;
 class CBaseSrv
 {
 public:
-	CBaseSrv(wchar_t* szSrvName);
+    explicit CBaseSrv(wchar_t* szSrvName);
 	~CBaseSrv(void);
 	int Run(void);
 

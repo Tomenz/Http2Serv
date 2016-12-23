@@ -33,7 +33,7 @@ class HeadList : public vector<pair<string, string>>
 {
 public:
     HeadList() : vector<pair<string, string>>() {}
-    HeadList(vector<pair<string, string>> v) : vector<pair<string, string>>(v) {}
+    explicit HeadList(const vector<pair<string, string>>& v) : vector<pair<string, string>>(v) {}
     HeadList::iterator find(string strSearch)
     {   // Search strings as of now are always lower case
         return find_if(begin(), end(), [&](auto item) { return strSearch == item.first ? true : false; });
@@ -48,6 +48,7 @@ public:
 class HPack
 {
 public:
+    HPack() {};
 
     string HufmanDecode(const char* szBuf, size_t nLen) const noexcept
     {
@@ -500,8 +501,8 @@ public:
             INERNAL_ERROR       = 30
         };
 
-        H2ProtoException(HPACKEXCODE eCode) : m_eCode(eCode) {}
-        H2ProtoException(HPACKEXCODE eCode, uint32_t nStreamId) : m_eCode(eCode), m_nStreamId(nStreamId) {}
+        explicit H2ProtoException(HPACKEXCODE eCode) : m_eCode(eCode), m_nStreamId(0) {}
+        explicit H2ProtoException(HPACKEXCODE eCode, uint32_t nStreamId) : m_eCode(eCode), m_nStreamId(nStreamId) {}
         virtual ~H2ProtoException() throw() {}
         const char* what() const throw() {
             return m_strError.c_str();
