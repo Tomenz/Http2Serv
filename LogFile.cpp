@@ -44,17 +44,15 @@ CLogFile& CLogFile::GetInstance(const wstring& strLogfileName)
     return instance->second;
 }
 
-CLogFile::CLogFile(const CLogFile& src)
+CLogFile::CLogFile(const CLogFile& src) : m_strFileName(src.m_strFileName), m_lstMessages(src.m_lstMessages)
 {
-    m_strFileName = src.m_strFileName;
-    m_lstMessages = src.m_lstMessages;
     m_atThrRunning.store(src.m_atThrRunning);
 }
 
 CLogFile::~CLogFile()
 {
     m_mtxBacklog.lock();
-    while (m_lstMessages.size() > 0 || m_atThrRunning == true)
+    while (m_lstMessages.empty() == false || m_atThrRunning == true)
     {
         m_mtxBacklog.unlock();
         this_thread::sleep_for(milliseconds(10));
@@ -144,7 +142,7 @@ void CLogFile::StartWriteThread(const string& szMessage)
             if (fout.is_open() == true)
             {
                 m_mtxBacklog.lock();
-                while (m_lstMessages.size() > 0)
+                while (m_lstMessages.empty() == false)
                 {
                     auto msg = *begin(m_lstMessages);
                     m_lstMessages.pop_front();

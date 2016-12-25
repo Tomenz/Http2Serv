@@ -1045,7 +1045,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
                 strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
 
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, { {make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation))} }, 0);
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HeadList({make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation))}), 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1131,7 +1131,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             nPos = itAuth->second.find(' ');
             if (nPos != string::npos)
             {
-                string strCredenial = Base64::Decode(itAuth->second.substr(nPos + 1));
+                //string strCredenial = Base64::Decode(itAuth->second.substr(nPos + 1));
                 //string strBase64 = Base64::Encode(strCredenial.c_str(), strCredenial.size());
                 //if (strBase64.compare(itAuth->second.substr(nPos + 1)) == 0)
                 //if (itAuth->second.compare(nPos + 1, -1, strBase64) == 0)
@@ -1186,7 +1186,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         // OPTION
         if (aritMethode->second == 3)
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, { {make_pair("Allow", "OPTIONS, GET, HEAD, POST")} }, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/ | ADDCONENTLENGTH, 200, HeadList({make_pair("Allow", "OPTIONS, GET, HEAD, POST")}), 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1349,11 +1349,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         HeadList umPhpHeaders;
                         char psBuffer[4096];
                         basic_string<char> strBuffer;
-                        size_t nTotal = 0, nRead = 0, nOffset = 0;
+                        size_t nTotal = 0, nOffset = 0;
                         bool bChunkedTransfer = false;
                         while (feof(hPipe) == 0 && (*patStop).load() == false)
                         {
-                            nRead = fread(psBuffer + nHttp2Offset + nOffset, 1, static_cast<int>(4096 - nHttp2Offset - nOffset), hPipe);
+                            size_t nRead = fread(psBuffer + nHttp2Offset + nOffset, 1, static_cast<int>(4096 - nHttp2Offset - nOffset), hPipe);
                             if (nRead > 0 && ferror(hPipe) == 0)
                             {
                                 nOffset = 0;
@@ -1713,7 +1713,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
             // Build response header
             stringstream strLastModTime; strLastModTime << put_time(::gmtime(&stFileInfo.st_mtime), "%a, %d %b %Y %H:%M:%S GMT");
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, { {make_pair("Content-Type", strMineType), make_pair("Last-Modified", strLastModTime.str()), make_pair("Cache-control", "must-revalidate") } }, nFSize);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, HeadList({make_pair("Content-Type", strMineType), make_pair("Last-Modified", strLastModTime.str()), make_pair("Cache-control", "must-revalidate") }), nFSize);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
             if (fnIsStreamReset(nStreamId) == false)

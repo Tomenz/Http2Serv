@@ -82,7 +82,6 @@ int CSvrCtrl::Start(wchar_t* szSvrName)
     SERVICE_STATUS_PROCESS ssStatus;
     DWORD dwOldCheckPoint;
     DWORD dwStartTickCount;
-    DWORD dwWaitTime;
     DWORD dwBytesNeeded;
 
     schService = OpenService(m_hSCManager, szSvrName, SERVICE_ALL_ACCESS);
@@ -120,7 +119,7 @@ int CSvrCtrl::Start(wchar_t* szSvrName)
         // one tenth the wait hint, but no less than 1 second and no
         // more than 10 seconds.
 
-        dwWaitTime = ssStatus.dwWaitHint / 10;
+        DWORD dwWaitTime = ssStatus.dwWaitHint / 10;
 
         if( dwWaitTime < 1000 )
             dwWaitTime = 1000;
@@ -187,7 +186,7 @@ int CSvrCtrl::Pause(wchar_t* szSvrName)
     if (schService == NULL)
         return -5;
 
-	DWORD dwError;
+	DWORD dwError = 0;
 	SERVICE_STATUS ssStatus;
 	if (ControlService(schService, SERVICE_CONTROL_PAUSE, &ssStatus) == 0)
 		dwError = GetLastError();
@@ -203,7 +202,7 @@ int CSvrCtrl::Continue(wchar_t* szSvrName)
     if (schService == NULL)
         return -5;
 
-	DWORD dwError;
+	DWORD dwError = 0;
 	SERVICE_STATUS ssStatus;
 	if (ControlService(schService, SERVICE_CONTROL_CONTINUE, &ssStatus) == 0)
 		dwError = GetLastError();

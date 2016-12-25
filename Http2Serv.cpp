@@ -35,7 +35,7 @@ void se_translator(size_t e, _EXCEPTION_POINTERS* p)
 class CBaseSrv
 {
 public:
-    CBaseSrv(wchar_t*) {}
+    explicit CBaseSrv(wchar_t*) {}
     virtual int Run(void) { Start(); return 0; }
     virtual void Start(void) = 0;
 };
@@ -44,7 +44,7 @@ public:
 class Service : public CBaseSrv
 {
 public:
-    Service(wchar_t* szSrvName):CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
+    explicit Service(wchar_t* szSrvName) : CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
     virtual void Start(void)
     {
         // Set the Exception Handler-function
