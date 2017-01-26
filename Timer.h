@@ -20,8 +20,8 @@ public:
     {
         atomic_init(&m_bStop, false);
 
-        m_thWaitThread = thread([&]() {
-
+        m_thWaitThread = thread([&]()
+        {
             do
             {
                 mutex mut;
@@ -33,13 +33,18 @@ public:
                     break;
                 }
             } while (m_bStop == false);
+            m_bStop = false;
         });
     }
 
     virtual ~Timer()
     {
-        m_bStop = true;
-        m_cv.notify_all();
+        Stop();
+        while (m_bStop == true)
+        {
+            this_thread::sleep_for(chrono::nanoseconds(1));
+            m_cv.notify_all();
+        }
         if (m_thWaitThread.joinable() == true)
             m_thWaitThread.join();
     }

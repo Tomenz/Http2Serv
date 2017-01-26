@@ -36,7 +36,7 @@ mDnsServ: $(BUILDDIRS) mDnsServ.o DnsProtokol.o
 $(TARGET): $(BUILDDIRS) $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(LIB_PATH) $(LIB) $(LDFLAGS)
 
-%.o: %.cpp HttpServ.h HPack.h H2Proto.h Base64.h
+%.o: %.cpp HttpServ.h HPack.h H2Proto.h Base64.h Timer.h
 	$(CC) $(CFLAGS) $(INC_PATH) -c $<
 
 $(DIRS): $(BUILDDIRS)

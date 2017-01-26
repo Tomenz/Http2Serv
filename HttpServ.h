@@ -624,13 +624,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         TcpSocket* pTcpSocket = dynamic_cast<TcpSocket*>(pBaseSocket);
         CLogFile::GetInstance(m_vHostParam[L""].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", (pTcpSocket != nullptr ? pTcpSocket->GetClientAddr() : "0.0.0.0"), "] network error no.: ",  pBaseSocket->GetErrorNo());
 
-        lock_guard<mutex> lock(m_mtxConnections);
+        m_mtxConnections.lock();
         CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
         {
             *item->second.atStop.get() = true;
         }
-
+        m_mtxConnections.unlock();
         pBaseSocket->Close();
     }
 
