@@ -218,7 +218,10 @@ public:
 
         m_mtxConnections.lock();
         for (auto item : m_vConnections)
+        {
+            item.second.pTimer->Stop();
             item.first->Close();
+        }
         m_mtxConnections.unlock();
 
         //while (m_vConnections.size() != 0)
@@ -628,6 +631,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
         {
+            item->second.pTimer->Stop();
             *item->second.atStop.get() = true;
         }
         m_mtxConnections.unlock();
@@ -641,6 +645,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
         {
+            item->second.pTimer->Stop();
+
             m_ActThrMutex.lock();
             for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
             {
@@ -648,7 +654,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 {
                     *iter->second = true;   // Stop the DoAction thread
                     m_ActThrMutex.unlock();
-                    this_thread::sleep_for(chrono::milliseconds(10));
+                    this_thread::sleep_for(chrono::milliseconds(1));
                     m_ActThrMutex.lock();
                     iter = begin(m_umActionThreads);
                     continue;
@@ -1452,7 +1458,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
                                     if (nInQue >= 0x200000 || nStreamWndSize == 0)
                                     {
-                                        this_thread::sleep_for(chrono::milliseconds(1));
+                                        this_thread::sleep_for(chrono::nanoseconds(1));
                                         continue;
                                     }
 
@@ -1758,7 +1764,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
                     if (nInQue >= 0x200000 || nStreamWndSize == 0)
                     {
-                        this_thread::sleep_for(chrono::milliseconds(1));
+                        this_thread::sleep_for(chrono::nanoseconds(1));
                         continue;
                     }
 

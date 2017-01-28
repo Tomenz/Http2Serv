@@ -19,6 +19,7 @@ public:
     Timer(uint32_t tMilliSeconds, function<void(Timer*)> fTimeOut) : m_tMilliSeconds(tMilliSeconds), /*m_tpStart(chrono::system_clock::now()),*/ m_fTimeOut(fTimeOut)
     {
         atomic_init(&m_bStop, false);
+        atomic_init(&m_bIsStoped, false);
 
         m_thWaitThread = thread([&]()
         {
@@ -33,14 +34,14 @@ public:
                     break;
                 }
             } while (m_bStop == false);
-            m_bStop = false;
+            m_bIsStoped = true;
         });
     }
 
     virtual ~Timer()
     {
         Stop();
-        while (m_bStop == true)
+        while (m_bIsStoped == false)
         {
             this_thread::sleep_for(chrono::nanoseconds(1));
             m_cv.notify_all();
@@ -64,6 +65,7 @@ private:
     uint32_t m_tMilliSeconds;
     function<void(Timer*)> m_fTimeOut;
     atomic<bool> m_bStop;
+    atomic<bool> m_bIsStoped;
     thread m_thWaitThread;
     condition_variable m_cv;
 };
