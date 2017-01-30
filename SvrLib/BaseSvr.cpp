@@ -93,7 +93,7 @@ void WINAPI CBaseSrv::ServiceCtrlHandler(DWORD Opcode)
 		s_This->Stop();
 		s_stSrvStatus.dwCurrentState  = SERVICE_STOP_PENDING;
         s_stSrvStatus.dwWaitHint = 3000;
-        return;
+        break;
 
 	case SERVICE_CONTROL_INTERROGATE:
 	// Fall through to send current status.
@@ -103,7 +103,8 @@ void WINAPI CBaseSrv::ServiceCtrlHandler(DWORD Opcode)
 		;
 //		SvcDebugOut(" [MY_SERVICE] Unrecognized opcode %ld\n", Opcode);
 	}
-//OutputDebugStringA(string("ServiceCtrlHandler" + to_string(Opcode) + "\r\n").c_str());
+    s_stSrvStatus.dwCheckPoint++;
+
 	// Send current status.
 	if (!SetServiceStatus (s_hSrvStatus,  &s_stSrvStatus))
 	{
