@@ -386,8 +386,9 @@ private:
                 pSocket->BindFuncBytesRecived(bind(&CHttpServ::OnDataRecieved, this, _1));
                 pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
-                lock_guard<mutex> lock(m_mtxConnections);
+                m_mtxConnections.lock();
                 m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX), make_shared<atomic_bool>(false) }));
+                m_mtxConnections.unlock();
                 pSocket->StartReceiving();
             }
         }
@@ -907,7 +908,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
         };
 
-        function <bool(uint32_t)> fnIsStreamReset = [&](uint32_t nId) -> bool
+        auto fnIsStreamReset = [&](uint32_t nId) -> bool
         {
             if (nId == 0) return false;
             lock_guard<mutex> lock(*pmtxStream);
@@ -915,6 +916,59 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             if (StreamItem != end(hw2.StreamList))
                 return ((STREAMSTATE(StreamItem) & RESET_STREAM) == RESET_STREAM ? true : false);
             return true;
+        };
+
+        auto fnSendCueReady = [&](size_t& nStreamWndSize, size_t& nSendBufLen, uint64_t nBufSize, uint64_t nRestLenToSend) -> bool
+        {
+            size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
+            if (nInQue >= 0x200000 || nStreamWndSize == 0)
+            {
+                this_thread::sleep_for(chrono::nanoseconds(1));
+                return false;
+            }
+
+            nSendBufLen = min(static_cast<size_t>(min(nBufSize, nRestLenToSend)), nStreamWndSize);
+            return true;
+        };
+
+        auto fnGetStreamWindowSize = [&](size_t& nStreamWndSize) -> int
+        {
+            size_t nTotaleWndSize = SIZE_MAX;
+            if (nStreamId != 0)
+            {
+                lock_guard<mutex> lock0(*pmtxStream);
+                auto StreamItem = hw2.StreamList.find(nStreamId);
+                if (StreamItem != end(hw2.StreamList))
+                    nStreamWndSize = WINDOWSIZE(StreamItem);
+                else
+                    return -1;  // Stream Item was removed, properly the stream was reseted
+                StreamItem = hw2.StreamList.find(0);
+                if (StreamItem != end(hw2.StreamList))
+                    nTotaleWndSize = WINDOWSIZE(StreamItem);
+                else
+                    return -1;  // Stream Item was removed, properly the stream was reseted
+                nStreamWndSize = min(nStreamWndSize, nTotaleWndSize);
+            }
+            return 0;
+        };
+
+        auto fnUpdateStreamParam = [&](size_t& nSendBufLen) -> int
+        {
+            if (nStreamId != 0)
+            {
+                lock_guard<mutex> lock(*pmtxStream);
+                auto StreamItem = hw2.StreamList.find(nStreamId);
+                if (StreamItem != end(hw2.StreamList))
+                    WINDOWSIZE(StreamItem) -= nSendBufLen;
+                else
+                    return -1;  // Stream Item was removed, properly the stream was reseted
+                StreamItem = hw2.StreamList.find(0);
+                if (StreamItem != end(hw2.StreamList))
+                    WINDOWSIZE(StreamItem) -= nSendBufLen;
+                else
+                    return -1;  // Stream Item was removed, properly the stream was reseted
+            }
+            return 0;
         };
 
         const size_t nHttp2Offset = nStreamId != 0 ? 9 : 0;
@@ -1438,32 +1492,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 while (nBytesTransfered < nRead && (*patStop).load() == false)
                                 {
                                     size_t nStreamWndSize = SIZE_MAX;
-                                    size_t nTotaleWndSize = SIZE_MAX;
-                                    if (nStreamId != 0)
-                                    {
-                                        lock_guard<mutex> lock0(*pmtxStream);
-                                        auto StreamItem = hw2.StreamList.find(nStreamId);
-                                        if (StreamItem != end(hw2.StreamList))
-                                            nStreamWndSize = WINDOWSIZE(StreamItem);
-                                        else
-                                            break;  // Stream Item was removed, properly the stream was reseted
-                                        StreamItem = hw2.StreamList.find(0);
-                                        if (StreamItem != end(hw2.StreamList))
-                                            nTotaleWndSize = WINDOWSIZE(StreamItem);
-                                        else
-                                            break;  // Stream Item was removed, properly the stream was reseted
-                                        nStreamWndSize = min(nStreamWndSize, nTotaleWndSize);
-                                    }
+                                    if (fnGetStreamWindowSize(nStreamWndSize) == -1)
+                                        break;  // Stream Item was removed, properly the stream was reseted
 
-                                    size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
-                                    if (nInQue >= 0x200000 || nStreamWndSize == 0)
-                                    {
-                                        this_thread::sleep_for(chrono::nanoseconds(1));
+                                    size_t nSendBufLen;
+                                    if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nRead - nBytesTransfered) == false)
                                         continue;
-                                    }
-
-                                    size_t nSendBufLen = min(static_cast<size_t>(nSizeSendBuf) - nHttp2Offset, nRead - nBytesTransfered);
-                                    nSendBufLen = min(nSendBufLen, nStreamWndSize);
 
                                     nBytesTransfered += nSendBufLen;
 
@@ -1481,20 +1515,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                         soMetaDa.fSocketWrite("\r\n", 2);
                                     soMetaDa.fResetTimer();
 
-                                    if (nStreamId != 0)
-                                    {
-                                        lock_guard<mutex> lock0(*pmtxStream);
-                                        auto StreamItem = hw2.StreamList.find(nStreamId);
-                                        if (StreamItem != end(hw2.StreamList))
-                                            WINDOWSIZE(StreamItem) -= nSendBufLen;
-                                        else
-                                            break;  // Stream Item was removed, properly the stream was reseted
-                                        StreamItem = hw2.StreamList.find(0);
-                                        if (StreamItem != end(hw2.StreamList))
-                                            WINDOWSIZE(StreamItem) -= nSendBufLen;
-                                        else
-                                            break;  // Stream Item was removed, properly the stream was reseted
-                                    }
+                                    if (fnUpdateStreamParam(nSendBufLen) == -1)
+                                        break;  // Stream Item was removed, properly the stream was reseted
                                 }
 
                                 nTotal += nBytesTransfered;
@@ -1744,32 +1766,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 while (nBytesTransfered < nFSize && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                 {
                     size_t nStreamWndSize = SIZE_MAX;
-                    size_t nTotaleWndSize = SIZE_MAX;
-                    if (nStreamId != 0)
-                    {
-                        lock_guard<mutex> lock0(*pmtxStream);
-                        auto StreamItem = hw2.StreamList.find(nStreamId);
-                        if (StreamItem != end(hw2.StreamList))
-                            nStreamWndSize = WINDOWSIZE(StreamItem);
-                        else
-                            break;  // Stream Item was removed, properly the stream was reseted
-                        StreamItem = hw2.StreamList.find(0);
-                        if (StreamItem != end(hw2.StreamList))
-                            nTotaleWndSize = WINDOWSIZE(StreamItem);
-                        else
-                            break;  // Stream Item was removed, properly the stream was reseted
-                        nStreamWndSize = min(nStreamWndSize, nTotaleWndSize);
-                    }
+                    if (fnGetStreamWindowSize(nStreamWndSize) == -1)
+                        break;  // Stream Item was removed, properly the stream was reseted
 
-                    size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
-                    if (nInQue >= 0x200000 || nStreamWndSize == 0)
-                    {
-                        this_thread::sleep_for(chrono::nanoseconds(1));
+                    size_t nSendBufLen;
+                    if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered) == false)
                         continue;
-                    }
-
-                    size_t nSendBufLen = static_cast<size_t>(min(static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered));
-                    nSendBufLen = min(nSendBufLen, nStreamWndSize);
 
                     nBytesTransfered += nSendBufLen;
 
@@ -1779,20 +1781,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     soMetaDa.fSocketWrite(apBuf.get(), nSendBufLen + nHttp2Offset);
                     soMetaDa.fResetTimer();
 
-                    if (nStreamId != 0)
-                    {
-                        lock_guard<mutex> lock0(*pmtxStream);
-                        auto StreamItem = hw2.StreamList.find(nStreamId);
-                        if (StreamItem != end(hw2.StreamList))
-                            WINDOWSIZE(StreamItem) -= nSendBufLen;
-                        else
-                            break;  // Stream Item was removed, properly the stream was reseted
-                        StreamItem = hw2.StreamList.find(0);
-                        if (StreamItem != end(hw2.StreamList))
-                            WINDOWSIZE(StreamItem) -= nSendBufLen;
-                        else
-                            break;  // Stream Item was removed, properly the stream was reseted
-                    }
+                    if (fnUpdateStreamParam(nSendBufLen) == -1)
+                        break;  // Stream Item was removed, properly the stream was reseted
                 }
             }
             fin.close();
