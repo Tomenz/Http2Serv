@@ -16,19 +16,17 @@
 
 #include "zlib/zlib.h"
 
-#if defined(_WIN32) || defined(_WIN64)
 #ifdef _DEBUG
 #ifdef _WIN64
 #pragma comment(lib, "x64/Debug/zlib")
-#else
+#elif _WIN32
 #pragma comment(lib, "Debug/zlib")
 #endif
 #else
 #ifdef _WIN64
 #pragma comment(lib, "x64/Release/zlib")
-#else
+#elif _WIN32
 #pragma comment(lib, "Release/zlib")
-#endif
 #endif
 #endif
 
