@@ -1,7 +1,7 @@
 
 #include ".\svrctrl.h"
 
-CSvrCtrl::CSvrCtrl(void)
+CSvrCtrl::CSvrCtrl(void) : m_hSCManager(nullptr)
 {
 	m_hSCManager = OpenSCManager(
     NULL,                    // local machine
@@ -11,7 +11,8 @@ CSvrCtrl::CSvrCtrl(void)
 
 CSvrCtrl::~CSvrCtrl(void)
 {
-	CloseServiceHandle(m_hSCManager);
+    if (m_hSCManager != nullptr)
+	    CloseServiceHandle(m_hSCManager);
 }
 
 int CSvrCtrl::Install(wchar_t* szSvrName, wchar_t* szDisplayName)

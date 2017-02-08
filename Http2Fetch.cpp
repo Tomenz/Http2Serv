@@ -39,15 +39,17 @@ int main(int argc, const char* argv[])
 
 	//fetch.Fetch("https://twitter.com/");
     //fetch.Fetch("https://www.microsoft.com/de-de");
-    //fetch.Fetch("https://192.168.161.1/index.htm");
+//    fetch.Fetch("http://192.168.161.1/index.htm");
     //fetch.Fetch("https://192.66.65.226/");
     //fetch.Fetch("https://www.google.de/");
-    //fetch.Fetch("http://www.heise.de/");
+    //fetch.Fetch("https://www.heise.de/");
     //fetch.Fetch("https://avm.de/");
     //fetch.Fetch("https://www.elumatec.de/");
     //fetch.Fetch("https://http2.golang.org/gophertiles?latency=0");
     //fetch.Fetch("https://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx");
-    fetch.Fetch("https://tools.keycdn.com/brotli-test");
+    //fetch.Fetch("https://tools.keycdn.com/brotli-test");
+    fetch.Fetch("https://tools.keycdn.com/http2-test");
+
 
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PUT");
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PROPPATCH");

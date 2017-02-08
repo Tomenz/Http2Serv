@@ -268,7 +268,7 @@ int main(int argc, const char* argv[])
 
     wchar_t szDspName[] = { L"HTTP/2 Server" };
     wchar_t szDescrip[] = { L"Http 2.0 Server by Thomas Hauck" };
-    CSvrCtrl cSC;
+
 #else
     auto _kbhit = []() -> int
     {
@@ -311,23 +311,23 @@ int main(int argc, const char* argv[])
                 {
 #if defined(_WIN32) || defined(_WIN64)
                 case 'I':
-                    iRet = cSC.Install(szSvrName, szDspName);
-                    cSC.SetServiceDescription(szSvrName, szDescrip);
+                    iRet = CSvrCtrl().Install(szSvrName, szDspName);
+                    CSvrCtrl().SetServiceDescription(szSvrName, szDescrip);
                     break;
                 case 'R':
-                    iRet = cSC.Remove(szSvrName);
+                    iRet = CSvrCtrl().Remove(szSvrName);
                     break;
                 case 'S':
-                    iRet = cSC.Start(szSvrName);
+                    iRet = CSvrCtrl().Start(szSvrName);
                     break;
                 case 'E':
-                    iRet = cSC.Stop(szSvrName);
+                    iRet = CSvrCtrl().Stop(szSvrName);
                     break;
                 case 'P':
-                    iRet = cSC.Pause(szSvrName);
+                    iRet = CSvrCtrl().Pause(szSvrName);
                     break;
                 case 'C':
-                    iRet = cSC.Continue(szSvrName);
+                    iRet = CSvrCtrl().Continue(szSvrName);
                     break;
 #endif
                 case 'F':

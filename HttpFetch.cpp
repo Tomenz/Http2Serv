@@ -26,7 +26,7 @@
 
 using namespace std::placeholders;
 
-HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(0), m_nChuncked(-1), m_nNextChunk(0)
+HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0)
 {
 }
 
@@ -253,7 +253,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                         return;
                     }
 
-                    if (m_nContentLength == 0 && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
+                    if ((m_nContentLength == SIZE_MAX || m_nContentLength == 0) && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
                     {
                         m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                         EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFileRec, nullptr);
@@ -289,7 +289,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                                 parResult->second.erase(0, parResult->second.find_first_not_of(" "));
                         }
 
-                        if (m_nContentLength == 0)
+                        if (m_nContentLength == SIZE_MAX)
                         {
                             auto pHeader = m_umRespHeader.find("content-length");
                             if (pHeader != m_umRespHeader.end())
@@ -323,13 +323,11 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
             {
                 m_pTmpFileRec = make_shared<TempFile>();
                 m_pTmpFileRec.get()->Open();
-//                if (m_nChuncked == 0) // Chunked transfer ecoding ist enabled
-//                    nRead += 2, nWriteOffset -= 2;
             }
 
-
-        nextchunck:
-            if (m_nChuncked == 0 && m_nNextChunk == 0)
+            nextchunck:
+            bool bLastChunk = false;
+            if (m_nChuncked == 0 && m_nNextChunk == 0 && m_nChunkFooter == 0)
             {
                 static regex rx("^([0-9a-fA-F]+)[\\r]?\\n"); //rx("^[\\r]?\\n([0-9a-fA-F]+)[\\r]?\\n");
                 match_results<const char*> mr;
@@ -338,28 +336,37 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                     m_nNextChunk = strtol(mr[1].str().c_str(), 0, 16);
                     nWriteOffset += mr.length();
                     nRead -= mr.length();
+                    m_nChunkFooter = 2;
+                    if (m_nNextChunk == 0)
+                        bLastChunk = true;
                 }
                 else
                     OutputDebugString(L"Buffer Fehler\r\n");
             }
 
-            m_pTmpFileRec.get()->Write(spBuffer.get() + nWriteOffset, m_nNextChunk != 0 ? min(nRead, m_nNextChunk) : nRead);
-            if (m_nNextChunk != 0)
+            size_t nAnzahlDatenBytes = m_nNextChunk != 0 || m_nChunkFooter != 0 ? min(nRead, m_nNextChunk) : nRead;
+            m_pTmpFileRec.get()->Write(spBuffer.get() + nWriteOffset, nAnzahlDatenBytes);
+
+            if (m_nNextChunk != 0 || m_nChunkFooter != 0)
             {
-                size_t nSaveRead = nRead;
-                nRead -= min(nRead, m_nNextChunk);
-                nWriteOffset += m_nNextChunk;
-                m_nNextChunk -= min(nSaveRead, m_nNextChunk);
+                nRead -= nAnzahlDatenBytes;
+                nWriteOffset += nAnzahlDatenBytes; // m_nNextChunk; War seither so
+                m_nNextChunk -= nAnzahlDatenBytes;
+
+                if (nRead == 0 && m_nNextChunk == 0)    // we expect the \r\n after the chunk, the next Data we receive should be a \r\n
+                    ;
                 if (nRead >= 2 && string(spBuffer.get() + nWriteOffset).substr(0, 2) == "\r\n")
-                    nRead -= 2, nWriteOffset += 2;
-                if (nRead == 0) // No more Bytes received, we need a chunk header if m_nNextChunk = 0, or the rest of the current chunk
+                    nRead -= 2, nWriteOffset += 2, m_nChunkFooter = 0;
+
+                if (nRead == 0 && bLastChunk == false) // No more Bytes received, we need a chunk header if m_nNextChunk = 0, or the rest of the current chunk
                     return;
                 // More bytes available in the buffer, we need a chunk header
-                m_nNextChunk = 0;
-                goto nextchunck;
+                if (bLastChunk == false)
+                {
+                    m_nNextChunk = 0;
+                    goto nextchunck;
+                }
             }
-            else if (m_nChuncked == 0 && nRead != 2)
-                ;
 
             if ((m_nContentLength != SIZE_MAX && m_nContentLength == m_pTmpFileRec->GetFileLength())
                 || (m_nChuncked == 0 && m_nNextChunk == 0))
@@ -467,8 +474,8 @@ void HttpFetch::EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, ST
             {
                 if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT)
                 {
-                    if (nBytesRead == 0)
-                        break;
+                    //if (nBytesRead == 0)
+                    //    break;
                     nBytesRead = static_cast<size_t>(pTmpFile->Read(srcBuf.get(), 4096));
                     input = srcBuf.get();
                 }

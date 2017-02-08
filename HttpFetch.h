@@ -54,6 +54,7 @@ private:
     uint64_t             m_nContentLength;
     int                  m_nChuncked;
     size_t               m_nNextChunk;
+    size_t               m_nChunkFooter;
 
     function<void(HttpFetch*, void*)> m_fnNotify;
     void*                             m_vpUserData;
