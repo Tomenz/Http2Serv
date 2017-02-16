@@ -23,10 +23,10 @@ public:
 
         m_thWaitThread = thread([&]()
         {
+            mutex mut;
+            unique_lock<mutex> lock(mut);
             do
             {
-                mutex mut;
-                unique_lock<mutex> lock(mut);
                 if (m_cv.wait_for(lock, chrono::milliseconds(m_tMilliSeconds)) == cv_status::timeout)
                 {
                     if (m_fTimeOut != 0)
