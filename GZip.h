@@ -99,9 +99,9 @@ public:
         m_strm.next_in = pIn;
     }
 
-    int Enflate(unsigned char* pOut, uint32_t* pnOutCount, int nFlush)
+    int Enflate(unsigned char* pOut, size_t* pnOutCount, int nFlush)
     {
-        m_strm.avail_out = *pnOutCount;
+        m_strm.avail_out = static_cast<uint32_t>(*pnOutCount);
         m_strm.next_out = pOut;
 
         int iRet = deflate(&m_strm, nFlush);

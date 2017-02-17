@@ -185,7 +185,7 @@ public:
             SslTcpServer* pSocket = new SslTcpServer();
             pSocket->AddCertificat(m_vHostParam[L""].m_strCAcertificate.c_str(), m_vHostParam[L""].m_strHostCertificate.c_str(), m_vHostParam[L""].m_strHostKey.c_str());
             pSocket->SetDHParameter(m_vHostParam[L""].m_strDhParam.c_str());
-            pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1, _2));
+            pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1));
 
             for (auto& Item : m_vHostParam)
             {
@@ -201,7 +201,7 @@ public:
         else
         {
             m_pSocket = new TcpServer();
-            m_pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1, _2));
+            m_pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1));
         }
 
         return m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
@@ -368,12 +368,11 @@ public:
     }
 */
 private:
-    void OnNewConnection(TcpServer* pTcpServer, int nCountNewConnections)
+    void OnNewConnection(vector<TcpSocket*>& vNewConnections)
     {
-        for (int i = 0; i < nCountNewConnections; ++i)
+        vector<TcpSocket*> vCache;
+        for (auto pSocket : vNewConnections)
         {
-            TcpSocket* pSocket = pTcpServer->GetNextPendingConnection();
-            //SslTcpSocket* pSocket = reinterpret_cast<SslTcpServer*>(pTcpServer)->GetNextPendingConnection();
             if (pSocket != nullptr)
             {
                 if (pSocket->GetErrorNo() != 0)
@@ -386,11 +385,18 @@ private:
                 pSocket->BindFuncBytesRecived(bind(&CHttpServ::OnDataRecieved, this, _1));
                 pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
-                m_mtxConnections.lock();
+                vCache.push_back(pSocket);
+            }
+        }
+        if (vCache.size())
+        {
+            m_mtxConnections.lock();
+            for (auto pSocket : vCache)
+            {
                 m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX), make_shared<atomic_bool>(false) }));
-                m_mtxConnections.unlock();
                 pSocket->StartReceiving();
             }
+            m_mtxConnections.unlock();
         }
     }
 
@@ -1722,7 +1728,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         gzipEncoder.InitBuffer(srcBuf.get(), static_cast<uint32_t>(nBytesRead));
                         int nFlush = nBytesTransfered == nFSize ? Z_FINISH : Z_NO_FLUSH;
 
-                        uint32_t nBytesConverted;
+                        size_t nBytesConverted;
                         do
                         {
                             nBytesConverted = nSizeSendBuf - nHttp2Offset;
