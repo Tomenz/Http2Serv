@@ -368,7 +368,7 @@ public:
     }
 */
 private:
-    void OnNewConnection(vector<TcpSocket*>& vNewConnections)
+    void OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     {
         vector<TcpSocket*> vCache;
         for (auto pSocket : vNewConnections)
