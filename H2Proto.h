@@ -46,9 +46,9 @@ typedef map<unsigned long, STREAMITEM> STREAMLIST;
 typedef struct
 {
     string strIpClient;
-    short sPortClient;
+    uint16_t sPortClient;
     string strIpInterface;
-    short sPortInterFace;
+    uint16_t sPortInterFace;
     bool bIsSsl;
     function<size_t(const void*, size_t)> fSocketWrite;
     function<void()> fSocketClose;
