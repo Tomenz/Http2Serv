@@ -203,7 +203,8 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
 
     if (nRead > 0)
     {
-        m_Timer->Reset();
+        if (m_Timer != nullptr)
+            m_Timer->Reset();
 
         nRead += m_strBuffer.size();
         m_strBuffer.clear();
