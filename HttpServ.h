@@ -203,7 +203,7 @@ public:
             m_pSocket = new TcpServer();
             m_pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1));
         }
-
+        m_pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
         return m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
     }
 
@@ -375,13 +375,6 @@ private:
         {
             if (pSocket != nullptr)
             {
-                if (pSocket->GetErrorNo() != 0)
-                {
-                    CLogFile::GetInstance(L"./logs/Server.log").WriteToLog("Socket error \'", pSocket->GetErrorNo(), "\' on new connection");
-                    delete pSocket;
-                    continue;
-                }
-
                 pSocket->BindFuncBytesRecived(bind(&CHttpServ::OnDataRecieved, this, _1));
                 pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
