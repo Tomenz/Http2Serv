@@ -674,6 +674,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             if (it->second.pTimer.get() == pTimer)
             {
+                *it->second.atStop.get() = true;
                 it->first->Close();
                 break;
             }
