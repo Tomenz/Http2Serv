@@ -156,6 +156,7 @@ class CHttpServ : public Http2Protocol
         vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;
         vector<tuple<wstring, wstring, wstring>> m_vEnvIf;
         vector<string> m_vDeflateTyps;
+        unordered_map<wstring, wstring> m_mAuthenticate;
     } HOSTPARAM;
 
 public:

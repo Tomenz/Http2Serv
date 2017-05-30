@@ -75,7 +75,7 @@ public:
         deque<CHttpServ> vServers;
 
         const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 } };
-        const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 } };
+        const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 } };
 
         vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
 
@@ -198,6 +198,14 @@ public:
                                     wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
                                     while (token != wsregex_token_iterator())
                                         HostParam.m_vDeflateTyps.push_back(Utf8Converter.to_bytes(token++->str()));
+                                }
+                                break;
+                            case 8: // Authenticate
+                                for (const auto& strValue : vValues)
+                                {
+                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                    if (token != wsregex_token_iterator())
+                                        HostParam.m_mAuthenticate.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
                                 }
                                 break;
                             }
