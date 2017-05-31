@@ -1186,37 +1186,46 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return;
         }
 
-        auto itAuth = lstHeaderFields.find("authorization");
-        if (itAuth != end(lstHeaderFields))
+        // Check for Authentication
+        for (auto& strAuth : m_vHostParam[szHost].m_mAuthenticate)
         {
-            nPos = itAuth->second.find(' ');
-            if (nPos != string::npos)
+            if (regex_search(strItemPath, wregex(strAuth.first)) == true)
             {
-                //string strCredenial = Base64::Decode(itAuth->second.substr(nPos + 1));
+                function<void()> fnSendAuthRespons = [&]() -> void
+                {
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, HeadList({ make_pair("WWW-Authenticate", "Basic realm=\"Http-Utility Basic\"") }), 0);
+                    if (nStreamId != 0)
+                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                    soMetaDa.fResetTimer();
+                    if (nStreamId == 0)
+                        soMetaDa.fSocketClose();
+                    fuExitDoAction();
+                };
+
+                auto itAuth = lstHeaderFields.find("authorization");
+                if (itAuth == end(lstHeaderFields))
+                    return fnSendAuthRespons();
+
+                nPos = itAuth->second.find(' ');
+                if (nPos == string::npos)
+                    return fnSendAuthRespons();
+
+                wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPos + 1)));
                 //string strBase64 = Base64::Encode(strCredenial.c_str(), strCredenial.size());
                 //if (strBase64.compare(itAuth->second.substr(nPos + 1)) == 0)
                 //if (itAuth->second.compare(nPos + 1, -1, strBase64) == 0)
                 //    MessageBeep(-1);
-                //if (strCredenial == "Thomas:lanier")
-                //    MessageBeep(-1);
+                if (strCredenial != strAuth.second)
+                    return fnSendAuthRespons();
             }
         }
-        //else
-        //{
-        //    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, HEADERWRAPPER{{{"WWW-Authenticate", "Basic realm=\"Http-Uttility Basic\""}}}, 0);
-        //    if (nStreamId != 0)
-        //        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-        //    m_cSockSystem.soMetaDa.fSocketWrite(stSocketData.iId, caBuffer, nHeaderLen + nHttp2Offset, CONNFLAGS::CLOSE);
-        //    soMetaDa.fResetTimer();
-        //    return;
-        //}
 
         // AliasMatch
         bool bNewRootSet = false;
         for (auto& strAlias : m_vHostParam[szHost].m_mstrAliasMatch)
         {
-            wregex rx(strAlias.first);
-            wstring strNewPath = regex_replace(strItemPath, rx, strAlias.second, regex_constants::format_first_only);
+            wstring strNewPath = regex_replace(strItemPath, wregex(strAlias.first), strAlias.second, regex_constants::format_first_only);
             if (strNewPath != strItemPath)
             {
                 strItemPath = strNewPath;
