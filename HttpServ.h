@@ -156,7 +156,7 @@ class CHttpServ : public Http2Protocol
         vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;
         vector<tuple<wstring, wstring, wstring>> m_vEnvIf;
         vector<string> m_vDeflateTyps;
-        unordered_map<wstring, wstring> m_mAuthenticate;
+        unordered_map<wstring, vector<wstring>> m_mAuthenticate;
     } HOSTPARAM;
 
 public:
@@ -1216,7 +1216,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 //if (strBase64.compare(itAuth->second.substr(nPos + 1)) == 0)
                 //if (itAuth->second.compare(nPos + 1, -1, strBase64) == 0)
                 //    MessageBeep(-1);
-                if (strCredenial != strAuth.second)
+                if (find_if(begin(strAuth.second), end(strAuth.second), [strCredenial](const auto& strUser) { return strCredenial == strUser ? true : false; }) == end(strAuth.second))
                     return fnSendAuthRespons();
             }
         }

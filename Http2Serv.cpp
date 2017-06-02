@@ -203,9 +203,21 @@ public:
                             case 8: // Authenticate
                                 for (const auto& strValue : vValues)
                                 {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
+                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1, regex_constants::format_first_only);
                                     if (token != wsregex_token_iterator())
-                                        HostParam.m_mAuthenticate.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                                    {
+                                        auto itNew = HostParam.m_mAuthenticate.emplace(token->str(), vector<wstring>());
+                                        if (itNew.second == true)
+                                        {
+                                            wstring& strTmp = strValue.substr(token->str().size() + 1);
+                                            strTmp.erase(0, strTmp.find_first_not_of(L" \t"));      // Trim Whitespace and " character on the left
+
+                                            static const wregex seperatorKomma(L"\\s*,\\s*");
+                                            wsregex_token_iterator tok(begin(strTmp), end(strTmp), seperatorKomma, -1);
+                                            while (tok != wsregex_token_iterator())
+                                                itNew.first->second.emplace_back(tok++->str());
+                                        }
+                                    }
                                 }
                                 break;
                             }
