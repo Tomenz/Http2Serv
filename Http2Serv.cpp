@@ -209,7 +209,7 @@ public:
                                         auto itNew = HostParam.m_mAuthenticate.emplace(token->str(), vector<wstring>());
                                         if (itNew.second == true)
                                         {
-                                            wstring& strTmp = strValue.substr(token->str().size() + 1);
+                                            wstring strTmp = strValue.substr(token->str().size() + 1);
                                             strTmp.erase(0, strTmp.find_first_not_of(L" \t"));      // Trim Whitespace and " character on the left
 
                                             static const wregex seperatorKomma(L"\\s*,\\s*");
