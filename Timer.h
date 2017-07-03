@@ -50,12 +50,12 @@ public:
             m_thWaitThread.join();
     }
 
-    void Reset()
+    void Reset() noexcept
     {
         m_cv.notify_all();
     }
 
-    void Stop()
+    void Stop() noexcept
     {
         m_bStop = true;
         m_cv.notify_all();

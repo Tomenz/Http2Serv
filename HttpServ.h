@@ -231,7 +231,7 @@ public:
         return true;
     }
 
-    bool IsStopped()
+    bool IsStopped() noexcept
     {
         return m_vConnections.size() == 0 ? true : false;
     }
@@ -264,7 +264,7 @@ public:
         return *this;
     }
 */
-    CHttpServ& SetBindAdresse(const char* szBindIp)
+    CHttpServ& SetBindAdresse(const char* szBindIp) noexcept
     {
         m_strBindIp = szBindIp;
         return *this;

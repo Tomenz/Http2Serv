@@ -103,7 +103,7 @@ void TempFile::Rewind()
     m_theFile.seekg(0, ios_base::beg);
 }
 
-string TempFile::GetFileName()
+string TempFile::GetFileName() noexcept
 {
     return m_strTmpFileName;
 }
@@ -128,7 +128,7 @@ streamoff TempFile::GetFileLength()
     return nFSize;
 }
 
-fstream& TempFile::operator() ()
+fstream& TempFile::operator() () noexcept
 {
     return m_theFile;
 }

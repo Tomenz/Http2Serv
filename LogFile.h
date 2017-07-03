@@ -53,7 +53,7 @@ public:
         return WriteToLog(rest...);
     }
 
-    static void SetDontLog(bool bDontLog = true);
+    static void SetDontLog(bool bDontLog = true) noexcept;
 
 private:
     CLogFile() = delete;

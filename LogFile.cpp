@@ -123,7 +123,7 @@ CLogFile& CLogFile::WriteToLog()
     return *this;
 }
 
-void CLogFile::SetDontLog(bool bDontLog/* = true*/)
+void CLogFile::SetDontLog(bool bDontLog/* = true*/) noexcept
 {
     s_bDontLog = bDontLog;
 }

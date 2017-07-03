@@ -30,9 +30,9 @@ public:
     void Write(const void* szBuf, streamsize nLen);
     streamoff Read(unsigned char* szBuf, streamsize nLen);
     void Rewind();
-    string GetFileName();
+    string GetFileName() noexcept;
     streamoff GetFileLength();
-    fstream& operator() ();
+    fstream& operator() () noexcept;
 
 private:
     string  m_strTmpFileName;
