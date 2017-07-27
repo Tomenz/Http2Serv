@@ -485,6 +485,7 @@ private:
 auto dwStart = chrono::high_resolution_clock::now();
                     // If we get here we should have a HTTP request in strPuffer
 
+                    HeadList::iterator parLastHeader = end(pConDetails->HeaderList);
                     const static regex crlfSeperator("\r\n");
                     sregex_token_iterator line(begin(pConDetails->strBuffer), begin(pConDetails->strBuffer) + nPosEndOfHeader, crlfSeperator, -1);
                     while (line != sregex_token_iterator())
@@ -518,8 +519,18 @@ auto dwStart = chrono::high_resolution_clock::now();
                                 {
                                     parResult->second.erase(parResult->second.find_last_not_of(" \r\n\t")  + 1);
                                     parResult->second.erase(0, parResult->second.find_first_not_of(" \t"));
+                                    parLastHeader = parResult;
+
                                 }
                             }
+                            else if (line->str().find(" \t") == 0 && parLastHeader != end(pConDetails->HeaderList)) // Multi line Header
+                            {
+                                line->str().erase(line->str().find_last_not_of(" \r\n\t") + 1);
+                                line->str().erase(0, line->str().find_first_not_of(" \t"));
+                                parLastHeader->second += " " + line->str();
+                            }
+                            else
+                                parLastHeader = end(pConDetails->HeaderList);
                         }
                         ++line;
                     }
