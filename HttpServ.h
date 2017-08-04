@@ -97,7 +97,6 @@ const char* PIPETYPE = "r";
 
 class CHttpServ : public Http2Protocol
 {
-    //typedef tuple<unique_ptr<Timer>, string, bool, uint64_t, uint64_t, unique_ptr<TempFile>, HEADERLIST, deque<HEADERENTRY>, unique_ptr<mutex>, STREAMLIST, STREAMSETTINGS, atomic<bool>> CONNECTIONDETAILS;
     typedef struct
     {
         shared_ptr<Timer> pTimer;
@@ -161,7 +160,7 @@ class CHttpServ : public Http2Protocol
 
 public:
 
-    CHttpServ(wstring strRootPath = L"./html", short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_sPort(sPort), m_cLocal(locale("C"))
+    CHttpServ(wstring strRootPath = L".", short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_sPort(sPort), m_cLocal(locale("C"))
     {
         HOSTPARAM hp;
         hp.m_strRootPath = strRootPath;
@@ -225,9 +224,6 @@ public:
         }
         m_mtxConnections.unlock();
 
-        //while (m_vConnections.size() != 0)
-        //    this_thread::sleep_for(chrono::milliseconds(10));
-
         return true;
     }
 
@@ -243,131 +239,13 @@ public:
 
         return m_vHostParam[szHostName == nullptr ? L"" : szHostName];
     }
-/*
-    CHttpServ& SetDefaultItem(const wstring& strDefItem, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
 
-        wregex separator(L"\\s+");
-        wcregex_token_iterator token(strDefItem.c_str(), strDefItem.c_str() + strDefItem.size(), separator, -1);
-        while (token != wcregex_token_iterator())
-            m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_vstrDefaultItem.push_back(*token++);
-        return *this;
-    }
-
-    CHttpServ& SetRootDirectory(const wstring& strRootDir, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strRootPath = strRootDir;
-        return *this;
-    }
-*/
     CHttpServ& SetBindAdresse(const char* szBindIp) noexcept
     {
         m_strBindIp = szBindIp;
         return *this;
     }
-/*
-    CHttpServ& SetPort(const short& sPort)
-    {
-        m_sPort = sPort;
-        return *this;
-    }
 
-    CHttpServ& SetUseSSL(const bool& bSSL, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_bSSL = bSSL;
-        return *this;
-    }
-
-    CHttpServ& SetCAcertificate(const string& strCAcertificate, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strCAcertificate = strCAcertificate;
-        return *this;
-    }
-
-    CHttpServ& SetHostCertificate(const string& strHostCertificate, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strHostCertificate = strHostCertificate;
-        return *this;
-    }
-
-    CHttpServ& SetHostKey(const string& strHostKey, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strHostKey = strHostKey;
-        return *this;
-    }
-
-    CHttpServ& SetDhParam(const string& strDhParam, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strDhParam = strDhParam;
-        return *this;
-    }
-
-    CHttpServ& SetAccessLogFile(const wstring& strLogFile, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strLogFile = strLogFile;
-        return *this;
-    }
-
-    CHttpServ& SetErrorLogFile(const wstring& strErrorLogFile, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_strErrLog = strErrorLogFile;
-        return *this;
-    }
-
-    CHttpServ& AddRewriteRule(const vector<wstring>& vstrRewriteRule, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_vstrRewriteRule = vstrRewriteRule;
-        return *this;
-    }
-
-    CHttpServ& AddAliasMatch(const vector<wstring>& vstrAliasMatch, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_vstrAliasMatch = vstrAliasMatch;
-        return *this;
-    }
-
-    CHttpServ& AddFileTypAction(const wstring& strFileExtension, const wstring& strFileTypAction, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_mFileTypeAction.insert(make_pair(strFileExtension, strFileTypAction));
-        return *this;
-    }
-
-    CHttpServ& AddForceTyp(const vector<wstring>& vstrForceTyp, const wchar_t* szHostName = nullptr)
-    {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
-        m_vHostParam[szHostName == nullptr ? L"" : szHostName].m_mstrForceTyp = vstrForceTyp;
-        return *this;
-    }
-*/
 private:
     void OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     {

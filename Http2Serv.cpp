@@ -80,13 +80,17 @@ public:
         vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
 
         vector<wstring>&& vListen = conf.get(L"Listen");
+        if (vListen.empty() == true)
+            vListen.push_back(L"127.0.0.1"), vListen.push_back(L"::1");
         for (const auto& strListen : vListen)
         {
             vector<wstring>&& vPort = conf.get(L"Listen", strListen);
+            if (vPort.empty() == true)
+                vPort.push_back(L"80");
             for (const auto& strPort : vPort)
             {
                 // Default Werte setzen
-                vServers.emplace_back(strModulePath + L"html", stoi(strPort), false);
+                vServers.emplace_back(strModulePath + L".", stoi(strPort), false);
                 vServers.back().SetBindAdresse(string(begin(strListen), end(strListen)).c_str());
 
                 // Default und Common Parameter of the listening socket
