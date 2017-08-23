@@ -256,7 +256,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
 
                     if ((m_nContentLength == SIZE_MAX || m_nContentLength == 0) && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
                     {
-                        m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                        m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                         EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFileRec, nullptr);
                         return;
                     }
@@ -373,7 +373,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
                 || (m_nChuncked == 0 && m_nNextChunk == 0))
             {
                 m_pTmpFileRec.get()->Flush();
-                m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
+                m_umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(m_tuStreamSettings)))));
                 EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_pTmpFileRec, nullptr);
             }
         }

@@ -24,6 +24,13 @@ using namespace std;
 #define _stricmp strcasecmp
 #endif
 
+typedef tuple<uint32_t, int32_t, uint32_t, uint32_t, uint32_t> STREAMSETTINGS;
+#define MAXSTREAMCOUNT(x) get<0>(x)
+#define INITWINDOWSIZE(x) get<1>(x)
+#define MAXFRAMESIZE(x) get<2>(x)
+#define MAXHEADERSIZE(x) get<3>(x)
+#define HEADER_TABLE_SIZE(x) get<4>(x)
+
 typedef tuple<uint8_t, string, string> HEADERENTRY;
 #define HEADERINDEX(x) get<0>(x)
 #define HEADERNAME(x) get<1>(x)
@@ -140,7 +147,7 @@ public:
         if (*pnLen < nStrLen)
             throw H2ProtoException(H2ProtoException::BUFFSIZE_ERROR);
 
-        string strReturn = bEncoded == true ? HufmanDecode(*pszBuf, nStrLen) : string(*pszBuf, nStrLen);
+        string strReturn = (bEncoded == true ? HufmanDecode(*pszBuf, nStrLen) : string(*pszBuf, nStrLen));
         (*pnLen) -= nStrLen, (*pszBuf) += nStrLen;
 
         return strReturn;
@@ -160,7 +167,7 @@ public:
         return iIndex;
     }
 
-    size_t HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qDynTable, string& strHeaderName, string& strHeaderValue, uint32_t& nHeaderCount) const
+    size_t HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qDynTable, string& strHeaderName, string& strHeaderValue, uint32_t& nHeaderCount, STREAMSETTINGS& tuStreamSettings) const
     {
         //basic_fstream<char> fout("header.bin", ios_base::out | ios_base::binary);
         //if (fout.is_open() == true)
@@ -193,6 +200,9 @@ public:
 
         if (cBitMask == 0x7f)       // Indexed Header Field Representation
         {
+            if (iIndex == 0)
+                throw H2ProtoException(H2ProtoException::H2ProtoException::COMPRESSION_ERROR);
+
             if (bUseDynTbl == false && HEADERINDEX(StaticHeaderListe[iIndex - 1]) == iIndex)
             {
                 strHeaderName = HEADERNAME(StaticHeaderListe[iIndex - 1]);
@@ -209,6 +219,8 @@ public:
         else if (cBitMask == 0x1f)  // Dynamic Table Size Update
         {
             if (nHeaderCount-- != 0)
+                throw H2ProtoException(H2ProtoException::DYNTABLE_UPDATE);
+            if (iIndex > HEADER_TABLE_SIZE(tuStreamSettings))
                 throw H2ProtoException(H2ProtoException::DYNTABLE_UPDATE);
             if (iIndex == 0)
                 qDynTable.clear();
@@ -432,14 +444,14 @@ public:
         ::memcpy(&szBuf[5], &h2f.streamId, 4);
     }
 
-    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HeadList& lstHeaderFields) const
+    size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HeadList& lstHeaderFields, STREAMSETTINGS& tuStreamSettings) const
     {
         uint32_t nHeaderCount = 0;
         while (nHeaderLen != 0)
         {
             string strHeaderName;
             string strHeaderValue;
-            size_t nRet = HPackDecode(szHeaderStart, nHeaderLen, qDynTable, strHeaderName, strHeaderValue, nHeaderCount);
+            size_t nRet = HPackDecode(szHeaderStart, nHeaderLen, qDynTable, strHeaderName, strHeaderValue, nHeaderCount, tuStreamSettings);
             if (nRet == SIZE_MAX)
                 return nRet;
             MyTrace("    ", strHeaderName.c_str(), " : ", (strHeaderValue.empty() == false ? strHeaderValue.c_str() : ""));
@@ -448,10 +460,15 @@ public:
                 iter->second += "; " + strHeaderValue;
             else if (strHeaderName.empty() == false)    // if no Header name is returned, and no error, we had a dynamic table size update
             {
-                if (strHeaderName != "set-cookie" && lstHeaderFields.find(strHeaderName) != end(lstHeaderFields))
-                    throw H2ProtoException(H2ProtoException::DOUBLE_HEADER);
-                if (strHeaderName[0] == ':' && find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HeadList::const_reference item) { return item.first[0] != ':'; }) != end(lstHeaderFields))
-                    throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+                if (strHeaderName[0] == ':')
+                {
+                    // pseudo header can only be once in a header, no doubles allowed
+                    if (lstHeaderFields.find(strHeaderName) != end(lstHeaderFields))
+                        throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR);
+                    // pseudo header fields must be the first one in the header
+                    if (find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HeadList::const_reference item) { return item.first[0] != ':'; }) != end(lstHeaderFields))
+                        throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+                }
                 if (strHeaderName == "te" && strHeaderValue != "trailers")
                     throw H2ProtoException(H2ProtoException::INVALID_TE_HEADER);
                 lstHeaderFields.emplace_back(make_pair(strHeaderName, strHeaderValue));
@@ -469,15 +486,15 @@ public:
     public:
         enum HPACKEXCODE : uint32_t
         {
-            BUFFSIZE_ERROR      = 1,
-            DYNTABLE_UPDATE     = 2,
-            DOUBLE_HEADER       = 3,
+            PROTOCOL_ERROR      = 1,
+            INTERNAL_ERROR      = 2,
+            FLOW_CONTROL_ERROR  = 3,
             UPPERCASE_HEADER    = 4,
-            WRONG_HEADER        = 5,
+            STREAM_CLOSED       = 5,
             FALSE_PSEUDO_HEADER = 6,
             INVALID_HEADER      = 7,
             INVALID_TE_HEADER   = 8,
-            WRONG_STREAM_ID     = 9,
+            COMPRESSION_ERROR   = 9,
             HEADER_OTHER_STREAM = 10,
             DATA_WITHOUT_STREAM = 11,
             STREAM_HALF_CLOSED  = 12,
@@ -498,7 +515,10 @@ public:
             MAX_FRAME_SIZE_SET  = 27,
             WINDOW_SIZE_TO_HIGH = 28,
             INVALID_WINDOW_SIZE = 29,
-            INERNAL_ERROR       = 30
+            BUFFSIZE_ERROR      = 31,
+            DYNTABLE_UPDATE     = 32,
+            WRONG_STREAM_ID     = 33,
+            WRONG_HEADER        = 34
         };
 
         explicit H2ProtoException(HPACKEXCODE eCode) : m_eCode(eCode), m_nStreamId(0) {}

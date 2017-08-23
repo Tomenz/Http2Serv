@@ -16,12 +16,6 @@
 #include "HPack.h"
 #include "TempFile.h"
 
-typedef tuple<uint32_t, int32_t, uint32_t, uint32_t> STREAMSETTINGS;
-#define MAXSTREAMCOUNT(x) get<0>(x)
-#define INITWINDOWSIZE(x) get<1>(x)
-#define MAXFRAMESIZE(x) get<2>(x)
-#define MAXHEADERSIZE(x) get<3>(x)
-
 typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #define BUFFER(x) get<0>(x)
 #define BUFLEN(x) get<1>(x)
@@ -29,7 +23,7 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #if !defined(_WIN32) && !defined(_WIN64)
 typedef atomic<size_t> atomic_size_t;
 #endif
-typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, shared_ptr<atomic_size_t>> STREAMITEM;
+typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, shared_ptr<atomic_int32_t>> STREAMITEM;
 #define STREAMSTATE(x) get<0>(x->second)
 #define DATALIST(x) get<1>(x->second)
 #define GETHEADERLIST(x) get<2>(x->second)
@@ -150,7 +144,7 @@ public:
                 auto streamData = umStreamCache.find(h2f.streamId);
                 if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
                 {
-                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(tuStreamSettings)))));
                     streamData = umStreamCache.find(h2f.streamId);
                 }
 
@@ -169,8 +163,10 @@ public:
                         if (streamData == end(umStreamCache) || h2f.streamId == 0 || (STREAMSTATE(umStreamCache.find(0)) & HEADER_RECEIVED) == HEADER_RECEIVED)
                             throw H2ProtoException(H2ProtoException::DATA_WITHOUT_STREAM);
                         if ((STREAMSTATE(streamData) & STREAM_END) == STREAM_END)
-                            throw H2ProtoException(H2ProtoException::STREAM_HALF_CLOSED, h2f.streamId);
-                        if (h2f.size > 16375)
+                            throw H2ProtoException(H2ProtoException::STREAM_CLOSED, h2f.streamId);
+                        if ((STREAMSTATE(streamData) & RESET_STREAM) == RESET_STREAM)
+                            throw H2ProtoException(H2ProtoException::STREAM_CLOSED);
+                        if (h2f.size > MAXFRAMESIZE(tuStreamSettings))
                             throw H2ProtoException(H2ProtoException::MAX_FRAME_SIZE, h2f.streamId);
                         if (h2f.size < PadLen)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_VALUE, h2f.streamId);
@@ -219,6 +215,8 @@ public:
                         if ((h2f.flag & PADDED) == PADDED)    // PADDED
                             PadLen = szBuf++[0], h2f.size--, nLen--;
 
+                        if (h2f.size > MAXFRAMESIZE(tuStreamSettings))
+                            throw H2ProtoException(H2ProtoException::FRAME_SIZE_ERROR, h2f.streamId);
                         if (h2f.size < PadLen)
                             throw H2ProtoException(H2ProtoException::WRONG_PAD_LENGTH);
 
@@ -240,9 +238,11 @@ public:
                         MyTrace("    Pad Length = 0x", static_cast<unsigned long>(PadLen), " StreamId = 0x", hex, lStremId, " E = ", E, " Weight = ", dec, static_cast<unsigned long>(Weight));
 
                         if (streamData != end(umStreamCache) && (STREAMSTATE(streamData) & STREAM_END) == STREAM_END)
-                            throw H2ProtoException(H2ProtoException::STREAM_HALF_CLOSED, h2f.streamId);
+                            throw H2ProtoException(H2ProtoException::STREAM_CLOSED, h2f.streamId);
                         if (streamData != end(umStreamCache) && (STREAMSTATE(streamData) & HEADER_END) == HEADER_END && (h2f.flag & END_OF_STREAM) == 0)
                             throw H2ProtoException(H2ProtoException::HEADER_NO_STREAMEND);
+                        if (streamData != end(umStreamCache) && (STREAMSTATE(streamData) & RESET_STREAM) == RESET_STREAM)
+                            throw H2ProtoException(H2ProtoException::STREAM_CLOSED);
 
                         if ((h2f.flag & END_OF_HEADER) == END_OF_HEADER)    // END_HEADERS
                         {
@@ -250,15 +250,18 @@ public:
                             if (streamData != end(umStreamCache))
                                 lstHeaderFields = GETHEADERLIST(streamData);
 
-                            if (Http2DecodeHeader(szBuf, h2f.size - PadLen, qDynTable, lstHeaderFields) != 0)
+                            if (Http2DecodeHeader(szBuf, h2f.size - PadLen, qDynTable, lstHeaderFields, tuStreamSettings) != 0)
                                 throw H2ProtoException(H2ProtoException::COMMON_DECODE_ERROR);
 
                             // The header is finished, we safe it for later, but there must come some DATA frames for this request
                             if (streamData == end(umStreamCache))
                             {
-                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                                if (umStreamCache.rbegin()->first > h2f.streamId)   // New stream id is smaller that existing stream id
+                                    throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR, h2f.streamId);
+
+                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(tuStreamSettings)))));
                                 if (insert.second == false)
-                                    throw H2ProtoException(H2ProtoException::INERNAL_ERROR, h2f.streamId);
+                                    throw H2ProtoException(H2ProtoException::INTERNAL_ERROR, h2f.streamId);
                                 else
                                     streamData = insert.first;
                             }
@@ -273,6 +276,10 @@ public:
                             if (itStream0 != end(umStreamCache))
                                 STREAMSTATE(itStream0) &= ~HEADER_RECEIVED;
 
+                            auto itPath = GETHEADERLIST(streamData).find(":path");
+                            if (itPath == end(GETHEADERLIST(streamData)) || itPath->second.empty() == true)
+                                throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+
                             if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM
                             {
                                 STREAMSTATE(streamData) |= STREAM_END;
@@ -284,7 +291,7 @@ public:
                         }
                         else
                         {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(tuStreamSettings)))));
                             if (insert.second == true)
                             {
                                 auto data = shared_ptr<char>(new char[h2f.size - PadLen]);
@@ -310,6 +317,8 @@ public:
                             throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
                         if (h2f.size != 5)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_ERROR);
+                        if ((STREAMSTATE(umStreamCache.find(0)) & HEADER_RECEIVED) == HEADER_RECEIVED)
+                            throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR);
 
                         unsigned long lStremId;
                         ::memcpy(&lStremId, szBuf, 4);
@@ -339,10 +348,7 @@ public:
                         if (streamData == end(umStreamCache) || h2f.streamId == 0)
                             throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
 
-                        if ((STREAMSTATE(streamData) & STREAM_END) == 0)
-                            umStreamCache.erase(streamData);
-                        else
-                            STREAMSTATE(streamData) |= RESET_STREAM;
+                        STREAMSTATE(streamData) |= RESET_STREAM;
                     }
                     pmtxStream->unlock();
                     break;
@@ -374,6 +380,7 @@ public:
                             switch (sIdent)
                             {
                             case 1: //  SETTINGS_HEADER_TABLE_SIZE
+                                HEADER_TABLE_SIZE(tuStreamSettings) = lValue;
                                 break;
                             case 2: //  SETTINGS_ENABLE_PUSH
                                 if (lValue > 1)
@@ -384,7 +391,15 @@ public:
                                 break;
                             case 4: // SETTINGS_INITIAL_WINDOW_SIZE
                                 if (lValue < 2147483647)
+                                {
+                                    unsigned long ulOldSize = INITWINDOWSIZE(tuStreamSettings);
                                     INITWINDOWSIZE(tuStreamSettings) = lValue;
+                                    for (auto itStreams = begin(umStreamCache); itStreams != end(umStreamCache); ++itStreams)
+                                    {
+                                        if (itStreams->first != 0)
+                                            WINDOWSIZE(itStreams) += static_cast<int32_t>(lValue - ulOldSize);
+                                    }
+                                }
                                 else
                                     throw H2ProtoException(H2ProtoException::WINDOW_SIZE_SETTING);
                                 break;
@@ -418,6 +433,7 @@ public:
                     break;
                 case 6: // PING frame
                     MyTrace("PING frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
+                    if ((h2f.flag & 1) == 0)
                     {
                         if (h2f.streamId != 0)
                             throw H2ProtoException(H2ProtoException::STREAMID_MUST_NULL);
@@ -465,18 +481,19 @@ public:
                         bool R = (lValue & 0x80000000) == 0x80000000 ? true : false;
                         lValue &= 0x7fffffff;
                         MyTrace("    Value = ", lValue, " R = ", R);
-                        if (streamData != end(umStreamCache) && lValue >= 1 && lValue <= 2147483647)    // 2^31 - 1
+
+                        if (streamData == end(umStreamCache))
+                            throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
+                        else if (lValue >= 1 && lValue <= 2147483647)    // 2^31 - 1
                         {
-                            if ((WINDOWSIZE(streamData) + lValue) > 2147483647)  // 2^31 - 1
-                                throw H2ProtoException(H2ProtoException::WINDOW_SIZE_TO_HIGH);
+                            if ((static_cast<unsigned long>(WINDOWSIZE(streamData)) + lValue) > 2147483647)  // 2^31 - 1
+                                throw H2ProtoException(H2ProtoException::WINDOW_SIZE_TO_HIGH, h2f.streamId);
                             WINDOWSIZE(streamData) += lValue;
                         }
-                        else if (streamData == end(umStreamCache))
-                            throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
                         else
                         {   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
                             if (lValue == 0 || lValue > 2147483647)
-                                throw H2ProtoException(H2ProtoException::INVALID_WINDOW_SIZE);
+                                throw H2ProtoException(H2ProtoException::INVALID_WINDOW_SIZE, h2f.streamId);
                             umStreamCache.erase(streamData);
                         }
                     }
@@ -487,6 +504,8 @@ public:
                     {
                         if (streamData == end(umStreamCache) || h2f.streamId == 0)
                             throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
+                        if ((STREAMSTATE(streamData) & HEADER_END) == HEADER_END)    // End of Header was already
+                            throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR);
                         if ((STREAMSTATE(streamData) & HEADER_RECEIVED) == 0)    // We had a Header frame before
                             throw H2ProtoException(H2ProtoException::CONT_WITHOUT_HEADER);
                         if ((STREAMSTATE(streamData) & ACTION_CALLED) == ACTION_CALLED)
@@ -507,7 +526,7 @@ public:
                             for (DATAITEM chunk : DATALIST(streamData))
                                 copy(BUFFER(chunk).get(), &BUFFER(chunk).get()[BUFLEN(chunk)], &ptHeaderBuf.get()[nOffset]), nOffset += BUFLEN(chunk); // ::memcpy(ptHeaderBuf.get() + nOffset, BUFFER(chunk).get(), BUFLEN(chunk)), nOffset += BUFLEN(chunk);
 
-                            if (Http2DecodeHeader(ptHeaderBuf.get(), nHeaderLen, qDynTable, GETHEADERLIST(streamData)) != 0)
+                            if (Http2DecodeHeader(ptHeaderBuf.get(), nHeaderLen, qDynTable, GETHEADERLIST(streamData), tuStreamSettings) != 0)
                                 throw H2ProtoException(H2ProtoException::COMMON_DECODE_ERROR);
 
                             DATALIST(streamData).clear();
@@ -560,10 +579,11 @@ public:
         catch (H2ProtoException& ex)
         {
             pmtxStream->unlock();
-            nReturn = SIZE_MAX;
+            nReturn = SIZE_MAX; // closes the connection
 
             switch (ex.GetCode())
             {
+            case H2ProtoException::COMPRESSION_ERROR:
             case H2ProtoException::BUFFSIZE_ERROR:
             case H2ProtoException::DYNTABLE_UPDATE:
             case H2ProtoException::COMMON_DECODE_ERROR:
@@ -573,10 +593,21 @@ public:
                 Http2Goaway(soMetaDa.fSocketWrite, 0, 0, 6);   // 6 = FRAME_SIZE_ERROR
                 break;
             case H2ProtoException::WINDOW_SIZE_SETTING:
-            case H2ProtoException::WINDOW_SIZE_TO_HIGH:
                 Http2Goaway(soMetaDa.fSocketWrite, 0, 0, 3);    // 3 = FLOW_CONTROL_ERROR
                 break;
-            case H2ProtoException::DOUBLE_HEADER:
+            case H2ProtoException::WINDOW_SIZE_TO_HIGH:
+                if (ex.GetStreamId() == 0)
+                    Http2Goaway(soMetaDa.fSocketWrite, 0, 0, 3);    // 3 = FLOW_CONTROL_ERROR
+                else
+                {
+                    Http2StreamError(soMetaDa.fSocketWrite, ex.GetStreamId(), 3);   // 3 = FLOW_CONTROL_ERROR
+                    nReturn = 0;    // Don't close the connection
+                }
+                break;
+            case H2ProtoException::STREAM_CLOSED:
+                Http2Goaway(soMetaDa.fSocketWrite, 0, 0, H2ProtoException::STREAM_CLOSED);    // 5 = STREAM_CLOSED
+                break;
+            case H2ProtoException::PROTOCOL_ERROR:
             case H2ProtoException::UPPERCASE_HEADER:
             case H2ProtoException::WRONG_HEADER:
             case H2ProtoException::FALSE_PSEUDO_HEADER:
@@ -594,30 +625,30 @@ public:
             case H2ProtoException::INVALID_PUSH_SET:
             case H2ProtoException::MAX_FRAME_SIZE_SET:
             case H2ProtoException::INVALID_WINDOW_SIZE:
+            case H2ProtoException::FRAME_SIZE_VALUE:
                 Http2Goaway(soMetaDa.fSocketWrite, 0, 0, 1);    // 1 = PROTOCOL_ERROR
                 break;
-            case H2ProtoException::FRAME_SIZE_VALUE:
             case H2ProtoException::SAME_STREAMID:
             case H2ProtoException::DATASIZE_MISSMATCH:
                 Http2StreamError(soMetaDa.fSocketWrite, ex.GetStreamId(), 1);   // 1 = PROTOCOL_ERROR
-                nReturn = 0;
+                nReturn = 0;    // Don't close the connection
                 break;
             case H2ProtoException::STREAM_HALF_CLOSED:
                 Http2StreamError(soMetaDa.fSocketWrite, ex.GetStreamId(), 5);   // 5 = STREAM_CLOSED
-                nReturn = 0;
+                nReturn = 0;    // Don't close the connection
                 break;
             case H2ProtoException::MAX_FRAME_SIZE:
                 Http2StreamError(soMetaDa.fSocketWrite, ex.GetStreamId(), 6);   // 6 = FRAME_SIZE_ERROR
-                nReturn = 0;
+                nReturn = 0;    // Don't close the connection
                 break;
-            case H2ProtoException::INERNAL_ERROR:
+            case H2ProtoException::INTERNAL_ERROR:
                 Http2StreamError(soMetaDa.fSocketWrite, ex.GetStreamId(), 2);   // 2 = INTERNAL_ERROR
-                nReturn = 0;
+                nReturn = 0;    // Don't close the connection
                 break;
             }
         }
 
-        return nReturn;
+        return nReturn; // SIZE_MAX closes the connection
     }
 
 private:

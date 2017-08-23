@@ -41,7 +41,7 @@ private:
     deque<HEADERENTRY>   m_qDynTable;
     mutex                m_mtxStreams;
     STREAMLIST           m_umStreamCache;
-    STREAMSETTINGS       m_tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX);
+    STREAMSETTINGS       m_tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096);
     shared_ptr<TempFile> m_pTmpFileRec;
     shared_ptr<TempFile> m_pTmpFileSend;
     unique_ptr<Timer>    m_Timer;

@@ -61,6 +61,11 @@ public:
         m_cv.notify_all();
     }
 
+    bool IsStopped()
+    {
+        return m_bIsStoped;
+    }
+
 private:
     uint32_t m_tMilliSeconds;
     function<void(Timer*)> m_fTimeOut;

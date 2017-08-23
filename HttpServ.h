@@ -265,7 +265,7 @@ private:
             m_mtxConnections.lock();
             for (auto pSocket : vCache)
             {
-                m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX), make_shared<atomic_bool>(false) }));
+                m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), make_shared<atomic_bool>(false) }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();
@@ -486,7 +486,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
                     pConDetails->mutStreams->lock();
-                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic_size_t>(INITWINDOWSIZE(pConDetails->StreamParam))));
+                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(pConDetails->StreamParam))));
                     pConDetails->mutStreams->unlock();
                     m_mtxConnections.unlock();
                     DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
@@ -531,30 +531,40 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
     void OnSocketCloseing(BaseSocket* pBaseSocket)
     {
         //OutputDebugString(L"CHttpServ::OnSocketCloseing\r\n");
-        lock_guard<mutex> lock(m_mtxConnections);
+        m_mtxConnections.lock();
         CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
         {
             item->second.pTimer->Stop();
+            Timer* pTimer = item->second.pTimer.get();
+            m_mtxConnections.unlock();
+            while (pTimer->IsStopped() == false)
+                this_thread::sleep_for(chrono::nanoseconds(1));
 
-            m_ActThrMutex.lock();
-            for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
+            m_mtxConnections.lock();
+            item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
+            if (item != end(m_vConnections))
             {
-                if (iter->second == item->second.atStop.get())
+                m_ActThrMutex.lock();
+                for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
                 {
-                    *iter->second = true;   // Stop the DoAction thread
-                    m_ActThrMutex.unlock();
-                    this_thread::sleep_for(chrono::milliseconds(1));
-                    m_ActThrMutex.lock();
-                    iter = begin(m_umActionThreads);
-                    continue;
+                    if (iter->second == item->second.atStop.get())
+                    {
+                        *iter->second = true;   // Stop the DoAction thread
+                        m_ActThrMutex.unlock();
+                        this_thread::sleep_for(chrono::milliseconds(1));
+                        m_ActThrMutex.lock();
+                        iter = begin(m_umActionThreads);
+                        continue;
+                    }
+                    ++iter;
                 }
-                ++iter;
-            }
-            m_ActThrMutex.unlock();
+                m_ActThrMutex.unlock();
 
-            m_vConnections.erase(item);
+                m_vConnections.erase(item);
+            }
         }
+        m_mtxConnections.unlock();
     }
 
     void OnTimeout(Timer* pTimer)
@@ -808,38 +818,38 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return true;
         };
 
-        auto fnSendCueReady = [&](size_t& nStreamWndSize, size_t& nSendBufLen, uint64_t nBufSize, uint64_t nRestLenToSend) -> bool
+        auto fnSendCueReady = [&](int32_t& nStreamWndSize, size_t& nSendBufLen, uint64_t nBufSize, uint64_t nRestLenToSend) -> bool
         {
             size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
-            if (nInQue >= 0x200000 || nStreamWndSize == 0)
+            if (nInQue >= 0x200000 || nStreamWndSize <= 0)
             {
                 this_thread::sleep_for(chrono::nanoseconds(1));
                 return false;
             }
 
-            nSendBufLen = min(static_cast<size_t>(min(nBufSize, nRestLenToSend)), nStreamWndSize);
+            nSendBufLen = min(static_cast<size_t>(min(nBufSize, nRestLenToSend)), static_cast<size_t>(nStreamWndSize));
             return true;
         };
 
-        auto fnGetStreamWindowSize = [&](size_t& nStreamWndSize) -> int
+        auto fnGetStreamWindowSize = [&](int32_t& iStreamWndSize) -> bool
         {
-            size_t nTotaleWndSize = SIZE_MAX;
+            int32_t iTotaleWndSize = INT32_MAX;
             if (nStreamId != 0)
             {
                 lock_guard<mutex> lock0(*pmtxStream);
                 auto StreamItem = hw2.StreamList.find(nStreamId);
                 if (StreamItem != end(hw2.StreamList))
-                    nStreamWndSize = WINDOWSIZE(StreamItem);
+                    iStreamWndSize = WINDOWSIZE(StreamItem);
                 else
-                    return -1;  // Stream Item was removed, properly the stream was reseted
+                    return false;  // Stream Item was removed, properly the stream was reseted
                 StreamItem = hw2.StreamList.find(0);
                 if (StreamItem != end(hw2.StreamList))
-                    nTotaleWndSize = WINDOWSIZE(StreamItem);
+                    iTotaleWndSize = WINDOWSIZE(StreamItem);
                 else
-                    return -1;  // Stream Item was removed, properly the stream was reseted
-                nStreamWndSize = min(nStreamWndSize, nTotaleWndSize);
+                    return false;  // Stream Item was removed, properly the stream was reseted
+                iStreamWndSize = min(iStreamWndSize, iTotaleWndSize);
             }
-            return 0;
+            return true;
         };
 
         auto fnUpdateStreamParam = [&](size_t& nSendBufLen) -> int
@@ -849,19 +859,19 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 lock_guard<mutex> lock(*pmtxStream);
                 auto StreamItem = hw2.StreamList.find(nStreamId);
                 if (StreamItem != end(hw2.StreamList))
-                    WINDOWSIZE(StreamItem) -= nSendBufLen;
+                    WINDOWSIZE(StreamItem) -= static_cast<uint32_t>(nSendBufLen);
                 else
                     return -1;  // Stream Item was removed, properly the stream was reseted
                 StreamItem = hw2.StreamList.find(0);
                 if (StreamItem != end(hw2.StreamList))
-                    WINDOWSIZE(StreamItem) -= nSendBufLen;
+                    WINDOWSIZE(StreamItem) -= static_cast<uint32_t>(nSendBufLen);
                 else
                     return -1;  // Stream Item was removed, properly the stream was reseted
             }
             return 0;
         };
 
-        const size_t nHttp2Offset = nStreamId != 0 ? 9 : 0;
+        const uint32_t nHttp2Offset = nStreamId != 0 ? 9 : 0;
         const uint32_t nSizeSendBuf = MAXFRAMESIZE(tuStreamSettings);// 0x4000;
         char caBuffer[4096];
         int iHeaderFlag = 0;
@@ -1390,8 +1400,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 size_t nBytesTransfered = 0;
                                 while (nBytesTransfered < nRead && (*patStop).load() == false)
                                 {
-                                    size_t nStreamWndSize = SIZE_MAX;
-                                    if (fnGetStreamWindowSize(nStreamWndSize) == -1)
+                                    int32_t nStreamWndSize = INT32_MAX;
+                                    if (fnGetStreamWindowSize(nStreamWndSize) == false)
                                         break;  // Stream Item was removed, properly the stream was reseted
 
                                     size_t nSendBufLen;
@@ -1605,8 +1615,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     int iRet;
                     do
                     {
-                        size_t nStreamWndSize = SIZE_MAX;
-                        if (fnGetStreamWindowSize(nStreamWndSize) == -1)
+                        int32_t nStreamWndSize = INT32_MAX;
+                        if (fnGetStreamWindowSize(nStreamWndSize) == false)
                             break;  // Stream Item was removed, properly the stream was reseted
 
                         size_t nSendBufLen;
@@ -1690,8 +1700,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 uint64_t nBytesTransfered = 0;
                 while ((*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                 {
-                    size_t nStreamWndSize = SIZE_MAX;
-                    if (fnGetStreamWindowSize(nStreamWndSize) == -1)
+                    int32_t nStreamWndSize = INT32_MAX;
+                    if (fnGetStreamWindowSize(nStreamWndSize) == false)
                         break;  // Stream Item was removed, properly the stream was reseted
 
                     size_t nSendBufLen;
@@ -1760,8 +1770,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 uint64_t nBytesTransfered = 0;
                 while (nBytesTransfered < nFSize && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                 {
-                    size_t nStreamWndSize = SIZE_MAX;
-                    if (fnGetStreamWindowSize(nStreamWndSize) == -1)
+                    int32_t nStreamWndSize = INT32_MAX;
+                    if (fnGetStreamWindowSize(nStreamWndSize) == false)
                         break;  // Stream Item was removed, properly the stream was reseted
 
                     size_t nSendBufLen;
