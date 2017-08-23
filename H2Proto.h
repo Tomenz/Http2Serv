@@ -21,7 +21,7 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #define BUFLEN(x) get<1>(x)
 
 #if !defined(_WIN32) && !defined(_WIN64)
-typedef atomic<size_t> atomic_size_t;
+typedef atomic<size_t> atomic_int32_t;
 #endif
 typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, shared_ptr<atomic_int32_t>> STREAMITEM;
 #define STREAMSTATE(x) get<0>(x->second)
