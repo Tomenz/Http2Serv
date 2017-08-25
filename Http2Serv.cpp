@@ -94,7 +94,7 @@ public:
                 vServers.back().SetBindAdresse(string(begin(strListen), end(strListen)).c_str());
 
                 // Default und Common Parameter of the listening socket
-                function<void(const wstring&, const wchar_t*)> fnSetParameter = [&](const wstring& strSection, const wchar_t* szHost = nullptr)
+                auto fnSetParameter = [&](const wstring& strSection, const wchar_t* szHost = nullptr)
                 {
                     static wregex seperator(L"\\s+");
 

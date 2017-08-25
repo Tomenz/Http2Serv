@@ -217,7 +217,7 @@ public:
         }
 
         m_mtxConnections.lock();
-        for (auto item : m_vConnections)
+        for (auto& item : m_vConnections)
         {
             item.second.pTimer->Stop();
             item.first->Close();
@@ -250,7 +250,7 @@ private:
     void OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     {
         vector<TcpSocket*> vCache;
-        for (auto pSocket : vNewConnections)
+        for (auto& pSocket : vNewConnections)
         {
             if (pSocket != nullptr)
             {
@@ -263,7 +263,7 @@ private:
         if (vCache.size())
         {
             m_mtxConnections.lock();
-            for (auto pSocket : vCache)
+            for (auto& pSocket : vCache)
             {
                 m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), make_shared<atomic_bool>(false) }));
                 pSocket->StartReceiving();
@@ -300,7 +300,7 @@ private:
                 {
                     if ( pConDetails->strBuffer.size() >= 24 && pConDetails->strBuffer.compare(0, 24, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") == 0 && pConDetails->nContentsSoll == 0)
                     {
-                        pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x10\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and 1048576 Value + ParaID(5) and 16375 Value
+                        pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x10\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and 1048576 Value + ParaID(5) and 16384 Value
                         pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\xf\x0\x1", 13);       // WINDOW_UPDATE frame (8) with value ?1048576? (minus 65535) == 983041
                         pConDetails->bIsH2Con = true;
                         pConDetails->strBuffer.erase(0, 24);
@@ -349,8 +349,23 @@ private:
                         m_mtxConnections.unlock();
                         return;
                     }
-                    *pConDetails->atStop.get() = true;
+
                     // After a GOAWAY we terminate the connection
+                    // we wait, until all action thread's are finished, otherwise we remove the connection while the action thread is still using it = crash
+                    m_ActThrMutex.lock();
+                    for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
+                    {
+                        if (iter->second == pConDetails->atStop.get())
+                        {
+                            m_ActThrMutex.unlock();
+                            this_thread::sleep_for(chrono::milliseconds(1));
+                            m_ActThrMutex.lock();
+                            iter = begin(m_umActionThreads);
+                            continue;
+                        }
+                        ++iter;
+                    }
+                    m_ActThrMutex.unlock();
                     soMetaDa.fSocketClose();
                     m_mtxConnections.unlock();
                     return;
@@ -466,7 +481,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
                         pTcpSocket->Write("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n", 71);
-                        pTcpSocket->Write("\x0\x0\x0\x4\x0\x0\x0\x0\x0", 9);    // empty SETTINGS frame (4)
+                        pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x10\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and 1048576 Value + ParaID(5) and 16384 Value
+                        pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\xf\x0\x1", 13);       // WINDOW_UPDATE frame (8) with value ?1048576? (minus 65535) == 983041
                         nStreamId = 1;
 
                         size_t nRet;
@@ -481,7 +497,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     }
                 }
 
-                if (pConDetails->bIsH2Con == false)  // If we received a GOAWAY Frame in HTTP/2 we end up here, but we will not do any action
+                if (pConDetails->bIsH2Con == false)  // If we received or send no GOAWAY Frame in HTTP/2 we end up here, and send the response to the request how made the upgrade
                 {
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer) });
 
@@ -491,18 +507,19 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     m_mtxConnections.unlock();
                     DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
 
-                    lock_guard<mutex> lock(m_mtxConnections);
+                    lock_guard<mutex> lock1(m_mtxConnections);
                     if (m_vConnections.find(pTcpSocket) == end(m_vConnections))
                         return; // Sollte bei Socket Error oder Time auftreten
 
                     if (nStreamId != 0)
-                    {
                         pConDetails->bIsH2Con = true;
+                    else
+                    {
+                        lock_guard<mutex> lock2(*pConDetails->mutStreams.get());
+                        pConDetails->H2Streams.clear();
                     }
 
                     pConDetails->nContentRecv = pConDetails->nContentsSoll = 0;
-                    lock_guard<mutex> log(*pConDetails->mutStreams.get());
-                    pConDetails->H2Streams.clear();
                     pConDetails->HeaderList.clear();
                     return;
                 }
@@ -545,6 +562,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
             if (item != end(m_vConnections))
             {
+                // we wait, until all action thread's are finished for this connection, otherwise we remove the connection while the action thread is still using it = crash
                 m_ActThrMutex.lock();
                 for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
                 {
@@ -833,7 +851,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         auto fnGetStreamWindowSize = [&](int32_t& iStreamWndSize) -> bool
         {
-            int32_t iTotaleWndSize = INT32_MAX;
+            int32_t iTotaleWndSize = UINT16_MAX;
             if (nStreamId != 0)
             {
                 lock_guard<mutex> lock0(*pmtxStream);
@@ -878,6 +896,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         string strHttpVersion("0");
 
         pmtxStream->lock();
+        if (hw2.StreamList.size() == 0 || hw2.StreamList.find(nStreamId) == end(hw2.StreamList))
+        {
+            pmtxStream->unlock();
+            fuExitDoAction();
+            return;
+        }
         HeadList& lstHeaderFields = GETHEADERLIST(hw2.StreamList.find(nStreamId));
         pmtxStream->unlock();
 
@@ -1090,7 +1114,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             if (regex_search(strItemPath, wregex(strAuth.first)) == true)
             {
-                function<void()> fnSendAuthRespons = [&]() -> void
+                auto fnSendAuthRespons = [&]() -> void
                 {
                     size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, HeadList({ make_pair("WWW-Authenticate", "Basic realm=\"Http-Utility Basic\"") }), 0);
                     if (nStreamId != 0)
@@ -1216,7 +1240,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                soMetaDa.fResetTimer();
 
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                     << itMethode->second << " " << lstHeaderFields.find(":path")->second
@@ -1234,8 +1257,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                soMetaDa.fResetTimer();
-                soMetaDa.fSocketClose();
 
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                     << itMethode->second << " " << lstHeaderFields.find(":path")->second
@@ -1248,6 +1269,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] internal server error: ", itPath->second);
             }
 
+            soMetaDa.fResetTimer();
             if (nStreamId == 0)
                 soMetaDa.fSocketClose();
 

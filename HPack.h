@@ -57,7 +57,7 @@ class HPack
 public:
     HPack() {};
 
-    string HufmanDecode(const char* szBuf, size_t nLen) const noexcept
+    string HufmanDecode(const char* szBuf, size_t nLen, int& iError) const noexcept
     {
         string strRet;
         size_t TotalBits = 0;
@@ -112,6 +112,12 @@ public:
                 nLen -= AnzByt;
             }
         }
+
+        if (nLen == 1 && (((uint8_t)*szBuf << (TotalBits % 8)) & 0xff) != ((0xff << (TotalBits % 8)) & 0xff))
+            iError = 1;            //OutputDebugString(L"Padded with 0 Bits\r\n");   // Padding with 0
+        else if (nLen > 1)
+            iError = 2;            //OutputDebugString(L"Padding with unused Bits\r\n");   // Padding with unused Bits
+
         return strRet;
     }
 
@@ -147,8 +153,14 @@ public:
         if (*pnLen < nStrLen)
             throw H2ProtoException(H2ProtoException::BUFFSIZE_ERROR);
 
-        string strReturn = (bEncoded == true ? HufmanDecode(*pszBuf, nStrLen) : string(*pszBuf, nStrLen));
+        int iHufmanError = 0;
+        string strReturn = (bEncoded == true ? HufmanDecode(*pszBuf, nStrLen, iHufmanError) : string(*pszBuf, nStrLen));
         (*pnLen) -= nStrLen, (*pszBuf) += nStrLen;
+
+        if (iHufmanError == 1)
+            throw H2ProtoException(H2ProtoException::H2ProtoException::COMPRESSION_ERROR);
+        else if (iHufmanError == 2)
+            throw H2ProtoException(H2ProtoException::H2ProtoException::COMPRESSION_ERROR);
 
         return strReturn;
     }

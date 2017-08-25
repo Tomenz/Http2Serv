@@ -113,10 +113,17 @@ public:
     {
         size_t nReturn = 0;
 
+        function<void()> fnResetStream0Flag = [&]()
+        {
+            // We reset in Stream 0 that we are in the middle of receiving a Header
+            auto itStream0 = umStreamCache.find(0);
+            if (itStream0 != end(umStreamCache))
+                STREAMSTATE(itStream0) &= ~HEADER_RECEIVED;
+        };
+
         try
         {
             char* szBufStart = szBuf;
-            map<uint32_t, uint32_t> mapWindUodate;
             vector<uint32_t> CallAction;
 
             while (nLen >= 9)   // Settings ACK Frame is 9 Bytes long
@@ -171,17 +178,14 @@ public:
                         if (h2f.size < PadLen)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_VALUE, h2f.streamId);
 
+                        Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size - PadLen);
+                        Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size - PadLen);
+
                         if (pTmpFile.get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                         {
                             auto contentLength = GETHEADERLIST(streamData).find("content-length");
-
                             if (contentLength != end(GETHEADERLIST(streamData)))
-                            {
                                 CONTENTLENGTH(streamData) = stoull(contentLength->second);
-
-                                Http2WindowUpdate(soMetaDa.fSocketWrite, 0, static_cast<unsigned long>(CONTENTLENGTH(streamData))); // ! if really big data a 32 Bit Number maybe to small
-                                //Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, static_cast<unsigned long>(CONTENTLENGTH(streamData->second)));
-                            }
 
                             pTmpFile = make_shared<TempFile>();
                             pTmpFile.get()->Open();
@@ -189,8 +193,6 @@ public:
 
                         pTmpFile.get()->Write(szBuf, min(static_cast<size_t>(h2f.size), nLen) - PadLen);
                         CONTENTRESCIV(streamData) += min(static_cast<size_t>(h2f.size), nLen);
-
-                        mapWindUodate[h2f.streamId] += static_cast<size_t>(h2f.size) - PadLen;
 
                         if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM
                         {
@@ -271,10 +273,8 @@ public:
                                 GETHEADERLIST(streamData) = lstHeaderFields;
                             }
 
-                            // We mark in Stream 0 that the Header is received
-                            auto itStream0 = umStreamCache.find(0);
-                            if (itStream0 != end(umStreamCache))
-                                STREAMSTATE(itStream0) &= ~HEADER_RECEIVED;
+                            // We reset in Stream 0 that we are in the middle of receiving a Header
+                            fnResetStream0Flag();
 
                             auto itPath = GETHEADERLIST(streamData).find(":path");
                             if (itPath == end(GETHEADERLIST(streamData)) || itPath->second.empty() == true)
@@ -492,9 +492,7 @@ public:
                         }
                         else
                         {   // Decode error send RST_STREAM with error code: PROTOCOL_ERROR
-                            if (lValue == 0 || lValue > 2147483647)
-                                throw H2ProtoException(H2ProtoException::INVALID_WINDOW_SIZE, h2f.streamId);
-                            umStreamCache.erase(streamData);
+                            throw H2ProtoException(H2ProtoException::INVALID_WINDOW_SIZE, h2f.streamId);
                         }
                     }
                     pmtxStream->unlock();
@@ -531,10 +529,8 @@ public:
 
                             DATALIST(streamData).clear();
 
-                            // We mark in Stream 0 that the Header is received
-                            auto itStream0 = umStreamCache.find(0);
-                            if (itStream0 != end(umStreamCache))
-                                STREAMSTATE(itStream0) &= ~HEADER_RECEIVED;
+                            // We reset in Stream 0 that we are in the middle of receiving a Header
+                            fnResetStream0Flag();
 
                             STREAMSTATE(streamData) |= (h2f.flag & END_OF_STREAM) == END_OF_STREAM ? STREAM_END : 0; // END_STREAM
                             STREAMSTATE(streamData) |= HEADER_END;
@@ -564,10 +560,7 @@ public:
                 MyTrace("Protocol Error");
 #endif // DEBUG
 
-            for (auto item : mapWindUodate)
-                Http2WindowUpdate(soMetaDa.fSocketWrite, item.first, item.second);
-
-            for (auto item : CallAction)
+            for (auto& item : CallAction)
             {
                 pmtxStream->lock();
                 EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
