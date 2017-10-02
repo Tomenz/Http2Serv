@@ -53,8 +53,12 @@ public:
         const string& base64chr = bUrlSave == false ? base64_chars : base64url_chars;
 
         size_t nIndex = 0;
-        while (nLen-- && strInput[nPos] != '=' && base64chr.find(strInput[nPos]) != string::npos)
+        while (nLen && strInput[nPos] != '=')
         {
+            nLen--;
+            if (base64chr.find(strInput[nPos]) == string::npos)
+                return string();
+
             if (++nPos, ++nIndex == 4)
             {
                 nIndex = 0;
@@ -68,6 +72,9 @@ public:
                 strRet += ((c3 & 0x3) << 6) + c4;
             }
         }
+
+        if (nLen > 0 && nLen - (4 - nIndex) != 0)
+            return string();
 
         if (nIndex)
         {

@@ -851,9 +851,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         auto fnGetStreamWindowSize = [&](int32_t& iStreamWndSize) -> bool
         {
-            int32_t iTotaleWndSize = UINT16_MAX;
             if (nStreamId != 0)
             {
+                int32_t iTotaleWndSize = UINT16_MAX;
+
                 lock_guard<mutex> lock0(*pmtxStream);
                 auto StreamItem = hw2.StreamList.find(nStreamId);
                 if (StreamItem != end(hw2.StreamList))
@@ -1116,7 +1117,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             {
                 auto fnSendAuthRespons = [&]() -> void
                 {
-                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, HeadList({ make_pair("WWW-Authenticate", "Basic realm=\"Http-Utility Basic\"") }), 0);
+                    HeadList vHeader({ make_pair("WWW-Authenticate", "Basic realm=\"Http-Utility Basic\"") });
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, vHeader, 0);
                     if (nStreamId != 0)
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1638,7 +1640,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     do
                     {
                         int32_t nStreamWndSize = INT32_MAX;
-                        if (fnGetStreamWindowSize(nStreamWndSize) == false)
+                        if (fnGetStreamWindowSize(nStreamWndSize) == false || (*patStop).load() == true)
                             break;  // Stream Item was removed, properly the stream was reseted
 
                         size_t nSendBufLen;
@@ -1677,7 +1679,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 if (fnUpdateStreamParam(nSendBufLen) == -1)
                                     break;  // Stream Item was removed, properly the stream was reseted
                             }
-                        } while (iRet == Z_OK && nBytesConverted == 0);
+                        } while (iRet == Z_OK && nBytesConverted == 0 && (*patStop).load() == false);
                     } while (iRet == Z_OK);
 
                     if (nStreamId != 0)
