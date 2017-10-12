@@ -22,7 +22,7 @@ CLEANDIRS = $(DIRS:%=clean-%)
 #INC_PATH = -I ../matrixssl-3-7-2b-open/ -I .
 #LIB_PATH = -L ../matrixssl-3-7-2b-open/core -L ../matrixssl-3-7-2b-open/crypto -L ../matrixssl-3-7-2b-open/matrixssl -L ./zlib
 INC_PATH = -I ../openssl-1.0.2f/include -I ./brotli/include
-LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f -L ./brotli -L ./Commonlib
+LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f -L ./brotli -L ./CommonLib
 
 OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o TempFile.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
@@ -36,7 +36,7 @@ mDnsServ: $(BUILDDIRS) mDnsServ.o DnsProtokol.o
 $(TARGET): $(BUILDDIRS) $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(LIB_PATH) $(LIB) $(LDFLAGS)
 
-%.o: %.cpp HttpServ.h HPack.h H2Proto.h Base64.h Timer.h
+%.o: %.cpp HttpServ.h HPack.h H2Proto.h Timer.h
 	$(CC) $(CFLAGS) $(INC_PATH) -c $<
 
 $(DIRS): $(BUILDDIRS)
