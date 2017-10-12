@@ -117,6 +117,9 @@ streamoff TempFile::GetFileLength()
     else
         Flush();
 
+    if (m_theFile.is_open() == false)
+        return 0;
+
     streampos nCurPos = m_theFile.tellg();
     m_theFile.seekg(0, ios_base::end);
     streamoff nFSize = m_theFile.tellg();

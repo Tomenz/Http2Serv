@@ -23,9 +23,10 @@
 #include "TempFile.h"
 #include "H2Proto.h"
 #include "LogFile.h"
-#include "Base64.h"
+#include "CommonLib/Base64.h"
 #include "GZip.h"
 #include <brotli/encode.h>
+#include "CommonLib/md5.h"
 
 using namespace std;
 using namespace std::placeholders;
@@ -49,17 +50,21 @@ const wchar_t* PIPETYPE = L"rb";
 #ifdef _WIN64
 #pragma comment(lib, "x64/Debug/socketlib")
 #pragma comment(lib, "x64/Debug/brotli")
+#pragma comment(lib, "x64/Debug/CommonLib")
 #else
 #pragma comment(lib, "Debug/socketlib")
 #pragma comment(lib, "Debug/brotli")
+#pragma comment(lib, "Debug/CommonLib")
 #endif
 #else
 #ifdef _WIN64
 #pragma comment(lib, "x64/Release/socketlib")
 #pragma comment(lib, "x64/Release/brotli")
+#pragma comment(lib, "x64/Release/CommonLib")
 #else
 #pragma comment(lib, "Release/socketlib")
 #pragma comment(lib, "Release/brotli")
+#pragma comment(lib, "Release/CommonLib")
 #endif
 #endif
 
@@ -429,6 +434,30 @@ auto dwStart = chrono::high_resolution_clock::now();
                     }
                     pConDetails->strBuffer.erase(0, nPosEndOfHeader + 4);
 
+                    auto expect = pConDetails->HeaderList.find("expect");
+                    if (expect != end(pConDetails->HeaderList))
+                    {
+                        if (expect->second == "100-continue")
+                            pTcpSocket->Write("HTTP/1.1 100 Continue\r\n\r\n", 25);
+                        else
+                        {
+                            char caBuffer[4096];
+                            size_t nHeaderLen = BuildResponsHeader(caBuffer, sizeof(caBuffer), ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 417, HeadList(), 0);
+                            pTcpSocket->Write(caBuffer, nHeaderLen);
+                            pConDetails->pTimer.get()->Reset();
+
+                            CLogFile::GetInstance(m_vHostParam[L""].m_strLogFile) << pTcpSocket->GetClientAddr() << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                                << pConDetails->HeaderList.find(":method")->second << " " << pConDetails->HeaderList.find(":path")->second << " HTTP/1.1\" 417 - \""
+                                << (pConDetails->HeaderList.find("referer") != end(pConDetails->HeaderList) ? pConDetails->HeaderList.find("referer")->second : "-") << "\" \""
+                                << (pConDetails->HeaderList.find("user-agent") != end(pConDetails->HeaderList) ? pConDetails->HeaderList.find("user-agent")->second : "-") << "\""
+                                << CLogFile::LOGTYPES::END;
+                            CLogFile::GetInstance(m_vHostParam[L""].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] Expectation Failed");
+
+                            pTcpSocket->Close();
+                            return;
+                        }
+                    }
+
                     auto contentLength = pConDetails->HeaderList.find("content-length");
                     if (contentLength != end(pConDetails->HeaderList))
                     {
@@ -535,7 +564,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CLogFile::GetInstance(m_vHostParam[L""].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", (pTcpSocket != nullptr ? pTcpSocket->GetClientAddr() : "0.0.0.0"), "] network error no.: ",  pBaseSocket->GetErrorNo());
 
         m_mtxConnections.lock();
-        CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
+        auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
         {
             item->second.pTimer->Stop();
@@ -549,7 +578,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
     {
         //OutputDebugString(L"CHttpServ::OnSocketCloseing\r\n");
         m_mtxConnections.lock();
-        CONNECTIONLIST::iterator item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
+        auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
         {
             item->second.pTimer->Stop();
@@ -564,7 +593,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             {
                 // we wait, until all action thread's are finished for this connection, otherwise we remove the connection while the action thread is still using it = crash
                 m_ActThrMutex.lock();
-                for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
+                for (auto iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
                 {
                     if (iter->second == item->second.atStop.get())
                     {
@@ -588,7 +617,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
     void OnTimeout(Timer* pTimer)
     {
         lock_guard<mutex> lock(m_mtxConnections);
-        for (CONNECTIONLIST::iterator it = begin(m_vConnections); it != end(m_vConnections); ++it)
+        for (auto it = begin(m_vConnections); it != end(m_vConnections); ++it)
         {
             if (it->second.pTimer.get() == pTimer)
             {
@@ -746,6 +775,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         case 413: strRespons += "Request Entity Too Large"; break;
         case 414: strRespons += "Request-URI Too Long"; break;
         case 415: strRespons += "Unsupported Media Type"; break;
+        case 416: strRespons += "Requested Range Not Satisfiable"; break;
+        case 417: strRespons += "Expectation Failed"; break;
         case 500: strRespons += "Internal Server Error"; break;
         case 501: strRespons += "Not Implemented"; break;
         case 502: strRespons += "Bad Gateway"; break;
@@ -1118,6 +1149,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 auto fnSendAuthRespons = [&]() -> void
                 {
                     HeadList vHeader({ make_pair("WWW-Authenticate", "Basic realm=\"Http-Utility Basic\"") });
+                    vHeader.push_back(make_pair("WWW-Authenticate", " Digest realm=\"Http-Utility Digest\",\r\n\tqop=\"auth,auth-int\",\r\n\tnonce=\"cmFuZG9tbHlnZW5lcmF0ZWRub25jZQ\",\r\n\topaque=\"c29tZXJhbmRvbW9wYXF1ZXN0cmluZw\""));
                     size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, vHeader, 0);
                     if (nStreamId != 0)
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
@@ -1135,13 +1167,48 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 nPos = itAuth->second.find(' ');
                 if (nPos == string::npos)
                     return fnSendAuthRespons();
+                if (itAuth->second.substr(0, nPos) == "Basic")
+                {
+                    wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPos + 1)));
+                    if (find_if(begin(strAuth.second), end(strAuth.second), [strCredenial](const auto& strUser) { return strCredenial == strUser ? true : false; }) == end(strAuth.second))
+                        return fnSendAuthRespons();
+                }
+                else if (itAuth->second.substr(0, nPos) == "Digest")
+                {   // username="Thomas", realm="Http-Utility Digest", nonce="cmFuZG9tbHlnZW5lcmF0ZWRub25jZQ", uri="/iso/", response="2254355340eede0649b9df7f0121dcca", opaque="c29tZXJhbmRvbW9wYXF1ZXN0cmluZw", qop=auth, nc=00000002, cnonce="78a4421707fa60bc"
+                    const static regex spaceSeperator(",");
+                    string strTmp = itAuth->second.substr(nPos + 1);
+                    sregex_token_iterator token(begin(strTmp), end(strTmp), spaceSeperator, -1);
+                    map<string, string> maDigest;
+                    while (token != sregex_token_iterator())
+                    {
+                        if (nPos = token->str().find("="), nPos != string::npos)
+                        {
+                            string strKey = token->str().substr(0, nPos);
+                            strKey.erase(strKey.find_last_not_of(" \t") + 1);
+                            strKey.erase(0, strKey.find_first_not_of(" \t"));
+                            auto itInsert = maDigest.emplace(strKey, token->str().substr(nPos + 1));
+                            if (itInsert.second == true)
+                            {
+                                itInsert.first->second.erase(itInsert.first->second.find_last_not_of("\" \t") + 1);
+                                itInsert.first->second.erase(0, itInsert.first->second.find_first_not_of("\" \t"));
+                            }
+                        }
+                        token++;
+                    }
 
-                wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPos + 1)));
-                //string strBase64 = Base64::Encode(strCredenial.c_str(), strCredenial.size());
-                //if (strBase64.compare(itAuth->second.substr(nPos + 1)) == 0)
-                //if (itAuth->second.compare(nPos + 1, -1, strBase64) == 0)
-                //    MessageBeep(-1);
-                if (find_if(begin(strAuth.second), end(strAuth.second), [strCredenial](const auto& strUser) { return strCredenial == strUser ? true : false; }) == end(strAuth.second))
+                    wstring strUserName = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(maDigest["username"]);
+                    auto item = find_if(begin(strAuth.second), end(strAuth.second), [strUserName](const auto& strUser) { return strUser.substr(0, strUserName.size()) == strUserName && strUser[strUserName.size()] == ':' ? true : false; });
+                    if (item == end(strAuth.second))
+                        return fnSendAuthRespons();
+
+                    string PassWord = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(item->substr(strUserName.size()));
+                    string strM1 = md5(maDigest["username"] + ":" + maDigest["realm"] + PassWord);
+                    string strM2 = md5(itMethode->second + ":" + maDigest["uri"]);
+                    string strRe = md5(strM1 + ":" + maDigest["nonce"] + ":" + maDigest["nc"] + ":" + maDigest["cnonce"] + ":" + maDigest["qop"] + ":" + strM2);
+                    if (strRe != maDigest["response"])
+                        return fnSendAuthRespons();
+                }
+                else
                     return fnSendAuthRespons();
             }
         }

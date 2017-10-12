@@ -13,8 +13,8 @@ CFLAGS = -Wall -O3 -std=c++14 -D ZLIB_CONST -pthread -ffunction-sections -fdata-
 #CFLAGS = -w -std=c++14 -m32 -pthread -lstdc++fs # -lstdc++fs -ffunction-sections -fdata-sections -fomit-frame-pointer -DPOSIX
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++ # -lstdc++fs
 TARGET = Http2Serv
-DIRS = zlib socketlib brotli
-OBJLIBS = libzlib.a libsocketlib.a libbrotlilib.a
+DIRS = zlib socketlib brotli CommonLib
+OBJLIBS = libzlib.a libsocketlib.a libbrotlilib.a libcommonlib.a
 
 BUILDDIRS = $(DIRS:%=build-%)
 CLEANDIRS = $(DIRS:%=clean-%)
@@ -22,11 +22,11 @@ CLEANDIRS = $(DIRS:%=clean-%)
 #INC_PATH = -I ../matrixssl-3-7-2b-open/ -I .
 #LIB_PATH = -L ../matrixssl-3-7-2b-open/core -L ../matrixssl-3-7-2b-open/crypto -L ../matrixssl-3-7-2b-open/matrixssl -L ./zlib
 INC_PATH = -I ../openssl-1.0.2f/include -I ./brotli/include
-LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f -L ./brotli
+LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f -L ./brotli -L ./Commonlib
 
 OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o TempFile.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
-LIB = -l zlib -l socketlib -l brotlilib -l crypto -l ssl
+LIB = -l zlib -l socketlib -l brotlilib -l crypto -l ssl -l commonlib
 
 all: mDnsServ $(TARGET)
 
