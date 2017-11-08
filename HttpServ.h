@@ -38,7 +38,7 @@ using namespace tr1;
 #endif
 
 #define FN_CA(x) x.c_str()
-#define FN_STR(x) x
+#define FN_WSTR(x) x
 const wchar_t* ENV = L"SET ";
 const wchar_t* ENVJOIN = L"&";
 const wchar_t* QUOTES = L"";
@@ -91,7 +91,7 @@ const wchar_t* PIPETYPE = L"rb";
 std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
 #endif
 #define FN_CA(x) Utf8Converter.to_bytes(x).c_str()
-#define FN_STR(x) Utf8Converter.to_bytes(x).c_str()
+#define FN_WSTR(x) Utf8Converter.from_bytes(x)
 const wchar_t* ENV = L"";
 const wchar_t* ENVJOIN = L" ";
 const wchar_t* QUOTES = L"\"";
@@ -1155,6 +1155,15 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                     soMetaDa.fResetTimer();
+
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                        << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                        << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
+                        << "\" 401 " << "-" << " \""
+                        << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                        << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                        << CLogFile::LOGTYPES::END;
+
                     if (nStreamId == 0)
                         soMetaDa.fSocketClose();
                     fuExitDoAction();
@@ -1599,28 +1608,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
         }
 
-        // Static Content, check if we have a Modified Since Header
-        auto ifmodifiedsince = lstHeaderFields.find("if-modified-since");
-        if (ifmodifiedsince != end(lstHeaderFields))
-        {
-            tm tmIfModified = { 0 };
-            stringstream ss(ifmodifiedsince->second);
-            ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
-            double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
-            if (fabs(dTimeDif) < 0.001)
-            {
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, HeadList(), 0);
-                if (nStreamId != 0)
-                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                soMetaDa.fResetTimer();
-                if (bCloseConnection == true)
-                    soMetaDa.fSocketClose();
-
-                fuExitDoAction();
-                return;
-            }
-        }
+        // Calc ETag
+        string strEtag = "\"" + md5(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath) + ":" + to_string(stFileInfo.st_mtime) + ":" + to_string(stFileInfo.st_size)) + "\"";
 
         // MimeType
         if (strMineType.empty() == true)    // if not empty we have a fixed mimetyp from the configuration
@@ -1636,7 +1625,64 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         stringstream strLastModTime; strLastModTime << put_time(::gmtime(&stFileInfo.st_mtime), "%a, %d %b %Y %H:%M:%S GMT");
         umPhpHeaders.emplace_back(make_pair("Content-Type", strMineType));
         umPhpHeaders.emplace_back(make_pair("Last-Modified", strLastModTime.str()));
-        umPhpHeaders.emplace_back(make_pair("Cache-control", "must-revalidate"));
+        umPhpHeaders.emplace_back(make_pair("Cache-Control", "private, must-revalidate"));
+        umPhpHeaders.emplace_back(make_pair("ETag", strEtag));
+
+        auto ifnonematch = lstHeaderFields.find("if-none-match");
+        if (ifnonematch != end(lstHeaderFields) && ifnonematch->second == strEtag)
+        {
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
+            if (nStreamId != 0)
+                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            soMetaDa.fResetTimer();
+
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
+                << "\" 304 " << (stFileInfo.st_size == 0 ? "-" : to_string(stFileInfo.st_size)) << " \""
+                << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                << CLogFile::LOGTYPES::END;
+
+            if (bCloseConnection == true)
+                soMetaDa.fSocketClose();
+
+            fuExitDoAction();
+            return;
+        }
+
+        // Static Content, check if we have a Modified Since Header
+        auto ifmodifiedsince = lstHeaderFields.find("if-modified-since");
+        if (ifmodifiedsince != end(lstHeaderFields))
+        {
+            tm tmIfModified = { 0 };
+            stringstream ss(ifmodifiedsince->second);
+            ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
+            double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
+            if (fabs(dTimeDif) < 0.001)
+            {
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
+                if (nStreamId != 0)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                soMetaDa.fResetTimer();
+
+                CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                    << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                    << (nStreamId != 0 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
+                    << "\" 304 " << (stFileInfo.st_size == 0 ? "-" : to_string(stFileInfo.st_size)) << " \""
+                    << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                    << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                    << CLogFile::LOGTYPES::END;
+
+                if (bCloseConnection == true)
+                    soMetaDa.fSocketClose();
+
+                fuExitDoAction();
+                return;
+            }
+        }
 
         if (aritMethode->second == 1) // HEAD
         {
