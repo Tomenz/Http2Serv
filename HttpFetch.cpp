@@ -3,7 +3,7 @@
 
 #include "HttpFetch.h"
 #include "GZip.h"
-#include "Base64.h"
+#include "CommonLib/Base64.h"
 #include <brotli/decode.h>
 
 #ifdef _DEBUG
@@ -92,7 +92,7 @@ bool HttpFetch::Fetch(string strAdresse, string strMethode /*= "GET"*/)
     if (m_UseSSL == true)
     {
         m_pcClientCon->SetTrustedRootCertificates("./certs/ca-certificates.crt");
-        m_pcClientCon->SetAlpnProtokollNames({ { "h2" },{ "http/1.1" } });
+        m_pcClientCon->SetAlpnProtokollNames({ { "h2" }, { "http/1.1" } });
     }
 
     return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
@@ -158,8 +158,27 @@ void HttpFetch::Connected(TcpSocket* pTcpSocket)
             nHeaderLen += nReturn;
         }
 
-        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, 1);
-        pTcpSocket->Write(caBuffer, nHeaderLen + 9);
+        if (m_pTmpFileSend.get() != 0)
+        {
+            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, 1);
+            pTcpSocket->Write(caBuffer, nHeaderLen + 9);
+
+            auto apBuf = make_unique<unsigned char[]>(0x4000 + 9 + 2);
+            streamsize nBytesRead = m_pTmpFileSend.get()->Read(apBuf.get() + 9, 0x4000);
+            while (nBytesRead != 0)
+            {
+                BuildHttp2Frame(reinterpret_cast<char*>(apBuf.get()), static_cast<size_t>(nBytesRead), 0x0, nBytesRead < 0x4000 ? 0x1 : 0x0, 1);
+
+                pTcpSocket->Write(apBuf.get(), static_cast<size_t>(nBytesRead) + 9);
+                nBytesRead = m_pTmpFileSend.get()->Read(apBuf.get() + 9, 0x4000);
+            }
+            m_pTmpFileSend.get()->Close();
+        }
+        else
+        {
+            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, 1);
+            pTcpSocket->Write(caBuffer, nHeaderLen + 9);
+        }
     }
     else
     {

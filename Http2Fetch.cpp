@@ -4,7 +4,7 @@
 #include <conio.h>
 
 #include "HttpFetch.h"
-#include "Base64.h"
+#include "CommonLib/Base64.h"
 
 int main(int argc, const char* argv[])
 {
@@ -36,6 +36,11 @@ int main(int argc, const char* argv[])
 //    fetch.AddToHeader("Content-Length", "388");
 //    fetch.AddToHeader("Content-Type", "text/xml; charset=\"utf-8\"");
 //    fetch.AddToHeader("Expect", "100-continue");
+    fetch.AddToHeader("Content-Type", "application/json");
+    fetch.AddToHeader("Authorization", "key=AAAAlg2diDc:APA91bEQZ3CKLWnYA35_5sBR-RzOgtJ0NEapM4C1u3x0gO6fyNdZ5CfmaQ-ASR7uKGe9_9WLPwqWjiaYmsKKlC2QXBDst5GLnzJBszegKoSKn79x6v21i0JUSK7giNvmFzVIs6J-SKjs");
+    fetch.AddToHeader("Content-Length", "114");
+    //fetch.AddContent("{\"notification\":{\"title\": \"Firebase -  Test\",\"text\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 119);
+    fetch.AddContent("{\"data\":{\"title\": \"Firebase -  Test\",\"message\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 114);
 
 	//fetch.Fetch("https://twitter.com/");
     //fetch.Fetch("https://www.microsoft.com/de-de");
@@ -48,7 +53,8 @@ int main(int argc, const char* argv[])
     //fetch.Fetch("https://http2.golang.org/gophertiles?latency=0");
     //fetch.Fetch("https://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx");
     //fetch.Fetch("https://tools.keycdn.com/brotli-test");
-    fetch.Fetch("https://tools.keycdn.com/http2-test");
+    //fetch.Fetch("https://tools.keycdn.com/http2-test");
+    fetch.Fetch("https://fcm.googleapis.com/fcm/send", "POST");
 
 
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PUT");

@@ -187,6 +187,8 @@ public:
                         if ((h2f.flag & PADDED) == PADDED)
                             PadLen = szBuf++[0], h2f.size--, nLen--;
 
+                        MyTrace("    Pad Length = ", dec, static_cast<unsigned long>(PadLen));
+
                         if (streamData == end(umStreamCache) || h2f.streamId == 0 || (STREAMSTATE(umStreamCache.find(0)) & HEADER_RECEIVED) == HEADER_RECEIVED)
                             throw H2ProtoException(H2ProtoException::DATA_WITHOUT_STREAM);
                         if ((STREAMSTATE(streamData) & STREAM_END) == STREAM_END)
@@ -198,8 +200,8 @@ public:
                         if (h2f.size < PadLen)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_VALUE, h2f.streamId);
 
-                        Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size - PadLen);
-                        Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size - PadLen);
+                        Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size + (h2f.flag & PADDED) == PADDED ? 1 : 0/* - PadLen*/);
+                        Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + (h2f.flag & PADDED) == PADDED ? 1 : 0/* - PadLen*/);
 
                         if (pTmpFile.get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                         {
@@ -211,8 +213,8 @@ public:
                             pTmpFile.get()->Open();
                         }
 
-                        pTmpFile.get()->Write(szBuf, min(static_cast<size_t>(h2f.size), nLen) - PadLen);
-                        CONTENTRESCIV(streamData) += min(static_cast<size_t>(h2f.size), nLen);
+                        pTmpFile.get()->Write(szBuf, min(static_cast<size_t>(h2f.size) - PadLen, nLen));
+                        CONTENTRESCIV(streamData) += min(static_cast<size_t>(h2f.size) - PadLen, nLen);
 
                         if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM
                         {
@@ -257,7 +259,7 @@ public:
                             if (h2f.streamId == lStremId)
                                 throw H2ProtoException(H2ProtoException::SAME_STREAMID, h2f.streamId);
                         }
-                        MyTrace("    Pad Length = 0x", static_cast<unsigned long>(PadLen), " StreamId = 0x", hex, lStremId, " E = ", E, " Weight = ", dec, static_cast<unsigned long>(Weight));
+                        MyTrace("    Pad Length = ", dec, static_cast<unsigned long>(PadLen), " StreamId = 0x", hex, lStremId, " E = ", E, " Weight = ", dec, static_cast<unsigned long>(Weight));
 
                         if (streamData != end(umStreamCache) && (STREAMSTATE(streamData) & STREAM_END) == STREAM_END)
                             throw H2ProtoException(H2ProtoException::STREAM_CLOSED, h2f.streamId);
@@ -296,9 +298,14 @@ public:
                             // We reset in Stream 0 that we are in the middle of receiving a Header
                             fnResetStream0Flag();
 
+                            // We need a :path header or a :status header otherwise we received an invalid header
                             auto itPath = GETHEADERLIST(streamData).find(":path");
                             if (itPath == end(GETHEADERLIST(streamData)) || itPath->second.empty() == true)
-                                throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+                            {
+                                auto itStatus = GETHEADERLIST(streamData).find(":status");
+                                if (itStatus == end(GETHEADERLIST(streamData)) || itStatus->second.empty() == true)
+                                    throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+                            }
 
                             if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM
                             {
