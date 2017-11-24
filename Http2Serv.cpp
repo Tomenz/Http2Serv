@@ -75,7 +75,7 @@ public:
         deque<CHttpServ> vServers;
 
         const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 } };
-        const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 } };
+        const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 } };
 
         vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
 
@@ -141,11 +141,20 @@ public:
                                         HostParam.m_mstrRewriteRule.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
                                 }
                             case 2: // AliasMatch
+                            case 9: // ScriptAliasMatch
                                 for (const auto& strValue : vValues)
                                 {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                    if (token != wsregex_token_iterator())
-                                        HostParam.m_mstrAliasMatch.emplace(token->str(), next(token)->str());//HostParam.m_mstrAliasMatch.emplace(token->str(), strValue.substr(token->str().size() + 1));
+                                    const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                    vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                    if (token.size() == 2)
+                                    {
+                                        for (size_t n = 0; n < token.size(); ++n)
+                                        {
+                                            token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                            token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                        }
+                                        HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token[1], strKey.second == 9 ? true : false));
+                                    }
                                 }
                             case 3: // ForceType
                                 for (const auto& strValue : vValues)
@@ -166,22 +175,18 @@ public:
                             case 5: // SetEnvIf
                                 for (const auto& strValue : vValues)
                                 {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                    vector<wstring> vecTmp;
-                                    while (token != wsregex_token_iterator())
-                                        vecTmp.push_back(token++->str());
-                                    while (vecTmp.size() > 3)
+                                    const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                    vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                    if (token.size() >= 3)
                                     {
-                                        vecTmp[1] += vecTmp[2];
-                                        vecTmp.erase(begin(vecTmp) + 2);
-                                    }
-                                    if (vecTmp.size() == 3)
-                                    {
-                                        transform(begin(vecTmp[0]), end(vecTmp[0]), begin(vecTmp[0]), ::toupper);
-                                        transform(begin(vecTmp[2]), end(vecTmp[2]), begin(vecTmp[2]), ::toupper);
-                                        vecTmp[1].erase(vecTmp[1].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
-                                        vecTmp[1].erase(0, vecTmp[1].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
-                                        HostParam.m_vEnvIf.emplace_back(make_tuple(vecTmp[0], vecTmp[1], vecTmp[2]));
+                                        transform(begin(token[0]), end(token[0]), begin(token[0]), ::toupper);
+                                        for (size_t n = 0; n < token.size(); ++n)
+                                        {
+                                            token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                            token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                        }
+                                        for (size_t n = 2; n < token.size(); ++n)
+                                            HostParam.m_vEnvIf.emplace_back(make_tuple(token[0], token[1], token[n]));
                                     }
                                 }
                                 break;
@@ -207,19 +212,22 @@ public:
                             case 8: // Authenticate
                                 for (const auto& strValue : vValues)
                                 {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1, regex_constants::format_first_only);
-                                    if (token != wsregex_token_iterator())
+                                    const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                    vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                    if (token.size() >= 3)
                                     {
-                                        auto itNew = HostParam.m_mAuthenticate.emplace(token->str(), vector<wstring>());
+                                        for (size_t n = 0; n < token.size(); ++n)
+                                        {
+                                            token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                            token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                        }
+                                        transform(begin(token[2]), end(token[2]), begin(token[2]), ::toupper);
+
+                                        auto itNew = HostParam.m_mAuthenticate.emplace(token[0], make_tuple(token[1], token[2], vector<wstring>()));
                                         if (itNew.second == true)
                                         {
-                                            wstring strTmp = strValue.substr(token->str().size() + 1);
-                                            strTmp.erase(0, strTmp.find_first_not_of(L" \t"));      // Trim Whitespace and " character on the left
-
-                                            static const wregex seperatorKomma(L"\\s*,\\s*");
-                                            wsregex_token_iterator tok(begin(strTmp), end(strTmp), seperatorKomma, -1);
-                                            while (tok != wsregex_token_iterator())
-                                                itNew.first->second.emplace_back(tok++->str());
+                                            for (size_t n = 3; n < token.size(); ++n)
+                                                get<2>(itNew.first->second).emplace_back(token[n]);
                                         }
                                     }
                                 }
@@ -391,17 +399,6 @@ int main(int argc, const char* argv[])
 #endif
                     wcout << L"-f   Start die Anwendung als Konsolenanwendung\r\n";
                     wcout << L"-h   Zeigt diese Hilfe an\r\n";
-                    //wcout << L"-f x Start die Anwendung als Konsolenanwendung mit Verbosmeldungen(Siehe unten)\r\n";
-                    //wcout << L"-v x Setzt den Level der Verbosemeldungen(Siehe unten)\r\n";
-                    //wcout << L"\r\n";
-                    //wcout << L"Verbosezahl: Bitcodierung jedes Bit hat eine andere Bedeutung\r\n";
-                    //wcout << L"             Die Zahlen können addiert werden. Beispiel: 2 + 8 = 10\r\n";
-                    //wcout << L"0x01  (1) Telegramm-anforderungen fuer Lese, Schreib und Ueberwachungen\r\n";
-                    //wcout << L"0x02  (2) Telegramme die gesendet oder empfangen werden\r\n";
-                    //wcout << L"0x04  (4) Ueberwachungen(Monitor) wird nach dem Einrichten angezeigt mit Handle\r\n";
-                    //wcout << L"0x08  (8) Benachrichtigung über Variablenaenderung\r\n";
-                    //wcout << L"0x10 (16) Eventlog Meldungen\r\n";
-                    //wcout << L"0x20 (32) Debugfile mit Bytes der Netzwerksverbindung zum Klient\r\n";
                     return iRet;
                 }
             }
