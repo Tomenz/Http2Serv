@@ -200,8 +200,8 @@ public:
                         if (h2f.size < PadLen)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_VALUE, h2f.streamId);
 
-                        Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size + (h2f.flag & PADDED) == PADDED ? 1 : 0/* - PadLen*/);
-                        Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + (h2f.flag & PADDED) == PADDED ? 1 : 0/* - PadLen*/);
+                        Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
+                        Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
 
                         if (pTmpFile.get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                         {

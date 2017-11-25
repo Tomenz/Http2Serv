@@ -38,9 +38,10 @@ int main(int argc, const char* argv[])
 //    fetch.AddToHeader("Expect", "100-continue");
     fetch.AddToHeader("Content-Type", "application/json");
     fetch.AddToHeader("Authorization", "key=AAAAlg2diDc:APA91bEQZ3CKLWnYA35_5sBR-RzOgtJ0NEapM4C1u3x0gO6fyNdZ5CfmaQ-ASR7uKGe9_9WLPwqWjiaYmsKKlC2QXBDst5GLnzJBszegKoSKn79x6v21i0JUSK7giNvmFzVIs6J-SKjs");
-    fetch.AddToHeader("Content-Length", "114");
-    //fetch.AddContent("{\"notification\":{\"title\": \"Firebase -  Test\",\"text\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 119);
-    fetch.AddContent("{\"data\":{\"title\": \"Firebase -  Test\",\"message\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 114);
+    fetch.AddToHeader("Content-Length", "119");
+    fetch.AddContent("{\"notification\":{\"title\": \"Firebase -  Test\",\"text\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 119);
+    //fetch.AddToHeader("Content-Length", "114");
+    //fetch.AddContent("{\"data\":{\"title\": \"Firebase -  Test\",\"message\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 114);
 
 	//fetch.Fetch("https://twitter.com/");
     //fetch.Fetch("https://www.microsoft.com/de-de");
