@@ -277,7 +277,7 @@ private:
         }
     }
 
-    void OnDataRecieved(TcpSocket* pTcpSocket)
+    void OnDataRecieved(TcpSocket* const pTcpSocket)
     {
         uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
 
@@ -557,7 +557,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
     }
 
-    void OnSocketError(BaseSocket* pBaseSocket)
+    void OnSocketError(BaseSocket* const pBaseSocket)
     {
         MyTrace("Error: Network error ", pBaseSocket->GetErrorNo());
         TcpSocket* pTcpSocket = dynamic_cast<TcpSocket*>(pBaseSocket);
@@ -574,11 +574,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         pBaseSocket->Close();
     }
 
-    void OnSocketCloseing(BaseSocket* pBaseSocket)
+    void OnSocketCloseing(BaseSocket* const pBaseSocket)
     {
         //OutputDebugString(L"CHttpServ::OnSocketCloseing\r\n");
         m_mtxConnections.lock();
-        auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
+        auto item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
         if (item != end(m_vConnections))
         {
             item->second.pTimer->Stop();
@@ -588,7 +588,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 this_thread::sleep_for(chrono::nanoseconds(1));
 
             m_mtxConnections.lock();
-            item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
+            item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
             if (item != end(m_vConnections))
             {
                 // we wait, until all action thread's are finished for this connection, otherwise we remove the connection while the action thread is still using it = crash
@@ -608,13 +608,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 }
                 m_ActThrMutex.unlock();
 
-                m_vConnections.erase(item);
+                m_vConnections.erase(item->first);
             }
         }
         m_mtxConnections.unlock();
     }
 
-    void OnTimeout(Timer* pTimer)
+    void OnTimeout(Timer* const pTimer)
     {
         lock_guard<mutex> lock(m_mtxConnections);
         for (auto it = begin(m_vConnections); it != end(m_vConnections); ++it)
@@ -833,7 +833,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         return nRet;
     }
 
-    void DoAction(MetaSocketData soMetaDa, uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, atomic<bool>* patStop)
+    void DoAction(MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
     {
         const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
@@ -2020,7 +2020,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         fuExitDoAction();
     }
 
-    virtual void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop) override
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) override
     {
         auto StreamPara = StreamList.find(streamId);
         if (StreamPara != end(StreamList))

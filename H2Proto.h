@@ -39,15 +39,15 @@ typedef map<unsigned long, STREAMITEM> STREAMLIST;
 //#define FnSockGetOutBytesInQue(x) get<7>(x)
 typedef struct
 {
-    string strIpClient;
-    uint16_t sPortClient;
-    string strIpInterface;
-    uint16_t sPortInterFace;
-    bool bIsSsl;
-    function<size_t(const void*, size_t)> fSocketWrite;
-    function<void()> fSocketClose;
-    function<uint32_t()> fSockGetOutBytesInQue;
-    function<void()> fResetTimer;
+    const string strIpClient;
+    const uint16_t sPortClient;
+    const string strIpInterface;
+    const uint16_t sPortInterFace;
+    const bool bIsSsl;
+    const function<size_t(const void*, size_t)> fSocketWrite;
+    const function<void()> fSocketClose;
+    const function<uint32_t()> fSockGetOutBytesInQue;
+    const function<void()> fResetTimer;
 }MetaSocketData;
 
 class Http2Protocol : public HPack
@@ -109,7 +109,7 @@ public:
             MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
-    size_t Http2StreamProto(MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
+    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
     {
         size_t nReturn = 0;
 
@@ -681,5 +681,5 @@ public:
     }
 
 private:
-    virtual void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop) = 0;
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) = 0;
 };
