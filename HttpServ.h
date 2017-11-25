@@ -270,7 +270,7 @@ private:
             m_mtxConnections.lock();
             for (auto& pSocket : vCache)
             {
-                m_vConnections.emplace(pair<TcpSocket*, CONNECTIONDETAILS>(pSocket, { make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), make_shared<atomic_bool>(false) }));
+                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), make_shared<atomic_bool>(false) }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();

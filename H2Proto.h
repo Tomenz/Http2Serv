@@ -621,6 +621,7 @@ public:
                 Http2Goaway(soMetaDa.fSocketWrite, 0, 0, 6);   // 6 = FRAME_SIZE_ERROR
                 break;
             case H2ProtoException::WINDOW_SIZE_SETTING:
+            case H2ProtoException::FLOW_CONTROL_ERROR:
                 Http2Goaway(soMetaDa.fSocketWrite, 0, 0, 3);    // 3 = FLOW_CONTROL_ERROR
                 break;
             case H2ProtoException::WINDOW_SIZE_TO_HIGH:
