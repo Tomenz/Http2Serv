@@ -116,7 +116,7 @@ void HttpFetch::Stop()
     m_pcClientCon->Close();
 }
 
-void HttpFetch::Connected(TcpSocket* pTcpSocket)
+void HttpFetch::Connected(TcpSocket* const pTcpSocket)
 {
     string Protocoll;
     if (m_UseSSL == true)
@@ -202,10 +202,10 @@ void HttpFetch::Connected(TcpSocket* pTcpSocket)
     }
 
     m_Timer = make_unique<Timer>(30000, bind(&HttpFetch::OnTimeout, this, _1));
-    m_soMetaDa = { m_pcClientCon->GetClientAddr(), m_pcClientCon->GetClientPort(), m_pcClientCon->GetInterfaceAddr(), m_pcClientCon->GetInterfacePort(), m_pcClientCon->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()) };
+    m_soMetaDa = { m_pcClientCon->GetClientAddr(), m_pcClientCon->GetClientPort(), m_pcClientCon->GetInterfaceAddr(), m_pcClientCon->GetInterfacePort(), m_pcClientCon->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()), bind(&Timer::SetNewTimeout, m_Timer.get(), _1) };
 }
 
-void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
+void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
 {
     uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
 
@@ -399,14 +399,14 @@ void HttpFetch::DatenEmpfangen(TcpSocket* pTcpSocket)
     }
 }
 
-void HttpFetch::SocketError(BaseSocket* pBaseSocket)
+void HttpFetch::SocketError(BaseSocket* const pBaseSocket)
 {
     OutputDebugString(L"Http2Fetch::SocketError\r\n");
 
     pBaseSocket->Close();
 }
 
-void HttpFetch::SocketCloseing(BaseSocket* pBaseSocket)
+void HttpFetch::SocketCloseing(BaseSocket* const pBaseSocket)
 {
     OutputDebugString(L"Http2Fetch::SocketCloseing\r\n");
 
@@ -415,13 +415,13 @@ void HttpFetch::SocketCloseing(BaseSocket* pBaseSocket)
     m_Timer.get()->Stop();
 }
 
-void HttpFetch::OnTimeout(Timer* pTimer)
+void HttpFetch::OnTimeout(Timer* const pTimer)
 {
     OutputDebugString(L"Http2Fetch::OnTimeout\r\n");
     m_pcClientCon->Close();
 }
 
-void HttpFetch::EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
+void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop)
 {
     m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)));
 

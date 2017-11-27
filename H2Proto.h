@@ -39,15 +39,16 @@ typedef map<unsigned long, STREAMITEM> STREAMLIST;
 //#define FnSockGetOutBytesInQue(x) get<7>(x)
 typedef struct
 {
-    const string strIpClient;
-    const uint16_t sPortClient;
-    const string strIpInterface;
-    const uint16_t sPortInterFace;
-    const bool bIsSsl;
-    const function<size_t(const void*, size_t)> fSocketWrite;
-    const function<void()> fSocketClose;
-    const function<uint32_t()> fSockGetOutBytesInQue;
-    const function<void()> fResetTimer;
+    string strIpClient;
+    uint16_t sPortClient;
+    string strIpInterface;
+    uint16_t sPortInterFace;
+    bool bIsSsl;
+    function<size_t(const void*, size_t)> fSocketWrite;
+    function<void()> fSocketClose;
+    function<uint32_t()> fSockGetOutBytesInQue;
+    function<void()> fResetTimer;
+    function<void(uint32_t)> fSetNewTimeout;
 }MetaSocketData;
 
 class Http2Protocol : public HPack

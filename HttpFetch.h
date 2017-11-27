@@ -26,7 +26,7 @@ private:
     void SocketError(BaseSocket* pBaseSocket);
     void SocketCloseing(BaseSocket* pBaseSocket);
     void OnTimeout(Timer* pTimer);
-    void EndOfStreamAction(MetaSocketData soMetaDa, uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop);
+    void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop);
 
 private:
     SslTcpSocket*        m_pcClientCon;

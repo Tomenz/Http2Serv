@@ -66,6 +66,12 @@ public:
         return m_bIsStoped;
     }
 
+    void SetNewTimeout(uint32_t nNewTime)
+    {
+        m_tMilliSeconds = nNewTime;
+        m_cv.notify_all();
+    }
+
 private:
     uint32_t m_tMilliSeconds;
     function<void(Timer*)> m_fTimeOut;
