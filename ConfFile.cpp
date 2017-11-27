@@ -72,7 +72,7 @@ vector<wstring> ConfFile::get(const wstring& strSektion) const
     {
         for (const auto& item : section->second)
         {
-            if (vReturn.size() == 0 || vReturn[vReturn.size() - 1] != item.first)
+            if (find(begin(vReturn), end(vReturn), item.first) == end(vReturn))
                 vReturn.push_back(item.first);
         }
     }
