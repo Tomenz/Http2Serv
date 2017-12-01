@@ -13,6 +13,7 @@
 #pragma message("TODO!!! Folge Zeile wieder entfernen.")
 #include <termios.h>
 #include <fcntl.h>
+#include <dirent.h>
 #endif
 
 #include "ConfFile.h"
@@ -29,9 +30,6 @@ std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
 #include "Psapi.h"
 #pragma comment(lib, "Psapi.lib")
 
-const static wregex s_rxSepSpace(L"\\s+");
-const static wregex s_rxSepComma(L"\\s*,\\s*");
-
 void se_translator(size_t e, _EXCEPTION_POINTERS* p)
 {
     throw e;
@@ -45,6 +43,9 @@ public:
     virtual void Start(void) = 0;
 };
 #endif
+
+const static wregex s_rxSepSpace(L"\\s+");
+const static wregex s_rxSepComma(L"\\s*,\\s*");
 
 class Service : public CBaseSrv
 {
@@ -356,7 +357,7 @@ public:
 #if defined(_WIN32) || defined(_WIN64)
         OutputDebugString(L"STRG+C-Signal empfangen\r\n");
 #else
-        wcout << L"Signal SIGHUB empfangen\r\n";
+        wcout << L"Signal SIGHUP empfangen\r\n";
 #endif
     }
 
@@ -395,7 +396,7 @@ int main(int argc, const char* argv[])
 
 #else
 
-    signal(SIGHUB, Service::SignalHandler);
+    signal(SIGHUP, Service::SignalHandler);
 
     auto _kbhit = []() -> int
     {
@@ -578,7 +579,7 @@ int main(int argc, const char* argv[])
                                         if (strName == strMyName)
                                         {
                                             //wcout << strName.c_str() << L" = " << (pid_t)lpid << endl;
-                                            kill((pid_t)lpid, SIGHUB);
+                                            kill((pid_t)lpid, SIGHUP);
                                             break;
                                         }
                                     }
@@ -663,7 +664,7 @@ int main(int argc, const char* argv[])
             int sig;
             sigwait(&sigset, &sig);
 
-            svr.Stop();
+            Service::GetInstance().Stop();
         }).detach();
 
 #endif
