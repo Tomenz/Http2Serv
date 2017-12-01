@@ -2,6 +2,7 @@
 //
 
 #include <iostream>
+#include <signal.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <conio.h>
@@ -9,7 +10,6 @@
 #include <fcntl.h>
 #else
 #include <syslog.h>
-#include <signal.h>
 #pragma message("TODO!!! Folge Zeile wieder entfernen.")
 #include <termios.h>
 #include <fcntl.h>
@@ -26,6 +26,11 @@ std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
 #if defined(_WIN32) || defined(_WIN64)
 #include "SvrLib/BaseSvr.h"
 #include "SvrLib/svrctrl.h"
+#include "Psapi.h"
+#pragma comment(lib, "Psapi.lib")
+
+const static wregex s_rxSepSpace(L"\\s+");
+const static wregex s_rxSepComma(L"\\s*,\\s*");
 
 void se_translator(size_t e, _EXCEPTION_POINTERS* p)
 {
@@ -44,7 +49,13 @@ public:
 class Service : public CBaseSrv
 {
 public:
-    explicit Service(wchar_t* szSrvName) : CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
+    static Service& GetInstance(wchar_t* szSrvName = nullptr)
+    {
+        if (s_pInstance == 0)
+            s_pInstance.reset(new Service(szSrvName));
+        return *s_pInstance.get();
+    }
+
     virtual void Start(void)
     {
         // Set the Exception Handler-function
@@ -52,13 +63,13 @@ public:
 
         m_bIsStopped = false;
 
-        wstring strModulePath(FILENAME_MAX, 0);
+        m_strModulePath = wstring(FILENAME_MAX, 0);
 #if defined(_WIN32) || defined(_WIN64)
-        if (GetModuleFileName(NULL, &strModulePath[0], FILENAME_MAX) > 0)
-            strModulePath.erase(strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
+        if (GetModuleFileName(NULL, &m_strModulePath[0], FILENAME_MAX) > 0)
+            m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
 
-        if (_wchdir(strModulePath.c_str()) != 0)
-            strModulePath = L"./";
+        if (_wchdir(m_strModulePath.c_str()) != 0)
+            m_strModulePath = L"./";
 #else
         string strTmpPath(FILENAME_MAX, 0);
         if (readlink(string("/proc/" + to_string(getpid()) + "/exe").c_str(), &strTmpPath[0], FILENAME_MAX) > 0)
@@ -68,214 +79,23 @@ public:
         //If we cant find the directory we exit with failure.
         if ((chdir(strTmpPath.c_str())) < 0) // if ((chdir("/")) < 0)
             strTmpPath = ".";
-        strModulePath = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strTmpPath) + L"/";
+        m_strModulePath = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strTmpPath) + L"/";
 #endif
-        const ConfFile& conf = ConfFile::GetInstance(strModulePath + L"server.cfg");
-
-        deque<CHttpServ> vServers;
-
-        const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 } };
-        const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 } };
-
-        vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
-
-        vector<wstring>&& vListen = conf.get(L"Listen");
-        if (vListen.empty() == true)
-            vListen.push_back(L"127.0.0.1"), vListen.push_back(L"::1");
-        for (const auto& strListen : vListen)
-        {
-            vector<wstring>&& vPort = conf.get(L"Listen", strListen);
-            if (vPort.empty() == true)
-                vPort.push_back(L"80");
-            for (const auto& strPort : vPort)
-            {
-                // Default Werte setzen
-                vServers.emplace_back(strModulePath + L".", stoi(strPort), false);
-                vServers.back().SetBindAdresse(string(begin(strListen), end(strListen)).c_str());
-
-                // Default und Common Parameter of the listening socket
-                auto fnSetParameter = [&](const wstring& strSection, const wchar_t* szHost = nullptr)
-                {
-                    static wregex seperator(L"\\s+");
-
-                    CHttpServ::HOSTPARAM& HostParam = vServers.back().GetParameterBlockRef(szHost);
-                    for (const auto& strKey : strKeyWordUniqueItems)
-                    {
-                        wstring strValue = conf.getUnique(strSection, strKey.first);
-                        if (strValue.empty() == false)
-                        {
-                            switch (strKey.second)
-                            {
-                            case 1:
-                            {
-                                wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                while (token != wsregex_token_iterator())
-                                    HostParam.m_vstrDefaultItem.push_back(token++->str());
-                            }
-                            break;
-                            case 2: HostParam.m_strRootPath = strValue; break;
-                            case 3: HostParam.m_strLogFile = strValue; break;
-                            case 4: HostParam.m_strErrLog = strValue; break;
-                            case 5: HostParam.m_strDhParam = Utf8Converter.to_bytes(strValue); break;
-                            case 6: HostParam.m_strHostKey = Utf8Converter.to_bytes(strValue); break;
-                            case 7: HostParam.m_strHostCertificate = Utf8Converter.to_bytes(strValue); break;
-                            case 8: HostParam.m_strCAcertificate = Utf8Converter.to_bytes(strValue); break;
-                            case 9: transform(begin(strValue), end(strValue), begin(strValue), ::toupper);
-                                HostParam.m_bSSL = strValue == L"TRUE" ? true : false; break;
-                            }
-                        }
-                    }
-
-                    for (const auto& strKey : strKeyWordMultiItems)
-                    {
-                        vector<wstring>&& vValues = conf.get(strSection, strKey.first);
-                        if (vValues.empty() == false)
-                        {
-                            switch (strKey.second)
-                            {
-                            case 1: // RewriteRule
-                                for (const auto& strValue : vValues)
-                                {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                    if (token != wsregex_token_iterator())
-                                        HostParam.m_mstrRewriteRule.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
-                                }
-                            case 2: // AliasMatch
-                            case 9: // ScriptAliasMatch
-                                for (const auto& strValue : vValues)
-                                {
-                                    const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
-                                    vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
-                                    if (token.size() == 2)
-                                    {
-                                        for (size_t n = 0; n < token.size(); ++n)
-                                        {
-                                            token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
-                                            token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
-                                        }
-                                        HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token[1], strKey.second == 9 ? true : false));
-                                    }
-                                }
-                            case 3: // ForceType
-                                for (const auto& strValue : vValues)
-                                {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                    if (token != wsregex_token_iterator())
-                                        HostParam.m_mstrForceTyp.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
-                                }
-                                break;
-                            case 4: // FileTyps
-                                for (const auto& strValue : vValues)
-                                {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                    if (token != wsregex_token_iterator())
-                                        HostParam.m_mFileTypeAction.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
-                                }
-                                break;
-                            case 5: // SetEnvIf
-                                for (const auto& strValue : vValues)
-                                {
-                                    const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
-                                    vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
-                                    if (token.size() >= 3)
-                                    {
-                                        transform(begin(token[0]), end(token[0]), begin(token[0]), ::toupper);
-                                        for (size_t n = 0; n < token.size(); ++n)
-                                        {
-                                            token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
-                                            token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
-                                        }
-                                        for (size_t n = 2; n < token.size(); ++n)
-                                            HostParam.m_vEnvIf.emplace_back(make_tuple(token[0], token[1], token[n]));
-                                    }
-                                }
-                                break;
-                            case 6: // RedirectMatch
-                                for (const auto& strValue : vValues)
-                                {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                    vector<wstring> vecTmp;
-                                    while (token != wsregex_token_iterator())
-                                        vecTmp.push_back(token++->str());
-                                    if (vecTmp.size() == 3)
-                                        HostParam.m_vRedirMatch.emplace_back(make_tuple(vecTmp[0], vecTmp[1], vecTmp[2]));
-                                }
-                                break;
-                            case 7: // DeflateTyps
-                                for (const auto& strValue : vValues)
-                                {
-                                    wsregex_token_iterator token(begin(strValue), end(strValue), seperator, -1);
-                                    while (token != wsregex_token_iterator())
-                                        HostParam.m_vDeflateTyps.push_back(Utf8Converter.to_bytes(token++->str()));
-                                }
-                                break;
-                            case 8: // Authenticate
-                                for (const auto& strValue : vValues)
-                                {
-                                    const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
-                                    vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
-                                    if (token.size() >= 3)
-                                    {
-                                        for (size_t n = 0; n < token.size(); ++n)
-                                        {
-                                            token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
-                                            token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
-                                        }
-                                        transform(begin(token[2]), end(token[2]), begin(token[2]), ::toupper);
-
-                                        auto itNew = HostParam.m_mAuthenticate.emplace(token[0], make_tuple(token[1], token[2], vector<wstring>()));
-                                        if (itNew.second == true)
-                                        {
-                                            for (size_t n = 3; n < token.size(); ++n)
-                                                get<2>(itNew.first->second).emplace_back(token[n]);
-                                        }
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                    }
-                };
-                fnSetParameter(L"common", nullptr);
-
-                ///////////////////////////////////////////
-
-                // Host Parameter holen und setzen
-                function<void(wstring, bool)> fuSetHostParam = [&](wstring strListenAddr, bool IsVHost)
-                {
-                    fnSetParameter(strListenAddr + L":" + strPort, IsVHost == true ? strListenAddr.c_str() : nullptr);
-
-                    const wstring strValue = conf.getUnique(strListenAddr + L":" + strPort, L"VirtualHost");
-                    if (strValue.empty() == false)
-                    {
-                        size_t nPos = strValue.find_first_of(L','), nStart = 0;
-                        while (nPos != string::npos)
-                        {
-                            fuSetHostParam(strValue.substr(nStart, nPos++), true);
-                            nStart += nPos;
-                            nPos = strValue.find_first_of(L',', nStart);
-                        }
-                        fuSetHostParam(strValue.substr(nStart), true);
-                    }
-                };
-
-                fuSetHostParam(strListen, false);
-            }
-        }
+        ReadConfiguration();
 
         // Server starten
-        for (auto& HttpServer : vServers)
-            HttpServer.Start();
+        //for (auto& HttpServer : m_vServers)
+        //    HttpServer.Start();
 
         while (m_bStop == false)
             this_thread::sleep_for(chrono::milliseconds(100));
 
         // Server stoppen
-        for (auto& HttpServer : vServers)
+        for (auto& HttpServer : m_vServers)
             HttpServer.Stop();
 
         // Warten bis alle Verbindungen / Ressourcen geschlossen sind
-        for (auto& HttpServer : vServers)
+        for (auto& HttpServer : m_vServers)
         {
             while (HttpServer.IsStopped() == false)
                 this_thread::sleep_for(chrono::milliseconds(10));
@@ -286,10 +106,280 @@ public:
     virtual void Stop(void) { m_bStop = true; }
     bool IsStopped(void) { return m_bIsStopped; }
 
+    void ReadConfiguration()
+    {
+        const ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
+
+        static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 } };
+        static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 } };
+
+        vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
+
+        vector<wstring>&& vListen = conf.get(L"Listen");
+        if (vListen.empty() == true)
+            vListen.push_back(L"127.0.0.1"), vListen.push_back(L"::1");
+
+        map<string, vector<wstring>> mIpPortCombi;
+        deque<CHttpServ> vNewServers;
+        for (const auto& strListen : vListen)
+        {
+            string strIp = string(begin(strListen), end(strListen));
+            vector<wstring>&& vPort = conf.get(L"Listen", strListen);
+            if (vPort.empty() == true)
+                vPort.push_back(L"80");
+            for (const auto& strPort : vPort)
+            {   // Default Werte setzen
+                if (mIpPortCombi.find(strIp) == end(mIpPortCombi))
+                    mIpPortCombi.emplace(strIp, vector<wstring>({ strPort }));
+                else
+                    mIpPortCombi.find(strIp)->second.push_back(strPort);
+                if (find_if(begin(m_vServers), end(m_vServers), [strPort, strListen](auto& HttpServer) { return HttpServer.GetPort() == stoi(strPort) && HttpServer.GetBindAdresse() == string(begin(strListen), end(strListen)) ? true : false; }) != end(m_vServers))
+                    continue;
+                vNewServers.emplace_back(m_strModulePath + L".", strIp, stoi(strPort), false);
+            }
+        }
+
+        // Server stoppen how should be deleted
+        for (deque<CHttpServ>::iterator itServer = begin(m_vServers); itServer != end(m_vServers);)
+        {
+            map<string, vector<wstring>>::iterator itIp = mIpPortCombi.find(itServer->GetBindAdresse());
+            if (itIp != end(mIpPortCombi))
+            {
+                if (find_if(begin(itIp->second), end(itIp->second), [itServer](auto strPort) { return itServer->GetPort() == stoi(strPort) ? true : false; }) != end(itIp->second))
+                {
+                    ++itServer;
+                    continue;
+                }
+            }
+            // Alle Server hier sollten gestoppt und entfernt werden
+            itServer->Stop();
+            // Warten bis alle Verbindungen / Ressourcen geschlossen sind
+            while (itServer->IsStopped() == false)
+                this_thread::sleep_for(chrono::milliseconds(10));
+
+            itServer = m_vServers.erase(itServer);
+        }
+
+        // Move the new Servers to the main list
+        for (auto& HttpServer : vNewServers)
+            m_vServers.emplace_back(move(HttpServer));
+
+        // Read for every server the configuration
+        for (auto& HttpServer : m_vServers)
+        {
+            HttpServer.Stop();
+            // Warten bis alle Verbindungen / Ressourcen geschlossen sind
+            while (HttpServer.IsStopped() == false)
+                this_thread::sleep_for(chrono::milliseconds(10));
+
+            // Default und Common Parameter of the listening socket
+            auto fnSetParameter = [&](const wstring& strSection, const string& szHost = string())
+            {
+                if (strSection == L"common")  // Default Parametersatz
+                    HttpServer.ClearAllParameterBlocks();
+                CHttpServ::HOSTPARAM& HostParam = HttpServer.GetParameterBlockRef(szHost);
+
+                for (const auto& strKey : strKeyWordUniqueItems)
+                {
+                    wstring strValue = conf.getUnique(strSection, strKey.first);
+                    if (strValue.empty() == false)
+                    {
+                        switch (strKey.second)
+                        {
+                        case 1:
+                        {
+                            wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
+                            while (token != wsregex_token_iterator())
+                                HostParam.m_vstrDefaultItem.push_back(token++->str());
+                        }
+                        break;
+                        case 2: HostParam.m_strRootPath = strValue; break;
+                        case 3: HostParam.m_strLogFile = strValue; break;
+                        case 4: HostParam.m_strErrLog = strValue; break;
+                        case 5: HostParam.m_strDhParam = Utf8Converter.to_bytes(strValue); break;
+                        case 6: HostParam.m_strHostKey = Utf8Converter.to_bytes(strValue); break;
+                        case 7: HostParam.m_strHostCertificate = Utf8Converter.to_bytes(strValue); break;
+                        case 8: HostParam.m_strCAcertificate = Utf8Converter.to_bytes(strValue); break;
+                        case 9: transform(begin(strValue), end(strValue), begin(strValue), ::toupper);
+                            HostParam.m_bSSL = strValue == L"TRUE" ? true : false; break;
+                        }
+                    }
+                }
+
+                for (const auto& strKey : strKeyWordMultiItems)
+                {
+                    vector<wstring>&& vValues = conf.get(strSection, strKey.first);
+                    if (vValues.empty() == false)
+                    {
+                        switch (strKey.second)
+                        {
+                        case 1: // RewriteRule
+                            for (const auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
+                                if (token != wsregex_token_iterator())
+                                    HostParam.m_mstrRewriteRule.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                            }
+                        case 2: // AliasMatch
+                        case 9: // ScriptAliasMatch
+                            for (const auto& strValue : vValues)
+                            {
+                                const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                if (token.size() == 2)
+                                {
+                                    for (size_t n = 0; n < token.size(); ++n)
+                                    {
+                                        token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                        token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                    }
+                                    HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token[1], strKey.second == 9 ? true : false));
+                                }
+                            }
+                        case 3: // ForceType
+                            for (const auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
+                                if (token != wsregex_token_iterator())
+                                    HostParam.m_mstrForceTyp.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                            }
+                            break;
+                        case 4: // FileTyps
+                            for (const auto& strValue : vValues)
+                            {
+                                const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                if (token.size() == 2)
+                                {
+                                    for (size_t n = 0; n < token.size(); ++n)
+                                    {
+                                        token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                        token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                    }
+                                    HostParam.m_mFileTypeAction.emplace(token[0], token[1]);//strValue.substr(token->str().size() + 1));
+                                }
+                            }
+                            break;
+                        case 5: // SetEnvIf
+                            for (const auto& strValue : vValues)
+                            {
+                                const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                if (token.size() >= 3)
+                                {
+                                    transform(begin(token[0]), end(token[0]), begin(token[0]), ::toupper);
+                                    for (size_t n = 0; n < token.size(); ++n)
+                                    {
+                                        token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                        token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                    }
+                                    for (size_t n = 2; n < token.size(); ++n)
+                                        HostParam.m_vEnvIf.emplace_back(make_tuple(token[0], token[1], token[n]));
+                                }
+                            }
+                            break;
+                        case 6: // RedirectMatch
+                            for (const auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
+                                vector<wstring> vecTmp;
+                                while (token != wsregex_token_iterator())
+                                    vecTmp.push_back(token++->str());
+                                if (vecTmp.size() == 3)
+                                    HostParam.m_vRedirMatch.emplace_back(make_tuple(vecTmp[0], vecTmp[1], vecTmp[2]));
+                            }
+                            break;
+                        case 7: // DeflateTyps
+                            for (const auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
+                                while (token != wsregex_token_iterator())
+                                    HostParam.m_vDeflateTyps.push_back(Utf8Converter.to_bytes(token++->str()));
+                            }
+                            break;
+                        case 8: // Authenticate
+                            for (const auto& strValue : vValues)
+                            {
+                                const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                if (token.size() >= 3)
+                                {
+                                    for (size_t n = 0; n < token.size(); ++n)
+                                    {
+                                        token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                        token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                    }
+                                    transform(begin(token[2]), end(token[2]), begin(token[2]), ::toupper);
+
+                                    auto itNew = HostParam.m_mAuthenticate.emplace(token[0], make_tuple(token[1], token[2], vector<wstring>()));
+                                    if (itNew.second == true)
+                                    {
+                                        for (size_t n = 3; n < token.size(); ++n)
+                                            get<2>(itNew.first->second).emplace_back(token[n]);
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            };
+            fnSetParameter(L"common");
+
+            ///////////////////////////////////////////
+
+            // Host Parameter holen und setzen
+            function<void(wstring, bool)> fuSetHostParam = [&](wstring strListenAddr, bool IsVHost)
+            {
+                fnSetParameter(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), IsVHost == true ? string(begin(strListenAddr), end(strListenAddr)) : string());
+
+                const wstring strValue = conf.getUnique(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), L"VirtualHost");
+                wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepComma, -1);
+                while (token != wsregex_token_iterator() && token->str().empty() == false)
+                    fuSetHostParam(token++->str(), true);
+            };
+
+            fuSetHostParam(Utf8Converter.from_bytes(HttpServer.GetBindAdresse()), false);
+        }
+
+        // Server starten und speichern
+        for (auto& HttpServer : m_vServers)
+            HttpServer.Start();
+    }
+
+    static void SignalHandler(int iSignal)
+    {
+        signal(iSignal, Service::SignalHandler);
+
+        Service::GetInstance().ReadConfiguration();
+
+#if defined(_WIN32) || defined(_WIN64)
+        OutputDebugString(L"STRG+C-Signal empfangen\r\n");
+#else
+        wcout << L"Signal SIGHUB empfangen\r\n";
+#endif
+    }
+
 private:
+    Service(wchar_t* szSrvName) : CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
+
+private:
+    static shared_ptr<Service> s_pInstance;
+    wstring m_strModulePath;
+    deque<CHttpServ> m_vServers;
     bool m_bStop;
     bool m_bIsStopped;
 };
+
+shared_ptr<Service> Service::s_pInstance = nullptr;
+
+
+#if defined(_WIN32) || defined(_WIN64)
+DWORD WINAPI RemoteThreadProc(LPVOID/* lpParameter*/)
+{
+    return raise(SIGINT);
+}
+#endif
 
 int main(int argc, const char* argv[])
 {
@@ -301,7 +391,12 @@ int main(int argc, const char* argv[])
     wchar_t szDspName[] = { L"HTTP/2 Server" };
     wchar_t szDescrip[] = { L"Http 2.0 Server by Thomas Hauck" };
 
+    signal(SIGINT, Service::SignalHandler);
+
 #else
+
+    signal(SIGHUB, Service::SignalHandler);
+
     auto _kbhit = []() -> int
     {
         struct termios oldt, newt;
@@ -366,10 +461,10 @@ int main(int argc, const char* argv[])
                     {
                         wcout << L"Http2Serv gestartet" << endl;
 
-                        Service svr(szSvrName);
+                        Service::GetInstance(szSvrName);
 
                         thread th([&]() {
-                            svr.Start();
+                            Service::GetInstance().Start();
                         });
 
                         const wchar_t caZeichen[] = L"\\|/-";
@@ -382,8 +477,117 @@ int main(int argc, const char* argv[])
                         }
 
                         wcout << L"Http2Serv gestoppt" << endl;
-                        svr.Stop();
+                        Service::GetInstance().Stop();
                         th.join();
+                    }
+                    break;
+                case 'K':
+                    {
+                        //raise(SIGINT);
+#if defined(_WIN32) || defined(_WIN64)
+                        wstring strPath(MAX_PATH, 0);
+                        GetModuleFileName(NULL, &strPath[0], MAX_PATH);
+                        strPath.erase(strPath.find_first_of(L'\0'));
+                        strPath.erase(0, strPath.find_last_of(L'\\') + 1);
+
+                        if (strPath.empty() == false)
+                        {
+                            DWORD dwInitSize = 1024;
+                            DWORD dwIdReturned = 0;
+                            unique_ptr<DWORD[]> pBuffer = make_unique<DWORD[]>(dwInitSize);
+                            while (dwInitSize < 16384 && EnumProcesses(pBuffer.get(), sizeof(DWORD) * dwInitSize, &dwIdReturned) != 0)
+                            {
+                                if (dwIdReturned == sizeof(DWORD) * dwInitSize) // Buffer to small
+                                {
+                                    dwInitSize *= 2;
+                                    pBuffer = make_unique<DWORD[]>(dwInitSize);
+                                    continue;
+                                }
+                                dwIdReturned /= sizeof(DWORD);
+
+                                for (DWORD n = 0; n < dwIdReturned; ++n)
+                                {
+                                    HANDLE hProcess = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, pBuffer.get()[n]);
+                                    if (hProcess != NULL)
+                                    {
+                                        wstring strEnumPath(MAX_PATH, 0);
+                                        if (GetModuleBaseName(hProcess, NULL, &strEnumPath[0], MAX_PATH) > 0)
+                                            strEnumPath.erase(strEnumPath.find_first_of(L'\0'));
+                                        else
+                                        {
+                                            strEnumPath.erase(GetProcessImageFileName(hProcess, &strEnumPath[0], MAX_PATH));
+                                            strEnumPath.erase(0, strEnumPath.find_last_of('\\') + 1);
+                                        }
+
+                                        if (strEnumPath.empty() == false && strEnumPath == strPath) // Same Name
+                                        {
+                                            if (GetCurrentProcessId() != pBuffer.get()[n])          // but other process
+                                            {
+                                                CreateRemoteThread(hProcess, nullptr, 0, RemoteThreadProc, nullptr, 0, nullptr);
+                                                CloseHandle(hProcess);
+                                                break;
+                                            }
+                                        }
+                                        CloseHandle(hProcess);
+                                    }
+                                }
+                                break;
+                            }
+                        }
+#else
+                        pid_t nMyId = getpid();
+                        string strMyName(64, 0);
+                        FILE* fp = fopen("/proc/self/comm", "r"); 
+                        if (fp)
+                        {
+                            if (fgets(&strMyName[0], strMyName.size(), fp) != NULL)
+                            {
+                                strMyName.erase(strMyName.find_last_not_of('\0') + 1);
+                                strMyName.erase(strMyName.find_last_not_of('\n') + 1);
+                                //wcout << "Meine PID = " << nMyId << " = " << strMyName.c_str() << endl;
+                            }
+                            fclose(fp);
+                        }
+
+                        DIR* dir = opendir("/proc");
+                        if (dir != nullptr)
+                        {
+                            struct dirent* ent;
+                            char* endptr;
+
+                            while ((ent = readdir(dir)) != NULL)
+                            {
+                                // if endptr is not a null character, the directory is not entirely numeric, so ignore it
+                                long lpid = strtol(ent->d_name, &endptr, 10);
+                                if (*endptr != '\0')
+                                    continue;
+
+                                // if the number is our own pid we ignore it
+                                if ((pid_t)lpid == nMyId)
+                                    continue;
+
+                                // try to open the cmdline file
+                                FILE* fp = fopen(string("/proc/" + to_string(lpid) + "/comm").c_str(), "r");
+                                if (fp != nullptr)
+                                {
+                                    string strName(64, 0);
+                                    if (fgets(&strName[0], strName.size(), fp) != NULL)
+                                    {
+                                        strName.erase(strName.find_last_not_of('\0') + 1);
+                                        strName.erase(strName.find_last_not_of('\n') + 1);
+                                        if (strName == strMyName)
+                                        {
+                                            //wcout << strName.c_str() << L" = " << (pid_t)lpid << endl;
+                                            kill((pid_t)lpid, SIGHUB);
+                                            break;
+                                        }
+                                    }
+                                    fclose(fp);
+                                }
+                            }
+                            closedir(dir);
+                        }
+#endif
                     }
                     break;
                 case 'H':
@@ -398,6 +602,7 @@ int main(int argc, const char* argv[])
                     wcout << L"-c   Systemdienst wird fortgesetzt (Continue)\r\n";
 #endif
                     wcout << L"-f   Start die Anwendung als Konsolenanwendung\r\n";
+                    wcout << L"-k   Konfiguration neu laden\r\n";
                     wcout << L"-h   Zeigt diese Hilfe an\r\n";
                     return iRet;
                 }
@@ -406,7 +611,7 @@ int main(int argc, const char* argv[])
     }
     else
     {
-        Service svr(szSvrName);
+        Service::GetInstance(szSvrName);
 
 #if !defined(_WIN32) && !defined(_WIN64)
         //Set our Logging Mask and open the Log
@@ -462,7 +667,7 @@ int main(int argc, const char* argv[])
         }).detach();
 
 #endif
-        iRet = svr.Run();
+        iRet = Service::GetInstance().Run();
     }
 
     return iRet;

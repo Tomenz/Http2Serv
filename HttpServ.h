@@ -165,14 +165,28 @@ class CHttpServ : public Http2Protocol
 
 public:
 
-    CHttpServ(wstring strRootPath = L".", short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_sPort(sPort), m_cLocal(locale("C"))
+    CHttpServ(wstring strRootPath = L".", string strBindIp = "127.0.0.1", short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_sPort(sPort), m_strBindIp(strBindIp), m_cLocal(locale("C"))
     {
         HOSTPARAM hp;
         hp.m_strRootPath = strRootPath;
-        //hp.m_strLogFile = L"access.log";
-        //hp.m_strErrLog = L"error.log";
         hp.m_bSSL = bSSL;
-        m_vHostParam.emplace(L"", hp);
+        m_vHostParam.emplace(string(), hp);
+    }
+    CHttpServ(const CHttpServ&) = delete;
+    CHttpServ(CHttpServ&& other) { *this = move(other); }
+    CHttpServ& operator=(const CHttpServ&) = delete;
+    CHttpServ& operator=(CHttpServ&& other)
+    {
+        swap(m_pSocket, other.m_pSocket);
+        other.m_pSocket = nullptr;
+        swap(m_vConnections, other.m_vConnections);
+        swap(m_strBindIp, other.m_strBindIp);
+        swap(m_sPort, other.m_sPort);
+        swap(m_vHostParam, other.m_vHostParam);
+        swap(m_cLocal, other.m_cLocal);
+        swap(m_umActionThreads, other.m_umActionThreads);
+
+        return *this;
     }
 
     virtual ~CHttpServ()
@@ -185,16 +199,16 @@ public:
 
     bool Start()
     {
-        if (m_vHostParam[L""].m_bSSL == true)
+        if (m_vHostParam[""].m_bSSL == true)
         {
             SslTcpServer* pSocket = new SslTcpServer();
-            pSocket->AddCertificat(m_vHostParam[L""].m_strCAcertificate.c_str(), m_vHostParam[L""].m_strHostCertificate.c_str(), m_vHostParam[L""].m_strHostKey.c_str());
-            pSocket->SetDHParameter(m_vHostParam[L""].m_strDhParam.c_str());
+            pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str());
+            pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str());
             pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1));
 
             for (auto& Item : m_vHostParam)
             {
-                if (Item.first != L"" && Item.second.m_bSSL == true)
+                if (Item.first != "" && Item.second.m_bSSL == true)
                 {
                     pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str());
                     pSocket->SetDHParameter(Item.second.m_strDhParam.c_str());
@@ -237,18 +251,32 @@ public:
         return m_vConnections.size() == 0 ? true : false;
     }
 
-    HOSTPARAM& GetParameterBlockRef(const wchar_t* szHostName = nullptr)
+    HOSTPARAM& GetParameterBlockRef(const string& szHostName)
     {
-        if (szHostName != nullptr && m_vHostParam.find(szHostName) == end(m_vHostParam))
-            m_vHostParam[szHostName] = m_vHostParam[L""];
+        if (szHostName != string() && m_vHostParam.find(szHostName) == end(m_vHostParam))
+            m_vHostParam[szHostName] = m_vHostParam[string()];
 
-        return m_vHostParam[szHostName == nullptr ? L"" : szHostName];
+        return m_vHostParam[szHostName];
     }
 
-    CHttpServ& SetBindAdresse(const char* szBindIp) noexcept
+    void ClearAllParameterBlocks()
     {
-        m_strBindIp = szBindIp;
-        return *this;
+
+        HOSTPARAM hp;
+        hp.m_strRootPath = m_vHostParam[string()].m_strRootPath;
+        hp.m_bSSL = false;
+        m_vHostParam.clear();
+        m_vHostParam.emplace(string(), hp);
+    }
+
+    const string& GetBindAdresse() noexcept
+    {
+        return m_strBindIp;
+    }
+
+    short GetPort() noexcept
+    {
+        return m_sPort;
     }
 
 private:
@@ -446,12 +474,20 @@ auto dwStart = chrono::high_resolution_clock::now();
                             pTcpSocket->Write(caBuffer, nHeaderLen);
                             pConDetails->pTimer.get()->Reset();
 
-                            CLogFile::GetInstance(m_vHostParam[L""].m_strLogFile) << pTcpSocket->GetClientAddr() << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                            string szHost;
+                            auto host = pConDetails->HeaderList.find("host");
+                            if (host != end(pConDetails->HeaderList))
+                            {
+                                if (m_vHostParam.find(host->second) != end(m_vHostParam))
+                                    szHost = host->second;
+                            }
+
+                            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << pTcpSocket->GetClientAddr() << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                                 << pConDetails->HeaderList.find(":method")->second << " " << pConDetails->HeaderList.find(":path")->second << " HTTP/1.1\" 417 - \""
                                 << (pConDetails->HeaderList.find("referer") != end(pConDetails->HeaderList) ? pConDetails->HeaderList.find("referer")->second : "-") << "\" \""
                                 << (pConDetails->HeaderList.find("user-agent") != end(pConDetails->HeaderList) ? pConDetails->HeaderList.find("user-agent")->second : "-") << "\""
                                 << CLogFile::LOGTYPES::END;
-                            CLogFile::GetInstance(m_vHostParam[L""].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] Expectation Failed");
+                            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] Expectation Failed");
 
                             pTcpSocket->Close();
                             return;
@@ -560,8 +596,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
     void OnSocketError(BaseSocket* const pBaseSocket)
     {
         MyTrace("Error: Network error ", pBaseSocket->GetErrorNo());
-        TcpSocket* pTcpSocket = dynamic_cast<TcpSocket*>(pBaseSocket);
-        CLogFile::GetInstance(m_vHostParam[L""].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", (pTcpSocket != nullptr ? pTcpSocket->GetClientAddr() : "0.0.0.0"), "] network error no.: ",  pBaseSocket->GetErrorNo());
+
+        string szHost;
 
         m_mtxConnections.lock();
         auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
@@ -569,8 +605,24 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             item->second.pTimer->Stop();
             *item->second.atStop.get() = true;
+
+            auto host = item->second.HeaderList.find("host");
+            if (host == end(item->second.HeaderList))
+                host = item->second.HeaderList.find(":authority");
+            if (host != end(item->second.HeaderList))
+            {
+                if (m_vHostParam.find(host->second) != end(m_vHostParam))
+                    szHost = host->second;
+            }
         }
         m_mtxConnections.unlock();
+
+        if (m_vHostParam[szHost].m_strErrLog.empty() == false)
+        {
+            TcpSocket* pTcpSocket = dynamic_cast<TcpSocket*>(pBaseSocket);
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", (pTcpSocket != nullptr ? pTcpSocket->GetClientAddr() : "0.0.0.0"), "] network error no.: ", pBaseSocket->GetErrorNo());
+        }
+
         pBaseSocket->Close();
     }
 
@@ -937,16 +989,14 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         HeadList& lstHeaderFields = GETHEADERLIST(hw2.StreamList.find(nStreamId));
         pmtxStream->unlock();
 
-        const wchar_t* szHost = L"";
-        wstring strHost;
+        string szHost;
         auto host = lstHeaderFields.find("host");
         if (host == end(lstHeaderFields))
             host = lstHeaderFields.find(":authority");
         if (host != end(lstHeaderFields))
         {
-            strHost = wstring(begin(host->second), end(host->second)).c_str();
-            if (m_vHostParam.find(strHost.c_str()) != end(m_vHostParam))
-                szHost = strHost.c_str();
+            if (m_vHostParam.find(host->second) != end(m_vHostParam))
+                szHost = host->second;
         }
 
         auto itVersion = lstHeaderFields.find(":version");
@@ -1059,7 +1109,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             if (regex_match(strItemPath.cbegin(), strItemPath.cend(), match, rx) == true)
             {
                 wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
-                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), szHost);
+                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring(begin(szHost), end(szHost)));
 
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HeadList({make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation))}), 0);
                 if (nStreamId != 0)
@@ -2048,7 +2098,7 @@ private:
 
     string                 m_strBindIp;
     short                  m_sPort;
-    map<wstring, HOSTPARAM> m_vHostParam;
+    map<string, HOSTPARAM> m_vHostParam;
     locale                 m_cLocal;
     unordered_multimap<thread::id, atomic<bool>*> m_umActionThreads;
     mutex                  m_ActThrMutex;
