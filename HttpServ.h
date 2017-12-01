@@ -165,7 +165,7 @@ class CHttpServ : public Http2Protocol
 
 public:
 
-    CHttpServ(wstring strRootPath = L".", string strBindIp = "127.0.0.1", short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_sPort(sPort), m_strBindIp(strBindIp), m_cLocal(locale("C"))
+    CHttpServ(wstring strRootPath = L".", string strBindIp = "127.0.0.1", short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort), m_cLocal(locale("C"))
     {
         HOSTPARAM hp;
         hp.m_strRootPath = strRootPath;

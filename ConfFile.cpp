@@ -11,6 +11,7 @@
 
 #include <fstream>
 #include <codecvt>
+#include <algorithm>
 
 #include "ConfFile.h"
 
