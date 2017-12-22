@@ -1413,7 +1413,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 ss.imbue(m_cLocal);
 
                 for (const auto& strEnvVar : vStrEnvVariable)
-                    ss << ENV << strEnvVar << (strEnvVar.find(L"=1") == string::npos ? L"=" : L"") << ENVJOIN;
+                    ss << ENV << strEnvVar << (strEnvVar.find(L"=") == string::npos ? L"=1" : L"") << ENVJOIN;
 
                 const static array<pair<const char*, const wchar_t*>, 4> caHeaders = { { make_pair(":authority", L"HTTP_HOST") , make_pair(":scheme", L"REQUEST_SCHEME") , make_pair("content-type", L"CONTENT_TYPE"), make_pair("content-length", L"CONTENT_LENGTH") } };
                 for (auto& itHeader : lstHeaderFields)
