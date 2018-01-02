@@ -422,11 +422,11 @@ auto dwStart = chrono::high_resolution_clock::now();
                             const string& strLine = line->str();
                             const static regex SpaceSeperator(" ");
                             sregex_token_iterator token(begin(strLine), end(strLine), SpaceSeperator, -1);
-                            if (token != sregex_token_iterator())
+                            if (token != sregex_token_iterator() && token->str().empty() == false)
                                 pConDetails->HeaderList.emplace_back(make_pair(":method", token++->str()));
-                            if (token != sregex_token_iterator())
+                            if (token != sregex_token_iterator() && token->str().empty() == false)
                                 pConDetails->HeaderList.emplace_back(make_pair(":path", token++->str()));
-                            if (token != sregex_token_iterator())
+                            if (token != sregex_token_iterator() && token->str().empty() == false)
                             {
                                 auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(":version", token++->str()));
                                 if (parResult != end(pConDetails->HeaderList))
@@ -435,6 +435,7 @@ auto dwStart = chrono::high_resolution_clock::now();
 
                             if (pConDetails->HeaderList.size() != 3)    // The first line should have 3 part. method, path and HTTP/1.x version
                             {
+                                pConDetails->HeaderList.emplace_back(make_pair(":1stline", strLine));
                                 SendErrorRespons(pTcpSocket, pConDetails->pTimer, 400, HTTPVERSION11, pConDetails->HeaderList);
                                 pTcpSocket->Close();
                                 m_mtxConnections.unlock();
@@ -866,6 +867,14 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 << (HeaderList.find("user-agent") != end(HeaderList) ? HeaderList.find("user-agent")->second : "-") << "\""
                 << CLogFile::LOGTYPES::END;
         }
+        else if (HeaderList.find(":1stline") != end(HeaderList))
+        {
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << pTcpSocket->GetClientAddr() << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                << HeaderList.find(":1stline")->second << "\" " << to_string(iRespCode) << " - \""
+                << (HeaderList.find("referer") != end(HeaderList) ? HeaderList.find("referer")->second : "-") << "\" \""
+                << (HeaderList.find("user-agent") != end(HeaderList) ? HeaderList.find("user-agent")->second : "-") << "\""
+                << CLogFile::LOGTYPES::END;
+        }
 
         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
     }
@@ -1068,7 +1077,15 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 chr = 16 * Nipple1 + Nipple2;
                 n += 2;
 
-                if (chr < 0x7f)
+                if (chr < 0x20) // unprintable character
+                {
+                    SendErrorRespons(soMetaDa, nStreamId, BuildRespHeader, 400, iHeaderFlag, strHttpVersion, lstHeaderFields);
+                    if (nStreamId == 0)
+                        soMetaDa.fSocketClose();
+                    fuExitDoAction();
+                    return;
+                }
+                else if (chr < 0x7f)
                     strItemPath += static_cast<wchar_t>(chr);
                 else if (chr >= 0x80 && chr <= 0xBF)
                 {
@@ -1337,7 +1354,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
 
         // supplement default item
-        struct _stat64 stFileInfo;
+        struct _stat64 stFileInfo = { 0 };
         int iRet = ::_wstat64(FN_CA(strItemPath), &stFileInfo);
         if (iRet == 0 && (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
         {
