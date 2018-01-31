@@ -1383,7 +1383,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 if (_waccess(FN_CA((strItemPath + strDefItem)), 0) == 0)
                 {
                     strItemPath += strDefItem;
-                    itPath->second += string(strDefItem.begin(), strDefItem.end());
+//                    itPath->second += string(strDefItem.begin(), strDefItem.end());
                     break;
                 }
             }
@@ -1440,10 +1440,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) { return prItem.first == itHeader.first ? true : false; });
                         if (itArray != end(caHeaders))
                             ss << ENV << itArray->second << "=" << QUOTES << FIXENVSTR(itHeader.second).c_str() << QUOTES << ENVJOIN;
-                        else
+                        else if (itHeader.first[0] != ':')
                         {
                             wstring strHeader(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itHeader.first));
-                            strHeader.erase(0, strHeader.find_first_not_of(L':'));
+                            //strHeader.erase(0, strHeader.find_first_not_of(L':'));
                             transform(begin(strHeader), end(strHeader), begin(strHeader), ::toupper);
                             strHeader = regex_replace(strHeader, wregex(L"-"), wstring(L"_"));
                             ss << ENV << L"HTTP_" << strHeader << "=" << QUOTES << FIXENVSTR(itHeader.second).c_str() << QUOTES << ENVJOIN;
@@ -1454,7 +1454,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 ss << ENV << "SERVER_SOFTWARE=Http2Serv/1.0" << ENVJOIN << ENV << L"REDIRECT_STATUS=200" << ENVJOIN << ENV << L"REMOTE_ADDR=" << soMetaDa.strIpClient.c_str() << ENVJOIN << ENV << L"SERVER_PORT=" << soMetaDa.sPortInterFace;
                 ss << ENVJOIN << ENV << L"SERVER_ADDR=" << soMetaDa.strIpInterface.c_str() << ENVJOIN << ENV << L"REMOTE_PORT=" << soMetaDa.sPortClient;
                 ss << ENVJOIN << ENV << L"SERVER_PROTOCOL=" << (nStreamId != 0 ? L"HTTP/2." : L"HTTP/1.") << strHttpVersion.c_str();
-                ss << ENVJOIN << ENV << L"DOCUMENT_ROOT=" << QUOTES << m_vHostParam[szHost].m_strRootPath << QUOTES << ENVJOIN << ENV << L"GATEWAY_INTERFACE=CGI/1.1" << ENVJOIN << ENV << L"SCRIPT_NAME=" << QUOTES << itPath->second.substr(0, itPath->second.find("?")).substr(0, itPath->second.rfind(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strPathInfo))).c_str() << QUOTES;
+                ss << ENVJOIN << ENV << L"DOCUMENT_ROOT=" << QUOTES << m_vHostParam[szHost].m_strRootPath << QUOTES << ENVJOIN << ENV << L"GATEWAY_INTERFACE=CGI/1.1" << ENVJOIN << ENV << L"SCRIPT_NAME=" << QUOTES << strItemPath.substr(m_vHostParam[szHost].m_strRootPath.size()).c_str() << QUOTES;
                 ss << ENVJOIN << ENV << L"REQUEST_METHOD=" << itMethode->second.c_str() << ENVJOIN << ENV << L"REQUEST_URI=" << QUOTES << FIXENVSTR(itPath->second).c_str() << QUOTES;
                 if (strPathInfo.empty() == false)
                     ss << ENVJOIN << ENV << L"PATH_INFO=" << QUOTES << strPathInfo.c_str() << QUOTES << ENVJOIN << ENV << L"PATH_TRANSLATED=" << QUOTES << (m_vHostParam[szHost].m_strRootPath + strPathInfo).c_str() << QUOTES;
