@@ -34,6 +34,7 @@ class CHttpProxy
         string strBuffer;
         TcpSocket* pClientSocket;
         string strMethode;
+        bool bConncted;
 //        bool bIsH2Con;
 //        uint64_t nContentsSoll;
 //        uint64_t nContentRecv;
@@ -126,7 +127,7 @@ private:
             m_mtxConnections.lock();
             for (auto& pSocket : vCache)
             {
-                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpProxy::OnTimeout, this, _1)), string(), nullptr }));
+                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpProxy::OnTimeout, this, _1)), string(), nullptr, string(), false }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();
@@ -219,7 +220,14 @@ private:
                             pConDetails->pClientSocket->BindErrorFunction(bind(&CHttpProxy::SocketErrorDest, this, _1));
                             pConDetails->pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDest, this, _1));
 
-                            pConDetails->pClientSocket->Connect(strDestination.c_str(), sPort);
+                            if (pConDetails->pClientSocket->Connect(strDestination.c_str(), sPort) == false)
+                            {
+                                pConDetails->pClientSocket->SelfDestroy();
+                                pConDetails->pClientSocket = nullptr;
+
+                                const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
+                                pTcpSocket->Write(strRespons.c_str(), strRespons.size());
+                            }
                         }
                     }
                 }
@@ -288,11 +296,12 @@ private:
     void Connected(TcpSocket* const pTcpSocket)
     {
         m_mtxConnections.lock();
-        for (const auto& item : m_vConnections)
+        for (auto& item : m_vConnections)
         {
             if (item.second.pClientSocket == pTcpSocket)
             {
                 item.second.pTimer->Reset();
+                item.second.bConncted = true;
                 item.first->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedClient, this, _1));
 
                 if (item.second.strMethode == "CONNECT")
@@ -343,7 +352,17 @@ private:
 
         if (nAvalible == 0)
         {
-            pTcpSocket->Close();
+            // we always close the socket from the client, never the socket to the destination
+            m_mtxConnections.lock();
+            for (const auto& item : m_vConnections)
+            {
+                if (item.second.pClientSocket == pTcpSocket)
+                {
+                    item.second.pTimer->Stop();
+                    item.first->Close();
+                }
+            }
+            m_mtxConnections.unlock();
             return;
         }
 
@@ -369,36 +388,41 @@ private:
 
     void SocketErrorDest(BaseSocket* const pBaseSocket)
     {
-        //pBaseSocket->Close();
         m_mtxConnections.lock();
-        for (const auto& item : m_vConnections)
+        for (auto& item : m_vConnections)
         {
             if (item.second.pClientSocket == pBaseSocket)
             {
                 item.second.pTimer->Stop();
+                if (item.second.bConncted == false)
+                {
+                    const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
+                    item.first->Write(strRespons.c_str(), strRespons.size());
+                    item.second.bConncted = true;
+                }
                 item.first->Close();
-                m_mtxConnections.unlock();
-               return;
             }
         }
-        pBaseSocket->Close();
         m_mtxConnections.unlock();
     }
 
     void SocketCloseingDest(BaseSocket* const pBaseSocket)
     {
         m_mtxConnections.lock();
-        for (const auto& item : m_vConnections)
+        for (auto& item : m_vConnections)
         {
             if (item.second.pClientSocket == pBaseSocket)
             {
                 item.second.pTimer->Stop();
+                if (item.second.bConncted == false)
+                {
+                    const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
+                    item.first->Write(strRespons.c_str(), strRespons.size());
+                    item.second.bConncted = true;
+                }
                 item.first->Close();
-                m_mtxConnections.unlock();
-                return;
             }
         }
-        pBaseSocket->Close();
         m_mtxConnections.unlock();
     }
 
