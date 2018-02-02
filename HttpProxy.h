@@ -231,6 +231,8 @@ private:
                         }
                     }
                 }
+                else
+                    OutputDebugString(L"Zeitüberschneidung\r\n");
             }
 
             m_mtxConnections.unlock();
@@ -254,7 +256,7 @@ private:
 
     void OnSocketCloseing(BaseSocket* const pBaseSocket)
     {
-        //OutputDebugString(L"CHttpServ::OnSocketCloseing\r\n");
+        //OutputDebugString(wstring(L"CHttpProxy::OnSocketCloseing - " + to_wstring(reinterpret_cast<size_t>(pBaseSocket)) +  L"\r\n").c_str());
         m_mtxConnections.lock();
         auto item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
         if (item != end(m_vConnections))
@@ -335,14 +337,13 @@ private:
 
         if (nRead > 0)
         {
-            m_mtxConnections.lock();
+            lock_guard<mutex> lock(m_mtxConnections);
             CONNECTIONLIST::iterator item = m_vConnections.find(pTcpSocket);
             if (item != end(m_vConnections))
             {
                 item->second.pTimer->Reset();
                 item->second.pClientSocket->Write(spBuffer.get(), nRead);
             }
-            m_mtxConnections.unlock();
         }
     }
 
@@ -353,16 +354,16 @@ private:
         if (nAvalible == 0)
         {
             // we always close the socket from the client, never the socket to the destination
-            m_mtxConnections.lock();
+            lock_guard<mutex> lock(m_mtxConnections);
             for (const auto& item : m_vConnections)
             {
                 if (item.second.pClientSocket == pTcpSocket)
                 {
                     item.second.pTimer->Stop();
                     item.first->Close();
+                    break;
                 }
             }
-            m_mtxConnections.unlock();
             return;
         }
 
@@ -372,7 +373,7 @@ private:
 
         if (nRead > 0)
         {
-            m_mtxConnections.lock();
+            lock_guard<mutex> lock(m_mtxConnections);
             for (const auto& item : m_vConnections)
             {
                 if (item.second.pClientSocket == pTcpSocket)
@@ -382,13 +383,12 @@ private:
                     break;
                 }
             }
-            m_mtxConnections.unlock();
         }
     }
 
     void SocketErrorDest(BaseSocket* const pBaseSocket)
     {
-        m_mtxConnections.lock();
+        lock_guard<mutex> lock(m_mtxConnections);
         for (auto& item : m_vConnections)
         {
             if (item.second.pClientSocket == pBaseSocket)
@@ -401,14 +401,14 @@ private:
                     item.second.bConncted = true;
                 }
                 item.first->Close();
+                break;
             }
         }
-        m_mtxConnections.unlock();
     }
 
     void SocketCloseingDest(BaseSocket* const pBaseSocket)
     {
-        m_mtxConnections.lock();
+        lock_guard<mutex> lock(m_mtxConnections);
         for (auto& item : m_vConnections)
         {
             if (item.second.pClientSocket == pBaseSocket)
@@ -421,9 +421,9 @@ private:
                     item.second.bConncted = true;
                 }
                 item.first->Close();
+                break;
             }
         }
-        m_mtxConnections.unlock();
     }
 
 private:
