@@ -5,6 +5,7 @@
 #include <queue>
 #include <algorithm>
 #include <regex>
+#include <fstream>
 
 #include "socketlib/StdSocket.h"
 #include "Timer.h"
@@ -34,7 +35,10 @@ class CHttpProxy
         string strBuffer;
         TcpSocket* pClientSocket;
         string strMethode;
+        string strDestination;
         bool bConncted;
+        bool bAnswerd;
+        ofstream* pDebOut;
 //        bool bIsH2Con;
 //        uint64_t nContentsSoll;
 //        uint64_t nContentRecv;
@@ -48,6 +52,7 @@ class CHttpProxy
     } CONNECTIONDETAILS;
 
     typedef unordered_map<TcpSocket*, CONNECTIONDETAILS> CONNECTIONLIST;
+    typedef unordered_map<TcpSocket*, TcpSocket*> REFERENCLIST;
 
 public:
     CHttpProxy(string strBindIp = "127.0.0.1", short sPort = 8080) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort)
@@ -127,7 +132,7 @@ private:
             m_mtxConnections.lock();
             for (auto& pSocket : vCache)
             {
-                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpProxy::OnTimeout, this, _1)), string(), nullptr, string(), false }));
+                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpProxy::OnTimeout, this, _1)), string(), nullptr, string(), string(), false, false, nullptr }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();
@@ -167,7 +172,7 @@ private:
                         sregex_token_iterator line(begin(pConDetails->strBuffer), begin(pConDetails->strBuffer) + nPosEndOfHeader, crlfSeperator, -1);
                         if (line != sregex_token_iterator())
                         {
-                            string strDestination, strVersion;
+                            string strVersion;
 
                             const string& strLine = line->str();
                             const static regex SpaceSeperator(" ");
@@ -175,54 +180,56 @@ private:
                             if (token != sregex_token_iterator() && token->str().empty() == false)
                                 pConDetails->strMethode = token++->str();
                             if (token != sregex_token_iterator() && token->str().empty() == false)
-                                strDestination = token++->str();
+                                pConDetails->strDestination = token++->str();
                             if (token != sregex_token_iterator() && token->str().empty() == false)
                                 strVersion = token++->str();
 
                             short sPort = 80;
 
-                            if (pConDetails->strMethode == "CONNECT" && strDestination.empty() == false)
+                            if (pConDetails->strMethode == "CONNECT" && pConDetails->strDestination.empty() == false)
                             {
                                 sPort = 443;
-                                size_t nPos = strDestination.find(':');
+                                size_t nPos = pConDetails->strDestination.find(':');
                                 if (nPos != string::npos)
                                 {
-                                    sPort = stoi(strDestination.substr(nPos + 1));
-                                    strDestination.erase(nPos);
+                                    sPort = stoi(pConDetails->strDestination.substr(nPos + 1));
+                                    pConDetails->strDestination.erase(nPos);
                                 }
                             }
                             else
                             {
-                                size_t nPos = strDestination.find("//");
+                                size_t nPos = pConDetails->strDestination.find("//");
                                 if (nPos != string::npos)
-                                    strDestination.erase(0, nPos + 2);
+                                    pConDetails->strDestination.erase(0, nPos + 2);
 
-                                nPos = strDestination.find("/");
+                                nPos = pConDetails->strDestination.find("/");
                                 if (nPos != string::npos)
                                 {
-                                    string strNewFirstLine = pConDetails->strMethode + " " + strDestination.substr(nPos) + " " + strVersion;
+                                    string strNewFirstLine = pConDetails->strMethode + " " + pConDetails->strDestination.substr(nPos) + " " + strVersion;
                                     pConDetails->strBuffer.replace(0, strLine.size(), strNewFirstLine);
-                                    strDestination.erase(nPos);
+                                    pConDetails->strDestination.erase(nPos);
                                 }
 
-                                nPos = strDestination.find(':');
+                                nPos = pConDetails->strDestination.find(':');
                                 if (nPos != string::npos)
                                 {
-                                    sPort = stoi(strDestination.substr(nPos + 1));
-                                    strDestination.erase(nPos);
+                                    sPort = stoi(pConDetails->strDestination.substr(nPos + 1));
+                                    pConDetails->strDestination.erase(nPos);
                                 }
                             }
 
                             pConDetails->pClientSocket = new TcpSocket();
+
+                            m_vReferencList.emplace(pConDetails->pClientSocket, pTcpSocket);
 
                             pConDetails->pClientSocket->BindFuncConEstablished(bind(&CHttpProxy::Connected, this, _1));
                             pConDetails->pClientSocket->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedDest, this, _1));
                             pConDetails->pClientSocket->BindErrorFunction(bind(&CHttpProxy::SocketErrorDest, this, _1));
                             pConDetails->pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDest, this, _1));
 
-                            if (pConDetails->pClientSocket->Connect(strDestination.c_str(), sPort) == false)
+                            if (pConDetails->pClientSocket->Connect(pConDetails->strDestination.c_str(), sPort) == false)
                             {
-                                pConDetails->pClientSocket->SelfDestroy();
+                                pConDetails->pClientSocket->Delete();
                                 pConDetails->pClientSocket = nullptr;
 
                                 const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
@@ -271,10 +278,21 @@ private:
             item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
             if (item != end(m_vConnections))
             {
+                if (item->second.pDebOut != nullptr)
+                {
+                    item->second.pDebOut->flush();
+                    item->second.pDebOut->close();
+                    delete item->second.pDebOut;
+                }
+
                 TcpSocket* pSock = item->second.pClientSocket;
                 m_vConnections.erase(item->first);
                 if (pSock != nullptr)
-                    pSock->SelfDestroy();
+                {
+                    m_vReferencList.erase(pSock);
+                    pSock->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDelete, this, _1));
+                    pSock->Close();// pSock->SelfDestroy();
+                }
             }
         }
         m_mtxConnections.unlock();
@@ -314,6 +332,20 @@ private:
                 else
                 {
                     pTcpSocket->Write(item.second.strBuffer.c_str(), item.second.strBuffer.size());
+
+                    if (item.second.pDebOut == nullptr)
+                    {
+//                        item.second.pDebOut = new ofstream;
+                        if (item.second.pDebOut != nullptr)
+                        {
+                            static atomic<uint32_t> uiCounter = 1;
+                            item.second.pDebOut->open(string("Debug_" + to_string(uiCounter++) + ".txt").c_str(), ios::binary);
+                            if (item.second.pDebOut->is_open() == true)
+                                item.second.pDebOut->write(item.second.strBuffer.c_str(), item.second.strBuffer.size());
+                        }
+                    }
+
+                    item.second.strBuffer.clear();
                 }
                 break;
             }
@@ -342,7 +374,100 @@ private:
             if (item != end(m_vConnections))
             {
                 item->second.pTimer->Reset();
+                if (item->second.bAnswerd == true && item->second.strMethode != "CONNECT")
+                {
+                    item->second.strBuffer.append(spBuffer.get(), nRead);
+                    size_t nPosEndOfHeader = item->second.strBuffer.find("\r\n\r\n");
+                    while (nPosEndOfHeader != string::npos)
+                    {
+                        const static regex crlfSeperator("\r\n");
+                        sregex_token_iterator line(begin(item->second.strBuffer), begin(item->second.strBuffer) + nPosEndOfHeader, crlfSeperator, -1);
+                        if (line != sregex_token_iterator())
+                        {
+                            string strDestination, strVersion;
+
+                            const string& strLine = line->str();
+                            const static regex SpaceSeperator(" ");
+                            sregex_token_iterator token(begin(strLine), end(strLine), SpaceSeperator, -1);
+                            if (token != sregex_token_iterator() && token->str().empty() == false)
+                                item->second.strMethode = token++->str();
+                            if (token != sregex_token_iterator() && token->str().empty() == false)
+                                strDestination = token++->str();
+                            if (token != sregex_token_iterator() && token->str().empty() == false)
+                                strVersion = token++->str();
+
+                            short sPort = 80;
+
+                            size_t nPos = strDestination.find("//");
+                            if (nPos != string::npos)
+                                strDestination.erase(0, nPos + 2);
+
+                            nPos = strDestination.find("/");
+                            if (nPos != string::npos)
+                            {
+                                string strNewFirstLine = item->second.strMethode + " " + strDestination.substr(nPos) + " " + strVersion;
+                                item->second.strBuffer.replace(0, strLine.size(), strNewFirstLine);
+                                strDestination.erase(nPos);
+                                nPosEndOfHeader = item->second.strBuffer.find("\r\n\r\n");
+                            }
+                            nPos = strDestination.find(':');
+                            if (nPos != string::npos)
+                            {
+                                sPort = stoi(strDestination.substr(nPos + 1));
+                                strDestination.erase(nPos);
+                            }
+
+                            if (item->second.strDestination != strDestination)
+                            {
+                                item->second.strDestination = strDestination;
+
+                                m_vReferencList.erase(item->second.pClientSocket);
+                                item->second.pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDelete, this, _1));
+                                item->second.pClientSocket->Close();// pSock->SelfDestroy();
+
+                                item->second.pClientSocket = new TcpSocket();
+
+                                m_vReferencList.emplace(item->second.pClientSocket, pTcpSocket);
+
+                                item->second.pClientSocket->BindFuncConEstablished(bind(&CHttpProxy::Connected, this, _1));
+                                item->second.pClientSocket->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedDest, this, _1));
+                                item->second.pClientSocket->BindErrorFunction(bind(&CHttpProxy::SocketErrorDest, this, _1));
+                                item->second.pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDest, this, _1));
+
+                                if (item->second.pClientSocket->Connect(item->second.strDestination.c_str(), sPort) == false)
+                                {
+                                    item->second.pClientSocket->Delete();
+                                    item->second.pClientSocket = nullptr;
+
+                                    const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
+                                    pTcpSocket->Write(strRespons.c_str(), strRespons.size());
+                                }
+                                return;
+                            }
+
+                            item->second.pClientSocket->Write(item->second.strBuffer.c_str(), nPosEndOfHeader + 4);
+                            //item->second.bAnswerd = false;
+
+                            if (item->second.pDebOut != nullptr)
+                            {
+                                item->second.pDebOut->write("\r\n---***---\r\n\r\n", 15);
+                                item->second.pDebOut->write(item->second.strBuffer.c_str(), nPosEndOfHeader + 4);
+                            }
+                            item->second.strBuffer.erase(0, nPosEndOfHeader + 4);
+                            nPosEndOfHeader = item->second.strBuffer.find("\r\n\r\n");
+                        }
+                        else
+                            return;
+
+                    }
+                    //else
+                        return;
+
+                }
                 item->second.pClientSocket->Write(spBuffer.get(), nRead);
+
+                if (item->second.pDebOut != nullptr)
+                    item->second.pDebOut->write(spBuffer.get(), nRead);
             }
         }
     }
@@ -355,6 +480,17 @@ private:
         {
             // we always close the socket from the client, never the socket to the destination
             lock_guard<mutex> lock(m_mtxConnections);
+            REFERENCLIST::iterator item = m_vReferencList.find(pTcpSocket);
+            if (item != end(m_vReferencList))
+            {
+                auto& conn = m_vConnections.find(item->second);
+                if (conn != end(m_vConnections))
+                {
+                    conn->second.pTimer->Stop();
+                    conn->first->Close();
+                }
+            }
+/*
             for (const auto& item : m_vConnections)
             {
                 if (item.second.pClientSocket == pTcpSocket)
@@ -363,7 +499,7 @@ private:
                     item.first->Close();
                     break;
                 }
-            }
+            }*/
             return;
         }
 
@@ -374,6 +510,21 @@ private:
         if (nRead > 0)
         {
             lock_guard<mutex> lock(m_mtxConnections);
+            REFERENCLIST::iterator item = m_vReferencList.find(pTcpSocket);
+            if (item != end(m_vReferencList))
+            {
+                auto& conn = m_vConnections.find(item->second);
+                if (conn != end(m_vConnections))
+                {
+                    conn->second.pTimer->Reset();
+                    conn->second.bAnswerd = true;
+                    conn->first->Write(spBuffer.get(), nRead);
+
+                    if (conn->second.pDebOut != nullptr)
+                        conn->second.pDebOut->write(spBuffer.get(), nRead);
+                }
+            }
+/*
             for (const auto& item : m_vConnections)
             {
                 if (item.second.pClientSocket == pTcpSocket)
@@ -382,13 +533,30 @@ private:
                     item.first->Write(spBuffer.get(), nRead);
                     break;
                 }
-            }
+            }*/
         }
     }
 
     void SocketErrorDest(BaseSocket* const pBaseSocket)
     {
         lock_guard<mutex> lock(m_mtxConnections);
+        REFERENCLIST::iterator item = m_vReferencList.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
+        if (item != end(m_vReferencList))
+        {
+            auto& conn = m_vConnections.find(item->second);
+            if (conn != end(m_vConnections))
+            {
+                conn->second.pTimer->Stop();
+                if (conn->second.bConncted == false)
+                {
+                    static const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
+                    conn->first->Write(strRespons.c_str(), strRespons.size());
+                    conn->second.bConncted = true;
+                }
+                conn->first->Close();
+            }
+        }
+/*
         for (auto& item : m_vConnections)
         {
             if (item.second.pClientSocket == pBaseSocket)
@@ -403,12 +571,29 @@ private:
                 item.first->Close();
                 break;
             }
-        }
+        }*/
     }
 
     void SocketCloseingDest(BaseSocket* const pBaseSocket)
     {
         lock_guard<mutex> lock(m_mtxConnections);
+        REFERENCLIST::iterator item = m_vReferencList.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
+        if (item != end(m_vReferencList))
+        {
+            auto& conn = m_vConnections.find(item->second);
+            if (conn != end(m_vConnections))
+            {
+                conn->second.pTimer->Stop();
+                if (conn->second.bConncted == false)
+                {
+                    static const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
+                    conn->first->Write(strRespons.c_str(), strRespons.size());
+                    conn->second.bConncted = true;
+                }
+                conn->first->Close();
+            }
+        }
+/*
         for (auto& item : m_vConnections)
         {
             if (item.second.pClientSocket == pBaseSocket)
@@ -423,12 +608,18 @@ private:
                 item.first->Close();
                 break;
             }
-        }
+        }*/
+    }
+
+    void SocketCloseingDelete(BaseSocket* const pBaseSocket)
+    {
+        reinterpret_cast<TcpSocket*>(pBaseSocket)->Delete();
     }
 
 private:
     TcpServer*             m_pSocket;
     CONNECTIONLIST         m_vConnections;
+    REFERENCLIST           m_vReferencList;
     mutex                  m_mtxConnections;
 
     string                 m_strBindIp;
