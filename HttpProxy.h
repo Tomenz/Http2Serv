@@ -420,6 +420,7 @@ private:
                             if (item->second.strDestination != strDestination)
                             {
                                 item->second.strDestination = strDestination;
+                                item->second.bConncted = false;
 
                                 m_vReferencList.erase(item->second.pClientSocket);
                                 item->second.pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDelete, this, _1));
