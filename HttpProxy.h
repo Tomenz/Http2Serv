@@ -39,16 +39,6 @@ class CHttpProxy
         bool bConncted;
         bool bAnswerd;
         ofstream* pDebOut;
-//        bool bIsH2Con;
-//        uint64_t nContentsSoll;
-//        uint64_t nContentRecv;
-//        shared_ptr<TempFile> TmpFile;
-//        HeadList HeaderList;
-//        deque<HEADERENTRY> lstDynTable;
-//        shared_ptr<mutex> mutStreams;
-//        STREAMLIST H2Streams;
-//        STREAMSETTINGS StreamParam;
-//        shared_ptr<atomic_bool> atStop;
     } CONNECTIONDETAILS;
 
     typedef unordered_map<TcpSocket*, CONNECTIONDETAILS> CONNECTIONLIST;
@@ -491,16 +481,6 @@ private:
                     conn->first->Close();
                 }
             }
-/*
-            for (const auto& item : m_vConnections)
-            {
-                if (item.second.pClientSocket == pTcpSocket)
-                {
-                    item.second.pTimer->Stop();
-                    item.first->Close();
-                    break;
-                }
-            }*/
             return;
         }
 
@@ -525,16 +505,6 @@ private:
                         conn->second.pDebOut->write(spBuffer.get(), nRead);
                 }
             }
-/*
-            for (const auto& item : m_vConnections)
-            {
-                if (item.second.pClientSocket == pTcpSocket)
-                {
-                    item.second.pTimer->Reset();
-                    item.first->Write(spBuffer.get(), nRead);
-                    break;
-                }
-            }*/
         }
     }
 
@@ -557,22 +527,6 @@ private:
                 conn->first->Close();
             }
         }
-/*
-        for (auto& item : m_vConnections)
-        {
-            if (item.second.pClientSocket == pBaseSocket)
-            {
-                item.second.pTimer->Stop();
-                if (item.second.bConncted == false)
-                {
-                    const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-                    item.first->Write(strRespons.c_str(), strRespons.size());
-                    item.second.bConncted = true;
-                }
-                item.first->Close();
-                break;
-            }
-        }*/
     }
 
     void SocketCloseingDest(BaseSocket* const pBaseSocket)
@@ -594,22 +548,6 @@ private:
                 conn->first->Close();
             }
         }
-/*
-        for (auto& item : m_vConnections)
-        {
-            if (item.second.pClientSocket == pBaseSocket)
-            {
-                item.second.pTimer->Stop();
-                if (item.second.bConncted == false)
-                {
-                    const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-                    item.first->Write(strRespons.c_str(), strRespons.size());
-                    item.second.bConncted = true;
-                }
-                item.first->Close();
-                break;
-            }
-        }*/
     }
 
     void SocketCloseingDelete(BaseSocket* const pBaseSocket)
