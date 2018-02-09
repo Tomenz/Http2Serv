@@ -100,7 +100,17 @@ public:
 
     bool IsStopped() noexcept
     {
-        return m_vConnections.size() == 0 ? true : false;
+        return m_vConnections.size() == 0 && m_vReferencList.size() == 0 ? true : false;
+    }
+
+    const string& GetBindAdresse() noexcept
+    {
+        return m_strBindIp;
+    }
+
+    short GetPort() noexcept
+    {
+        return m_sPort;
     }
 
 private:
@@ -219,18 +229,24 @@ private:
 
                             if (pConDetails->pClientSocket->Connect(pConDetails->strDestination.c_str(), sPort) == false)
                             {
+                                m_vReferencList.erase(pConDetails->pClientSocket);
                                 pConDetails->pClientSocket->Delete();
                                 pConDetails->pClientSocket = nullptr;
+                                OutputDebugString(L"Connect schlug fehl (1)\r\n");
 
                                 const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
                                 pTcpSocket->Write(strRespons.c_str(), strRespons.size());
                             }
                         }
                     }
+                    else
+                        OutputDebugString(L"Destination Socket besteht bereits\r\n");
                 }
                 else
                     OutputDebugString(L"Zeitüberschneidung\r\n");
             }
+            else
+                OutputDebugString(L"Socket nicht in ConectionList (1)\r\n");
 
             m_mtxConnections.unlock();
         }
@@ -246,6 +262,8 @@ private:
         {
             item->second.pTimer->Stop();
         }
+        else
+            OutputDebugString(L"Socket nicht in ConectionList (2)\r\n");
         m_mtxConnections.unlock();
 
         pBaseSocket->Close();
@@ -279,12 +297,16 @@ private:
                 m_vConnections.erase(item->first);
                 if (pSock != nullptr)
                 {
-                    m_vReferencList.erase(pSock);
+//                    m_vReferencList.erase(pSock);
                     pSock->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDelete, this, _1));
                     pSock->Close();// pSock->SelfDestroy();
                 }
             }
+            else
+                OutputDebugString(L"Socket nicht in ConectionList (3)\r\n");
         }
+        else
+            OutputDebugString(L"Socket nicht in ConectionList (4)\r\n");
         m_mtxConnections.unlock();
     }
 
@@ -305,42 +327,46 @@ private:
 
     void Connected(TcpSocket* const pTcpSocket)
     {
-        m_mtxConnections.lock();
-        for (auto& item : m_vConnections)
+        lock_guard<mutex> lock(m_mtxConnections);
+        REFERENCLIST::iterator item = m_vReferencList.find(pTcpSocket);
+        if (item != end(m_vReferencList))
         {
-            if (item.second.pClientSocket == pTcpSocket)
+            auto& conn = m_vConnections.find(item->second);
+            if (conn != end(m_vConnections))
             {
-                item.second.pTimer->Reset();
-                item.second.bConncted = true;
-                item.first->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedClient, this, _1));
+                conn->second.pTimer->Reset();
+                conn->second.bConncted = true;
+                conn->first->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedClient, this, _1));
 
-                if (item.second.strMethode == "CONNECT")
+                if (conn->second.strMethode == "CONNECT")
                 {
                     const string strConnected = "HTTP/1.1 200 Connection established\r\n\r\n";
-                    item.first->Write(strConnected.c_str(), strConnected.size());
+                    conn->first->Write(strConnected.c_str(), strConnected.size());
                 }
                 else
                 {
-                    pTcpSocket->Write(item.second.strBuffer.c_str(), item.second.strBuffer.size());
-
-                    if (item.second.pDebOut == nullptr)
+                    pTcpSocket->Write(conn->second.strBuffer.c_str(), conn->second.strBuffer.size());
+/*
+                    if (conn->second.pDebOut == nullptr)
                     {
-//                        item.second.pDebOut = new ofstream;
-                        if (item.second.pDebOut != nullptr)
+                        //                        item.second.pDebOut = new ofstream;
+                        if (conn->second.pDebOut != nullptr)
                         {
                             static atomic<uint32_t> uiCounter = 1;
-                            item.second.pDebOut->open(string("Debug_" + to_string(uiCounter++) + ".txt").c_str(), ios::binary);
-                            if (item.second.pDebOut->is_open() == true)
-                                item.second.pDebOut->write(item.second.strBuffer.c_str(), item.second.strBuffer.size());
+                            conn->second.pDebOut->open(string("Debug_" + to_string(uiCounter++) + ".txt").c_str(), ios::binary);
+                            if (conn->second.pDebOut->is_open() == true)
+                                conn->second.pDebOut->write(conn->second.strBuffer.c_str(), conn->second.strBuffer.size());
                         }
                     }
-
-                    item.second.strBuffer.clear();
+*/
+                    conn->second.strBuffer.clear();
                 }
-                break;
             }
+            else
+                OutputDebugString(L"Socket nicht in ConectionList (5)\r\n");
         }
-        m_mtxConnections.unlock();
+        else
+            OutputDebugString(L"Socket nicht in ReferenceList (1)\r\n");
     }
 
     void OnDataRecievedClient(TcpSocket* const pTcpSocket)
@@ -412,7 +438,7 @@ private:
                                 item->second.strDestination = strDestination;
                                 item->second.bConncted = false;
 
-                                m_vReferencList.erase(item->second.pClientSocket);
+//                                m_vReferencList.erase(item->second.pClientSocket);
                                 item->second.pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDelete, this, _1));
                                 item->second.pClientSocket->Close();// pSock->SelfDestroy();
 
@@ -427,16 +453,20 @@ private:
 
                                 if (item->second.pClientSocket->Connect(item->second.strDestination.c_str(), sPort) == false)
                                 {
+                                    m_vReferencList.erase(item->second.pClientSocket);
                                     item->second.pClientSocket->Delete();
                                     item->second.pClientSocket = nullptr;
+                                    OutputDebugString(L"Connect schlug fehl (2)\r\n");
 
                                     const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-                                    pTcpSocket->Write(strRespons.c_str(), strRespons.size());
+                                    if (pTcpSocket->Write(strRespons.c_str(), strRespons.size()) == 0)
+                                        OutputDebugString(L"Socket bereits closed (0)\r\n");
                                 }
                                 return;
                             }
 
-                            item->second.pClientSocket->Write(item->second.strBuffer.c_str(), nPosEndOfHeader + 4);
+                            if (item->second.pClientSocket->Write(item->second.strBuffer.c_str(), nPosEndOfHeader + 4) == 0)
+                                OutputDebugString(L"Socket bereits closed (1)\r\n");
                             //item->second.bAnswerd = false;
 
                             if (item->second.pDebOut != nullptr)
@@ -455,11 +485,15 @@ private:
                         return;
 
                 }
-                item->second.pClientSocket->Write(spBuffer.get(), nRead);
-
+                if (item->second.pClientSocket->Write(spBuffer.get(), nRead) == 0)
+                    OutputDebugString(L"Socket bereits closed (2)\r\n");
+/*
                 if (item->second.pDebOut != nullptr)
                     item->second.pDebOut->write(spBuffer.get(), nRead);
+*/
             }
+            else
+                OutputDebugString(L"Master Socket nicht in Connection List\r\n");
         }
     }
 
@@ -480,7 +514,11 @@ private:
                     conn->second.pTimer->Stop();
                     conn->first->Close();
                 }
+                //else
+                //    OutputDebugString(L"Socket nicht in ConectionList (6)\r\n");
             }
+            else
+                OutputDebugString(L"Socket nicht in ReferenceList (2)\r\n");
             return;
         }
 
@@ -499,12 +537,18 @@ private:
                 {
                     conn->second.pTimer->Reset();
                     conn->second.bAnswerd = true;
-                    conn->first->Write(spBuffer.get(), nRead);
-
+                    if (conn->first->Write(spBuffer.get(), nRead) == 0)
+                        OutputDebugString(L"Socket bereits closed (3)\r\n");
+/*
                     if (conn->second.pDebOut != nullptr)
                         conn->second.pDebOut->write(spBuffer.get(), nRead);
+*/
                 }
+                else
+                    OutputDebugString(L"Socket nicht in ConectionList (7)\r\n");
             }
+            else
+                OutputDebugString(L"Socket nicht in ReferenceList (3)\r\n");
         }
     }
 
@@ -521,12 +565,17 @@ private:
                 if (conn->second.bConncted == false)
                 {
                     static const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-                    conn->first->Write(strRespons.c_str(), strRespons.size());
+                    if (conn->first->Write(strRespons.c_str(), strRespons.size()) == 0)
+                        OutputDebugString(L"Socket bereits closed (4)\r\n");
                     conn->second.bConncted = true;
                 }
                 conn->first->Close();
             }
+            else
+                OutputDebugString(L"Socket nicht in ConectionList (8)\r\n");
         }
+        else
+            OutputDebugString(L"Socket nicht in ReferenceList (4)\r\n");
     }
 
     void SocketCloseingDest(BaseSocket* const pBaseSocket)
@@ -542,16 +591,24 @@ private:
                 if (conn->second.bConncted == false)
                 {
                     static const string strRespons = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-                    conn->first->Write(strRespons.c_str(), strRespons.size());
+                    if (conn->first->Write(strRespons.c_str(), strRespons.size()) == 0)
+                        OutputDebugString(L"Socket bereits closed (5)\r\n");
                     conn->second.bConncted = true;
                 }
                 conn->first->Close();
             }
+            else
+                OutputDebugString(L"Socket nicht in ConectionList (9)\r\n");
         }
+        else
+            OutputDebugString(L"Socket nicht in ReferenceList (5)\r\n");
     }
 
     void SocketCloseingDelete(BaseSocket* const pBaseSocket)
     {
+        m_mtxConnections.lock();
+        m_vReferencList.erase(reinterpret_cast<TcpSocket* const>(pBaseSocket));
+        m_mtxConnections.unlock();
         reinterpret_cast<TcpSocket*>(pBaseSocket)->Delete();
     }
 

@@ -27,6 +27,12 @@
     <ClCompile Include="SvrLib\SvrCtrl.cpp">
       <Filter>SvrLib</Filter>
     </ClCompile>
+    <ClCompile Include="ConfFile.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="Trace.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="SvrLib\BaseSvr.h">
@@ -36,6 +42,15 @@
       <Filter>SvrLib</Filter>
     </ClInclude>
     <ClInclude Include="HttpProxy.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="ConfFile.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="Trace.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="Timer.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>

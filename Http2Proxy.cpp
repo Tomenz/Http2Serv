@@ -15,6 +15,7 @@
 #include <dirent.h>
 #endif
 
+#include "ConfFile.h"
 #include "HttpProxy.h"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -73,7 +74,29 @@ public:
         m_strModulePath = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strTmpPath) + L"/";
 #endif
 
-        m_vServers.emplace_back("127.0.0.1", stoi("8080"));
+        const ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"proxy.cfg");
+        vector<wstring>&& vListen = conf.get(L"Listen");
+        if (vListen.empty() == true)
+            vListen.push_back(L"127.0.0.1"), vListen.push_back(L"::1");
+
+        map<string, vector<wstring>> mIpPortCombi;
+        for (const auto& strListen : vListen)
+        {
+            string strIp = string(begin(strListen), end(strListen));
+            vector<wstring>&& vPort = conf.get(L"Listen", strListen);
+            if (vPort.empty() == true)
+                vPort.push_back(L"8080");
+            for (const auto& strPort : vPort)
+            {   // Default Werte setzen
+                if (mIpPortCombi.find(strIp) == end(mIpPortCombi))
+                    mIpPortCombi.emplace(strIp, vector<wstring>({ strPort }));
+                else
+                    mIpPortCombi.find(strIp)->second.push_back(strPort);
+                if (find_if(begin(m_vServers), end(m_vServers), [strPort, strListen](auto& HttpProxy) { return HttpProxy.GetPort() == stoi(strPort) && HttpProxy.GetBindAdresse() == string(begin(strListen), end(strListen)) ? true : false; }) != end(m_vServers))
+                    continue;
+                m_vServers.emplace_back(strIp, stoi(strPort));
+            }
+        }
 
         // Server starten
         for (auto& HttpProxy : m_vServers)
@@ -353,7 +376,7 @@ int main(int argc, const char* argv[])
                     wcout << L"-c   Systemdienst wird fortgesetzt (Continue)\r\n";
 #endif
                     wcout << L"-f   Start die Anwendung als Konsolenanwendung\r\n";
-                    wcout << L"-k   Konfiguration neu laden\r\n";
+                    //wcout << L"-k   Konfiguration neu laden\r\n";
                     wcout << L"-h   Zeigt diese Hilfe an\r\n";
                     return iRet;
                 }
@@ -367,7 +390,7 @@ int main(int argc, const char* argv[])
 #if !defined(_WIN32) && !defined(_WIN64)
         //Set our Logging Mask and open the Log
         setlogmask(LOG_UPTO(LOG_NOTICE));
-        openlog("http2serv", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
+        openlog("http2proxy", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
 
         syslog(LOG_NOTICE, "Starting Http2Proxy");
         pid_t pid, sid;
