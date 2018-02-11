@@ -219,7 +219,12 @@ public:
                             {
                                 wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
                                 if (token != wsregex_token_iterator())
-                                    HostParam.m_mstrRewriteRule.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                                {
+                                    if (HostParam.m_mstrRewriteRule.find(token->str()) == end(HostParam.m_mstrRewriteRule))
+                                        HostParam.m_mstrRewriteRule.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                                    else
+                                        HostParam.m_mstrRewriteRule[token->str()] = next(token)->str();
+                                }
                             }
                         case 2: // AliasMatch
                         case 9: // ScriptAliasMatch
@@ -234,7 +239,10 @@ public:
                                         token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
                                         token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
                                     }
-                                    HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token[1], strKey.second == 9 ? true : false));
+                                    if (HostParam.m_mstrAliasMatch.find(token[0]) == end(HostParam.m_mstrAliasMatch))
+                                        HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token[1], strKey.second == 9 ? true : false));
+                                    else
+                                        HostParam.m_mstrAliasMatch[token[0]] = make_tuple(token[1], strKey.second == 9 ? true : false);
                                 }
                             }
                         case 3: // ForceType
@@ -242,22 +250,33 @@ public:
                             {
                                 wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
                                 if (token != wsregex_token_iterator())
-                                    HostParam.m_mstrForceTyp.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                                {
+                                    if (HostParam.m_mstrForceTyp.find(token->str()) == end(HostParam.m_mstrForceTyp))
+                                        HostParam.m_mstrForceTyp.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                                    else
+                                        HostParam.m_mstrForceTyp[token->str()]= next(token)->str();
+                                }
                             }
                             break;
                         case 4: // FileTyps
                             for (const auto& strValue : vValues)
                             {
-                                const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                //const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\\"");
                                 vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
                                 if (token.size() == 2)
                                 {
                                     for (size_t n = 0; n < token.size(); ++n)
                                     {
+                                        token[n] = regex_replace(token[n], wregex(L"\\\\\\\""), L"°");
                                         token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
                                         token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                        token[n] = regex_replace(token[n], wregex(L"°"), L"\"");
                                     }
-                                    HostParam.m_mFileTypeAction.emplace(token[0], token[1]);//strValue.substr(token->str().size() + 1));
+                                    if (HostParam.m_mFileTypeAction.find(token[0]) == end(HostParam.m_mFileTypeAction))
+                                        HostParam.m_mFileTypeAction.emplace(token[0], token[1]);//strValue.substr(token->str().size() + 1));
+                                    else
+                                        HostParam.m_mFileTypeAction[token[0]] = token[1];
                                 }
                             }
                             break;
@@ -312,7 +331,12 @@ public:
                                     }
                                     transform(begin(token[2]), end(token[2]), begin(token[2]), ::toupper);
 
-                                    auto itNew = HostParam.m_mAuthenticate.emplace(token[0], make_tuple(token[1], token[2], vector<wstring>()));
+                                    pair<unordered_map<wstring, tuple<wstring, wstring, vector<wstring>>>::iterator, bool> itNew;
+                                    if (HostParam.m_mAuthenticate.find(token[0]) == end(HostParam.m_mAuthenticate))
+                                        itNew = HostParam.m_mAuthenticate.emplace(token[0], make_tuple(token[1], token[2], vector<wstring>()));
+                                    else
+                                        itNew = make_pair(HostParam.m_mAuthenticate.find(token[0]), true);
+
                                     if (itNew.second == true)
                                     {
                                         for (size_t n = 3; n < token.size(); ++n)

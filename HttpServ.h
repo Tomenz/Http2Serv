@@ -1464,7 +1464,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     ss << ENVJOIN << ENV << L"REMOTE_USER=" << strRemoteUser;
                 if (strQuery.empty() == false)
                     ss << ENVJOIN << ENV << L"QUERY_STRING=" << QUOTES << WFIXENVSTR(strQuery) << QUOTES;
-                ss << ENVJOIN << ENV << L"SCRIPT_FILENAME=" << QUOTES << strItemPath << QUOTES << ENVJOIN << L"\"" << (bExecAsScript == true ? strItemPath : strFileTyp->second) << L"\"";
+                ss << ENVJOIN << ENV << L"SCRIPT_FILENAME=" << QUOTES << strItemPath << QUOTES << ENVJOIN << /*L"\"" <<*/ (bExecAsScript == true ? strItemPath : regex_replace(strFileTyp->second, wregex(L"\\$1"), /*L"\" \"" +*/ strItemPath));// << L"\"";
 
                 if (pTmpFile != 0 && pTmpFile.get()->GetFileName().empty() == false)
                     ss << " < " << pTmpFile.get()->GetFileName().c_str();
