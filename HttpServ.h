@@ -148,6 +148,7 @@ class CHttpServ : public Http2Protocol
         wstring m_strRootPath;
         wstring m_strLogFile;
         wstring m_strErrLog;
+        wstring m_strMsgDir;
         bool    m_bSSL;
         string  m_strCAcertificate;
         string  m_strHostCertificate;
@@ -841,15 +842,36 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         return nRet;
     }
 
+    string LoadErrorHtmlMessage(HeadList& HeaderList, int iRespCode, const wstring& strMsgDir)
+    {
+        const auto& accept = HeaderList.find("accept");
+        if (accept != end(HeaderList))
+        {
+            const static regex s_rxSepComma("\\s*,\\s*");
+            vector<string> token(sregex_token_iterator(begin(accept->second), end(accept->second), s_rxSepComma, -1), sregex_token_iterator());
+            for (size_t n = 0; n < token.size(); ++n)
+            {
+                if (token[n] == "text/html")
+                {
+                    ifstream src(strMsgDir + to_wstring(iRespCode) + L".html", ios::binary);
+                    if (src.is_open() == true)
+                    {
+                        stringstream ssIn;
+                        copy(istreambuf_iterator<char>(src), istreambuf_iterator<char>(), ostreambuf_iterator<char>(ssIn));
+                        src.close();
+                        return ssIn.str();
+                    }
+                    break;
+                }
+            }
+        }
+        return string();
+    }
+
     void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, const HeadList& umHeaderList = HeadList())
     {
         if (HeaderList.find(":version") != end(HeaderList) && HeaderList.find(":version")->second == "1")
             iFlag |= HTTPVERSION11;
-
-        char caBuffer[4096];
-        size_t nHeaderLen = BuildResponsHeader(caBuffer, sizeof(caBuffer), iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, 0);
-        pTcpSocket->Write(caBuffer, nHeaderLen);
-        pTimer.get()->Reset();
 
         string szHost;
         const auto& host = HeaderList.find("host");   // Get the Host Header from the request
@@ -858,6 +880,15 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             if (m_vHostParam.find(host->second) != end(m_vHostParam))   // If we have it in our configuration, we use the host parameter for logging
                 szHost = host->second;
         }
+
+        string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
+
+        char caBuffer[4096];
+        size_t nHeaderLen = BuildResponsHeader(caBuffer, sizeof(caBuffer), iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
+        pTcpSocket->Write(caBuffer, nHeaderLen);
+        if (strHtmlRespons.size() > 0)
+            pTcpSocket->Write(strHtmlRespons.c_str(), strHtmlRespons.size());
+        pTimer.get()->Reset();
 
         if (HeaderList.find(":method") != end(HeaderList) && HeaderList.find(":path") != end(HeaderList))
         {
@@ -881,14 +912,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
     void SendErrorRespons(const MetaSocketData soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string strHttpVersion, HeadList& HeaderList, const HeadList& umHeaderList = HeadList())
     {
-        const uint32_t nHttp2Offset = nStreamId != 0 ? 9 : 0;
-        char caBuffer[4096];
-        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, /*iHeaderFlag | ADDNOCACHE |*/ iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, HeadList(), 0);
-        if (nStreamId != 0)
-            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-        soMetaDa.fResetTimer();
-
         string szHost;
         const auto& host = HeaderList.find("host");   // Get the Host Header from the request
         if (host != end(HeaderList))
@@ -896,6 +919,25 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             if (m_vHostParam.find(host->second) != end(m_vHostParam))   // If we have it in our configuration, we use the host parameter for logging
                 szHost = host->second;
         }
+
+        string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
+
+        const uint32_t nHttp2Offset = nStreamId != 0 ? 9 : 0;
+        char caBuffer[4096];
+        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, /*iHeaderFlag | ADDNOCACHE |*/ iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, HeadList(), strHtmlRespons.size());
+        if (nStreamId != 0)
+            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
+        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        if (strHtmlRespons.size() > 0)
+        {
+            if (nStreamId != 0)
+            {
+                BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+            }
+            soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
+        }
+        soMetaDa.fResetTimer();
 
         if (HeaderList.find(":method") != end(HeaderList) && HeaderList.find(":path") != end(HeaderList))
         {
