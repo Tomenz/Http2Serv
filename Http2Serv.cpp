@@ -18,7 +18,6 @@
 
 #include "ConfFile.h"
 #include "HttpServ.h"
-#include "SpawnProcess.h"
 
 #ifndef _UTFCONVERTER
 #define _UTFCONVERTER
@@ -493,29 +492,6 @@ int main(int argc, const char* argv[])
                 case 'F':
                     {
                         wcout << L"Http2Serv gestartet" << endl;
-
-                        SpawnProcess run;
-                        run.AddEnvironment("SCRIPT_FILENAME=C:/Users/hauck/Documents/My Web Sites/WebSite1/index.php");
-                        if (run.Spawn("\"C:/Users/hauck/Documents/Programme/php/php-cgi.exe\"", "C:/Users/hauck/Documents/My Web Sites/WebSite1") == 0)
-                        {
-                            run.CloseWritePipe();
-                            while (run.StillSpawning() == true)
-                            {
-                                unsigned char caBuf[4096];
-                                int iRead;
-                                if (iRead = run.ReadFromSpawn(caBuf, 4095), iRead > 0)
-                                {
-                                    caBuf[iRead] = 0;
-                                    OutputDebugStringA(reinterpret_cast<char*>(caBuf));
-                                    wcout << to_wstring(iRead) << L" Bytes gelesen" << endl;
-                                }
-                                else
-                                {
-                                    wcout << L"0 Bytes gelesen" << endl;
-                                    this_thread::sleep_for(chrono::milliseconds(1));
-                                }
-                            }
-                        }
 
                         Service::GetInstance(szSvrName);
 
