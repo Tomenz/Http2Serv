@@ -38,6 +38,7 @@ using namespace tr1;
 #endif
 
 #define FN_CA(x) x.c_str()
+#define FN_STR(x) x
 #define FN_WSTR(x) x
 const wchar_t* ENV = L"SET ";
 const wchar_t* ENVJOIN = L"&";
@@ -91,6 +92,7 @@ const wchar_t* PIPETYPE = L"rb";
 std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
 #endif
 #define FN_CA(x) Utf8Converter.to_bytes(x).c_str()
+#define FN_STR(x) Utf8Converter.to_bytes(x)
 #define FN_WSTR(x) Utf8Converter.from_bytes(x)
 const wchar_t* ENV = L"";
 const wchar_t* ENVJOIN = L" ";
@@ -853,7 +855,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             {
                 if (token[n] == "text/html")
                 {
-                    ifstream src(strMsgDir + to_wstring(iRespCode) + L".html", ios::binary);
+                    ifstream src(FN_STR(strMsgDir + to_wstring(iRespCode) + L".html"), ios::in | ios::binary);
                     if (src.is_open() == true)
                     {
                         stringstream ssIn;
