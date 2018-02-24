@@ -169,6 +169,7 @@
     <ClCompile Include="ConfFile.cpp" />
     <ClCompile Include="Http2Serv.cpp" />
     <ClCompile Include="LogFile.cpp" />
+    <ClCompile Include="SpawnProcess.cpp" />
     <ClCompile Include="TempFile.cpp" />
     <ClCompile Include="SvrLib\BaseSvr.cpp" />
     <ClCompile Include="SvrLib\SvrCtrl.cpp" />
@@ -181,6 +182,7 @@
     <ClInclude Include="HPack.h" />
     <ClInclude Include="HttpServ.h" />
     <ClInclude Include="LogFile.h" />
+    <ClInclude Include="SpawnProcess.h" />
     <ClInclude Include="SvrLib\BaseSvr.h" />
     <ClInclude Include="SvrLib\SvrCtrl.h" />
     <ClInclude Include="TempFile.h" />

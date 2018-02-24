@@ -231,14 +231,17 @@ public:
                         case 9: // ScriptAliasMatch
                             for (const auto& strValue : vValues)
                             {
-                                const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                //const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\\"");
                                 vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
                                 if (token.size() == 2)
                                 {
                                     for (size_t n = 0; n < token.size(); ++n)
                                     {
+                                        token[n] = regex_replace(token[n], wregex(L"\\\\\\\""), L"`");
                                         token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
                                         token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                        token[n] = regex_replace(token[n], wregex(L"`"), L"\"");
                                     }
                                     if (HostParam.m_mstrAliasMatch.find(token[0]) == end(HostParam.m_mstrAliasMatch))
                                         HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token[1], strKey.second == 9 ? true : false));
@@ -503,7 +506,9 @@ int main(int argc, const char* argv[])
                         int iIndex = 0;
                         while (_kbhit() == 0)
                         {
+                            SpawnProcess::s_mtxIOstreams.lock();
                             wcout << L'\r' << caZeichen[iIndex++] /*<< L"  Sockets:" << setw(3) << BaseSocket::s_atRefCount << L"  SSL-Pumpen:" << setw(3) << SslTcpSocket::s_atAnzahlPumps << L"  HTTP-Connections:" << setw(3) << nHttpCon*/ << flush;
+                            SpawnProcess::s_mtxIOstreams.unlock();
                             if (iIndex > 3) iIndex = 0;
                             this_thread::sleep_for(chrono::milliseconds(100));
                         }

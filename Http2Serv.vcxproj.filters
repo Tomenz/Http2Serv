@@ -34,6 +34,9 @@
     <ClInclude Include="SvrLib\SvrCtrl.h">
       <Filter>SvrLib</Filter>
     </ClInclude>
+    <ClInclude Include="SpawnProcess.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Headerdateien">
@@ -67,6 +70,9 @@
     </ClCompile>
     <ClCompile Include="SvrLib\SvrCtrl.cpp">
       <Filter>SvrLib</Filter>
+    </ClCompile>
+    <ClCompile Include="SpawnProcess.cpp">
+      <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
