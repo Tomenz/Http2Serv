@@ -27,6 +27,7 @@
 #include "GZip.h"
 #include <brotli/encode.h>
 #include "CommonLib/md5.h"
+#include "CommonLib/UrlCode.h"
 #include "SpawnProcess.h"
 
 using namespace std;
@@ -1081,6 +1082,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         // Decode URL (%20 -> ' ')
         wstring strItemPath;
+        string strQuery;
         size_t nLen = itPath->second.size();
         wchar_t wch = 0;
         int nAnzParts = 0;
@@ -1132,16 +1134,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     nAnzParts = 2;
                 }
             }
+            else if ('?' == chr)
+            {
+                strQuery = itPath->second.substr(n + 1);
+                break;
+            }
             else
                 strItemPath += static_cast<wchar_t>(itPath->second.at(n));
-        }
-
-        wstring strQuery;
-        string::size_type nPos;
-        if (string::npos != (nPos = strItemPath.find(L'?')))
-        {
-            strQuery = strItemPath.substr(nPos + 1);
-            strItemPath.erase(nPos);
         }
 
         // Check for redirect
@@ -1264,7 +1263,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 if (itAuth == end(lstHeaderFields))
                     return fnSendAuthRespons();
 
-                nPos = itAuth->second.find(' ');
+                string::size_type nPos = itAuth->second.find(' ');
                 if (nPos == string::npos)
                     return fnSendAuthRespons();
                 if (itAuth->second.substr(0, nPos) == "Basic")
@@ -1490,15 +1489,15 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 run.AddEnvironment("REQUEST_URI=" + itPath->second);
                 if (strPathInfo.empty() == false)
                 {
-                    run.AddEnvironment(L"PATH_INFO=" + strPathInfo);
-                    run.AddEnvironment(L"PATH_TRANSLATED=" + m_vHostParam[szHost].m_strRootPath + strPathInfo);
+                    run.AddEnvironment("PATH_INFO=" + url_encode(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strPathInfo)));
+                    run.AddEnvironment("PATH_TRANSLATED=" + url_encode(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(m_vHostParam[szHost].m_strRootPath + strPathInfo)));
                 }
                 if (soMetaDa.bIsSsl == true)
                     run.AddEnvironment("HTTPS=on");
                 if (strRemoteUser.empty() == false)
                     run.AddEnvironment(L"REMOTE_USER=" + strRemoteUser);
                 if (strQuery.empty() == false)
-                    run.AddEnvironment(L"QUERY_STRING=" + strQuery);
+                    run.AddEnvironment("QUERY_STRING=" + strQuery);
                 run.AddEnvironment(L"SCRIPT_FILENAME=" + strItemPath);
 
                 if (run.Spawn((bExecAsScript == true ? strItemPath : regex_replace(strFileTyp->second, wregex(L"\\$1"), /*L"\" \"" +*/ strItemPath)), strItemPath.substr(0, strItemPath.find_last_of(L"\\/"))) == 0)

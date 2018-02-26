@@ -20,10 +20,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="md5.cpp" />
+    <ClCompile Include="UrlCode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Base64.h" />
     <ClInclude Include="md5.h" />
+    <ClInclude Include="UrlCode.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{E76F2C44-3768-49F5-9866-BF3498185A23}</ProjectGuid>

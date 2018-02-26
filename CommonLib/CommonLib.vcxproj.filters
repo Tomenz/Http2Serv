@@ -18,12 +18,18 @@
     <ClCompile Include="md5.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="UrlCode.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="md5.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="Base64.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="UrlCode.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
