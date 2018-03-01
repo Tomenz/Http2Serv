@@ -1608,7 +1608,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             }
 
                             size_t nBytesTransfered = 0;
-                            while (nBytesTransfered < nRead && (*patStop).load() == false)
+                            while (nBytesTransfered < static_cast<size_t>(nRead) && (*patStop).load() == false)
                             {
                                 int32_t nStreamWndSize = INT32_MAX;
                                 if (fnGetStreamWindowSize(nStreamWndSize) == false)
