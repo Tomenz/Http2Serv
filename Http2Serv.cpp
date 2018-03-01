@@ -227,6 +227,7 @@ public:
                                         HostParam.m_mstrRewriteRule[token->str()] = next(token)->str();
                                 }
                             }
+                            break;
                         case 2: // AliasMatch
                         case 9: // ScriptAliasMatch
                             for (const auto& strValue : vValues)
@@ -249,6 +250,7 @@ public:
                                         HostParam.m_mstrAliasMatch[token[0]] = make_tuple(token[1], strKey.second == 9 ? true : false);
                                 }
                             }
+                            break;
                         case 3: // ForceType
                             for (const auto& strValue : vValues)
                             {
