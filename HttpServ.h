@@ -396,7 +396,7 @@ private:
                 {
 auto dwStart = chrono::high_resolution_clock::now();
                     // If we get here we should have a HTTP request in strPuffer
-
+OutputDebugStringA(string(pConDetails->strBuffer + "\r\n").c_str());
                     HeadList::iterator parLastHeader = end(pConDetails->HeaderList);
                     const static regex crlfSeperator("\r\n");
                     sregex_token_iterator line(begin(pConDetails->strBuffer), begin(pConDetails->strBuffer) + nPosEndOfHeader, crlfSeperator, -1);
@@ -1262,7 +1262,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 auto itAuth = lstHeaderFields.find("authorization");
                 if (itAuth == end(lstHeaderFields))
                     return fnSendAuthRespons();
-
+OutputDebugStringA(string(itAuth->first + " -> " + itAuth->second + "\r\n").c_str());
                 string::size_type nPos = itAuth->second.find(' ');
                 if (nPos == string::npos)
                     return fnSendAuthRespons();
