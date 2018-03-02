@@ -2,43 +2,43 @@
 converted to C++ class by Frank Thilo (thilo@unix-ag.org)
 for bzflag (http://www.bzflag.org)
 
- based on:
+based on:
 
-  md5.h and md5.c
-  reference implemantion of RFC 1321
+md5.h and md5.c
+reference implemantion of RFC 1321
 
-   Copyright (C) 1991-2, RSA Data Security, Inc. Created 1991. All
-   rights reserved.
+Copyright (C) 1991-2, RSA Data Security, Inc. Created 1991. All
+rights reserved.
 
-    License to copy and use this software is granted provided that it
-    is identified as the "RSA Data Security, Inc. MD5 Message-Digest
-    Algorithm" in all material mentioning or referencing this software
-    or this function.
+License to copy and use this software is granted provided that it
+is identified as the "RSA Data Security, Inc. MD5 Message-Digest
+Algorithm" in all material mentioning or referencing this software
+or this function.
 
-     License is also granted to make and use derivative works provided
-     that such works are identified as "derived from the RSA Data
-     Security, Inc. MD5 Message-Digest Algorithm" in all material
-     mentioning or referencing the derived work.
+License is also granted to make and use derivative works provided
+that such works are identified as "derived from the RSA Data
+Security, Inc. MD5 Message-Digest Algorithm" in all material
+mentioning or referencing the derived work.
 
-      RSA Data Security, Inc. makes no representations concerning either
-      the merchantability of this software or the suitability of this
-      software for any particular purpose. It is provided "as is"
-      without express or implied warranty of any kind.
+RSA Data Security, Inc. makes no representations concerning either
+the merchantability of this software or the suitability of this
+software for any particular purpose. It is provided "as is"
+without express or implied warranty of any kind.
 
-       These notices must be retained in any copies of any part of this
-       documentation and/or software.
+These notices must be retained in any copies of any part of this
+documentation and/or software.
 
-        */
+*/
 
-        /* interface header */
+/* interface header */
 #include "md5.h"
 
-        /* system implementation headers */
+/* system implementation headers */
 #include <cstdio>
 #include <sstream>
 
 
-        // Constants for MD5Transform routine.
+// Constants for MD5Transform routine.
 #define S11 7
 #define S12 12
 #define S13 17
@@ -56,9 +56,9 @@ for bzflag (http://www.bzflag.org)
 #define S43 15
 #define S44 21
 
-        ///////////////////////////////////////////////
+///////////////////////////////////////////////
 
-        // F, G, H and I are basic MD5 functions.
+// F, G, H and I are basic MD5 functions.
 inline MD5::uint4 MD5::F(uint4 x, uint4 y, uint4 z) {
     return x&y | ~x&z;
 }
@@ -112,7 +112,7 @@ MD5::MD5()
 MD5::MD5(const std::string &text)
 {
     init();
-    update(text.c_str(), text.length());
+    update(text.c_str(), static_cast<unsigned int>(text.length()));
     finalize();
 }
 
@@ -349,9 +349,8 @@ std::string MD5::hexdigest() const
 */
     std::basic_string<uint8_t> s(digest, 16);
     const static char bin2hex_lookup[] = "0123456789abcdef";
-    unsigned int t = 0, i = 0, leng = s.length();
     std::stringstream r;
-    for (i = 0; i<leng; i++)
+    for (size_t i = 0; i<s.length(); i++)
     {
         r << bin2hex_lookup[s[i] >> 4];
         r << bin2hex_lookup[s[i] & 0x0f];
@@ -368,7 +367,7 @@ std::ostream& operator<<(std::ostream& out, MD5 md5)
 
 //////////////////////////////
 
-std::string md5(const std::string str)
+std::string md5(const std::string& str)
 {
     MD5 md5 = MD5(str);
 

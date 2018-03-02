@@ -1238,7 +1238,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
                         string strNonce = md5(to_string(in_time_t) + ":" + soMetaDa.strIpClient + "http2server");
                         strNonce = Base64::Encode(strNonce.c_str(), strNonce.size());
-                        vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=MD5,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        if (nStreamId == 0)
+                            vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=MD5,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        else
+                            vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=MD5,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
                     }
                     size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, vHeader, 0);
                     if (nStreamId != 0)
@@ -1266,7 +1269,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 string::size_type nPos = itAuth->second.find(' ');
                 if (nPos == string::npos)
                     return fnSendAuthRespons();
-                if (itAuth->second.substr(0, nPos) == "Basic")
+                if (itAuth->second.substr(0, nPos) == "Basic" && get<1>(strAuth.second).find(L"BASIC") != string::npos)
                 {
                     wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPos + 1)));
                     if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredenial](const auto& strUser) { return strCredenial == strUser ? true : false; }) == end(get<2>(strAuth.second)))
@@ -1274,7 +1277,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     strRemoteUser = strCredenial.substr(0, strCredenial.find(L':'));
                     break;
                 }
-                else if (itAuth->second.substr(0, nPos) == "Digest")
+                else if (itAuth->second.substr(0, nPos) == "Digest" && get<1>(strAuth.second).find(L"DIGEST") != string::npos)
                 {   // username="Thomas", realm="Http-Utility Digest", nonce="cmFuZG9tbHlnZW5lcmF0ZWRub25jZQ", uri="/iso/", response="2254355340eede0649b9df7f0121dcca", opaque="c29tZXJhbmRvbW9wYXF1ZXN0cmluZw", qop=auth, nc=00000002, cnonce="78a4421707fa60bc"
                     const static regex spaceSeperator(",");
                     string strTmp = itAuth->second.substr(nPos + 1);
