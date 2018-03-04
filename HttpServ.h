@@ -1507,13 +1507,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 {
                     if (nPostLen > 0)
                     {
-                        auto pTmp = make_unique<unsigned char[]>(512);
+                        unique_ptr<unsigned char> pBuf(new unsigned char[65536]);
                         uint64_t nWritePipe = 0;
                         do
                         {
-                            streamoff iRead = pTmpFile.get()->Read(pTmp.get(), 512);
+                            streamoff iRead = pTmpFile.get()->Read(pBuf.get(), 65536);
                             if (iRead > 0)
-                                run.WriteToSpawn(pTmp.get(), static_cast<int>(iRead)), nWritePipe += iRead;
+                                run.WriteToSpawn(pBuf.get(), static_cast<int>(iRead)), nWritePipe += iRead;
                             else
                                 break;
                         } while (nWritePipe < nPostLen && (*patStop).load() == false);
@@ -1525,7 +1525,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                     bool bEndOfHeader = false;
                     HeadList umPhpHeaders;
-                    char psBuffer[4096];
+                    unique_ptr<char> pBuf(new char[65536 + nHttp2Offset]);
                     basic_string<char> strBuffer;
                     size_t nTotal = 0, nOffset = 0;
                     bool bChunkedTransfer = false;
@@ -1536,13 +1536,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         bStillRunning = run.StillSpawning();
 
                         int nRead;
-                        if (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(psBuffer + nHttp2Offset + nOffset), static_cast<int>(4096 - nHttp2Offset - nOffset)), nRead > 0)
+                        if (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0)
                         {
                             nOffset = 0;
 
                             if (bEndOfHeader == false)
                             {
-                                strBuffer.assign(psBuffer + nHttp2Offset, nRead + nOffset);
+                                strBuffer.assign(pBuf.get() + nHttp2Offset, nRead + nOffset);
                                 for (;;)
                                 {
                                     size_t nPosStart = strBuffer.find_first_of("\r\n");
@@ -1574,7 +1574,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                         bEndOfHeader = true;
                                         nRead -= static_cast<int>(nPosEnd);
                                         strBuffer.erase(0, nPosEnd);
-                                        strBuffer.copy(psBuffer + nHttp2Offset, nRead);
+                                        strBuffer.copy(pBuf.get() + nHttp2Offset, nRead);
                                         break;
                                     }
                                     else if (nPosStart != string::npos)
@@ -1600,7 +1600,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     else
                                     {
                                         nOffset = nRead;
-                                        strBuffer.copy(psBuffer + nHttp2Offset, nRead);
+                                        strBuffer.copy(pBuf.get() + nHttp2Offset, nRead);
                                         nRead = 0;
                                         break;
                                     }
@@ -1624,7 +1624,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 nBytesTransfered += nSendBufLen;
 
                                 if (nStreamId != 0)
-                                    BuildHttp2Frame(psBuffer, nSendBufLen, 0x0, 0x0, nStreamId);
+                                    BuildHttp2Frame(pBuf.get(), nSendBufLen, 0x0, 0x0, nStreamId);
                                 else if (bChunkedTransfer == true)
                                 {
                                     stringstream ss;
@@ -1632,7 +1632,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
                                 }
                                 if (fnIsStreamReset(nStreamId) == false)
-                                    soMetaDa.fSocketWrite(psBuffer, nSendBufLen + nHttp2Offset);
+                                    soMetaDa.fSocketWrite(pBuf.get(), nSendBufLen + nHttp2Offset);
                                 if (bChunkedTransfer == true)
                                     soMetaDa.fSocketWrite("\r\n", 2);
                                 soMetaDa.fResetTimer();
@@ -1643,9 +1643,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                             nTotal += nBytesTransfered;
                         }
-                        else if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(psBuffer), static_cast<int>(4096)), nRead > 0)
+                        else if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get()), static_cast<int>(65536)), nRead > 0)
                         {
-                            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] CGI error output: ", string(psBuffer, nRead));
+                            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] CGI error output: ", string(pBuf.get(), nRead));
                         }
                         else if (bStillRunning == true)
                             this_thread::sleep_for(chrono::milliseconds(1));
@@ -1655,8 +1655,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                     if (bEndOfHeader == true && nStreamId != 0)
                     {
-                        BuildHttp2Frame(psBuffer, 0, 0x0, 0x1, nStreamId);
-                        soMetaDa.fSocketWrite(psBuffer, nHttp2Offset);
+                        BuildHttp2Frame(pBuf.get(), 0, 0x0, 0x1, nStreamId);
+                        soMetaDa.fSocketWrite(pBuf.get(), nHttp2Offset);
                         soMetaDa.fResetTimer();
                     }
                     else if (bEndOfHeader == true && bChunkedTransfer == true)

@@ -132,7 +132,7 @@ private:
             m_mtxConnections.lock();
             for (auto& pSocket : vCache)
             {
-                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpProxy::OnTimeout, this, _1)), string(), nullptr, string(), string(), false, false, nullptr }));
+                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(600000, bind(&CHttpProxy::OnTimeout, this, _1)), string(), nullptr, string(), string(), false, false, nullptr }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();
@@ -379,15 +379,20 @@ private:
             return;
         }
 
-        shared_ptr<char> spBuffer(new char[nAvalible]);
-
-        uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
-
-        if (nRead > 0)
+        lock_guard<mutex> lock(m_mtxConnections);
+        CONNECTIONLIST::iterator item = m_vConnections.find(pTcpSocket);
+        if (item != end(m_vConnections))
         {
-            lock_guard<mutex> lock(m_mtxConnections);
-            CONNECTIONLIST::iterator item = m_vConnections.find(pTcpSocket);
-            if (item != end(m_vConnections))
+            if (item->second.pClientSocket->GetOutBytesInQue() > 0x100000)  // 1 MByt
+            {
+                item->second.pTimer->Reset();
+                return;
+            }
+
+            shared_ptr<char> spBuffer(new char[nAvalible]);
+            uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
+
+            if (nRead > 0)
             {
                 item->second.pTimer->Reset();
                 if (item->second.bAnswerd == true && item->second.strMethode != "CONNECT")
