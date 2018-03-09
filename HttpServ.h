@@ -1527,7 +1527,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     HeadList umPhpHeaders;
                     unique_ptr<char> pBuf(new char[65536 + nHttp2Offset]);
                     basic_string<char> strBuffer;
-                    size_t nTotal = 0, nOffset = 0;
+                    size_t nTotal = 0;
+                    int nOffset = 0;
                     bool bChunkedTransfer = false;
 
                     bool bStillRunning = true;
