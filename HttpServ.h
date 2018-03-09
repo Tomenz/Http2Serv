@@ -1538,11 +1538,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         int nRead;
                         if (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0)
                         {
+                            nRead += nOffset;
                             nOffset = 0;
 
                             if (bEndOfHeader == false)
                             {
-                                strBuffer.assign(pBuf.get() + nHttp2Offset, nRead + nOffset);
+                                strBuffer.assign(pBuf.get() + nHttp2Offset, nRead);
                                 for (;;)
                                 {
                                     size_t nPosStart = strBuffer.find_first_of("\r\n");
@@ -1621,10 +1622,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nRead - nBytesTransfered) == false)
                                     continue;
 
-                                nBytesTransfered += nSendBufLen;
-
                                 if (nStreamId != 0)
-                                    BuildHttp2Frame(pBuf.get(), nSendBufLen, 0x0, 0x0, nStreamId);
+                                    BuildHttp2Frame(pBuf.get() + nBytesTransfered, nSendBufLen, 0x0, 0x0, nStreamId);
                                 else if (bChunkedTransfer == true)
                                 {
                                     stringstream ss;
@@ -1632,10 +1631,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
                                 }
                                 if (fnIsStreamReset(nStreamId) == false)
-                                    soMetaDa.fSocketWrite(pBuf.get(), nSendBufLen + nHttp2Offset);
+                                    soMetaDa.fSocketWrite(pBuf.get() + nBytesTransfered, nSendBufLen + nHttp2Offset);
                                 if (bChunkedTransfer == true)
                                     soMetaDa.fSocketWrite("\r\n", 2);
                                 soMetaDa.fResetTimer();
+
+                                nBytesTransfered += nSendBufLen;
 
                                 if (fnUpdateStreamParam(nSendBufLen) == -1)
                                     break;  // Stream Item was removed, properly the stream was reseted

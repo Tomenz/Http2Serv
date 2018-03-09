@@ -5,6 +5,7 @@
 # http://lackof.org/taggart/hacking/make-example/
 # http://owen.sj.ca.us/~rk/howto/slides/make/slides/makerecurs.html
 # https://gcc.gnu.org/onlinedocs/gcc/Invoking-GCC.html
+# http://www.ijon.de/comp/tutorials/makefile.html (Deutsch)
 
 CC = g++
 #CC = clang++
@@ -28,7 +29,7 @@ OBJ = Http2Serv.o ConfFile.o LogFile.o Trace.o TempFile.o SpawnProcess.o #OBJ = 
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
 LIB = -l zlib -l socketlib -l brotlilib -l crypto -l ssl -l commonlib
 
-all: mDnsServ $(TARGET)
+all: $(TARGET)
 
 mDnsServ: $(BUILDDIRS) mDnsServ.o DnsProtokol.o
 	$(CC) -o mDnsServ mDnsServ.o DnsProtokol.o $(LIB_PATH) $(LIB) $(LDFLAGS)

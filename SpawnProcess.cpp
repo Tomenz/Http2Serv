@@ -1,11 +1,16 @@
 
 #include <stdio.h>
 #include <fcntl.h>
+#include <regex>
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <io.h>
 #include <process.h>
 #include <Stdlib.h>
 #include <Windows.h>
+#define string_t wstring
+#define FN_STR(x) x
+#define NULLCHR L'\0'
 #else
 #include <unistd.h>
 #include <spawn.h>
@@ -18,6 +23,11 @@ extern char **environ;
 #define _fileno fileno
 #define _write write
 #define _read read
+#define _wgetcwd getcwd
+#define _wchdir chdir
+#define string_t string
+#define FN_STR(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
+#define NULLCHR '\0'
 #endif
 
 #include "SpawnProcess.h"
@@ -57,41 +67,54 @@ SpawnProcess::~SpawnProcess() noexcept
 
 int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = wstring()*/) noexcept
 {
-    if (strWorkingDir.empty() == false)
-    {
-        if (strWorkingDir[1] == L':')
-            m_strCmd = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strWorkingDir.substr(0, 2)) + " && ";
-        m_strCmd += "cd \"" + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strWorkingDir) + "\" && ";
-    }
     m_strCmd += wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strCmd);
+    const static regex rx("([^\\s\\\"]+|(?:\\\"[^\\\"]*\\\")+)+\\s*");
+    vector<string> token;
+    smatch mr;
+    while (regex_search(m_strCmd, mr, rx) == true && mr[0].matched == true)
+    {
+        token.push_back(mr[1].str());
+        m_strCmd.erase(0, mr[0].length());
+        token.back().erase(token.back().find_last_not_of("\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+        token.back().erase(0, token.back().find_first_not_of("\" \t"));      // Trim Whitespace and " character on the left
+    }
+    unique_ptr<char*[]> wargv(new char*[token.size() + 1]);
+    for (size_t n = 0; n < token.size(); ++n)
+        wargv.get()[n] = &token[n][0];
+    wargv.get()[token.size()] = nullptr;
+
     for (auto& str : m_vstrEnvironment)
         m_envp.push_back(&str[0]);  //m_envp.push_back("SCRIPT_FILENAME=C:/Users/hauck/Documents/My Web Sites/WebSite1/index.php");
     m_envp.push_back(nullptr);
 
     // Create the pipe
 #if defined(_WIN32) || defined(_WIN64)
-    if (_pipe(m_fdStdOutPipe, 512, O_NOINHERIT | O_BINARY) == -1)
+    if (_pipe(m_fdStdOutPipe, 65536, O_NOINHERIT | O_BINARY) == -1)
         return   1;
 
     DWORD dwMode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
     SetNamedPipeHandleState((HANDLE)_get_osfhandle(m_fdStdOutPipe[READ_FD]), &dwMode, 0, 0);
 
-    if (_pipe(m_fdStdInPipe, 512, O_NOINHERIT | O_BINARY) == -1)
+    if (_pipe(m_fdStdInPipe, 65536, O_NOINHERIT | O_BINARY) == -1)
         return   1;
 
-    if (_pipe(m_fdStdErrPipe, 512, O_NOINHERIT | O_BINARY) == -1)
+    if (_pipe(m_fdStdErrPipe, 65536, O_NOINHERIT | O_BINARY) == -1)
         return   1;
 
     SetNamedPipeHandleState((HANDLE)_get_osfhandle(m_fdStdErrPipe[READ_FD]), &dwMode, 0, 0);
 #else
-    if (pipe2(m_fdStdOutPipe, O_CLOEXEC | O_NONBLOCK) == -1)
+    if (pipe2(m_fdStdOutPipe, O_CLOEXEC) == -1)
         return   1;
+
+    fcntl(m_fdStdOutPipe[READ_FD], F_SETFL, fcntl(m_fdStdOutPipe[READ_FD], F_GETFL, 0) | O_NONBLOCK);
 
     if (pipe2(m_fdStdInPipe, O_CLOEXEC) == -1)
         return   1;
 
-    if (pipe2(m_fdStdErrPipe, O_CLOEXEC | O_NONBLOCK) == -1)
+    if (pipe2(m_fdStdErrPipe, O_CLOEXEC) == -1)
         return   1;
+
+    fcntl(m_fdStdErrPipe[READ_FD], F_SETFL, fcntl(m_fdStdErrPipe[READ_FD], F_GETFL, 0) | O_NONBLOCK);
 #endif
 
     lock_guard<mutex> lock(s_mtxIOstreams);
@@ -116,14 +139,22 @@ int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = 
     _close(m_fdStdInPipe[READ_FD]);
     _close(m_fdStdErrPipe[WRITE_FD]);
 
+    string_t strCurDir(FILENAME_MAX, 0);
+    if (strWorkingDir.empty() == false && _wgetcwd(&strCurDir[0], FILENAME_MAX) == &strCurDir[0])
+    {
+        strCurDir.resize(strCurDir.find_first_of(NULLCHR));
+        _wchdir(&FN_STR(strWorkingDir)[0]);
+    }
+
     // Spawn process
 #if defined(_WIN32) || defined(_WIN64)
-    const char *const argv[] = { "cmd.exe", "/C", &m_strCmd[0] , nullptr };
-    m_hProcess = _spawnvpe(P_NOWAIT, "cmd.exe", argv, &m_envp[0]);
+    m_hProcess = _spawnvpe(P_NOWAIT, wargv.get()[0], wargv.get(), &m_envp[0]);
 #else
-    char *const argv[] = { "/bin/bash", "-c" , &m_strCmd[0] , nullptr };
-    posix_spawn(&m_hProcess, "/bin/bash", NULL, NULL, argv, &m_envp[0]);
+    posix_spawn(&m_hProcess, wargv.get()[0], NULL, NULL, wargv.get(), &m_envp[0]);
 #endif
+
+    if (strCurDir.size() != FILENAME_MAX)
+        _wchdir(&strCurDir[0]);
 
     // Duplicate copy of original stdout back into stdout
     if (_dup2(fdStdOut, _fileno(stdout)) < 0)
