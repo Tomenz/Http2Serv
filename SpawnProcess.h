@@ -29,12 +29,11 @@ private:
     int m_fdStdInPipe[2];
     int m_fdStdErrPipe[2];
 #if defined(_WIN32) || defined(_WIN64)
-    intptr_t m_hProcess;
+    HANDLE m_hProcess;
 #else
     pid_t m_hProcess;
 #endif
     vector<char*> m_envp;
     vector<string> m_vstrEnvironment;
-    string m_strCmd;
 };
 
