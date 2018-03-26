@@ -6,7 +6,7 @@ SERVICE_STATUS        CBaseSrv::s_stSrvStatus;
 SERVICE_STATUS_HANDLE CBaseSrv::s_hSrvStatus;
 CBaseSrv*             CBaseSrv::s_This;
 
-CBaseSrv::CBaseSrv(wchar_t* szSrvName)
+CBaseSrv::CBaseSrv(const wchar_t* szSrvName)
 {
 	s_strSrvName = szSrvName;
 	s_This       = this;

@@ -1,5 +1,8 @@
 
+#include <string>
 #include ".\svrctrl.h"
+
+using namespace std;
 
 CSvrCtrl::CSvrCtrl(void) : m_hSCManager(nullptr)
 {
@@ -15,8 +18,11 @@ CSvrCtrl::~CSvrCtrl(void)
 	    CloseServiceHandle(m_hSCManager);
 }
 
-int CSvrCtrl::Install(wchar_t* szSvrName, wchar_t* szDisplayName)
+int CSvrCtrl::Install(const wchar_t* szSvrName, const wchar_t* szDisplayName, wchar_t* szDescription/* = nullptr*/)
 {
+    if (SelfElevat() == true)
+        return 0;
+
 	wchar_t szPath[MAX_PATH];
 
     if(GetModuleFileName(NULL, szPath, MAX_PATH) == 0)
@@ -48,12 +54,19 @@ int CSvrCtrl::Install(wchar_t* szSvrName, wchar_t* szDisplayName)
     else
     {
         CloseServiceHandle(schService);
+
+        if (szDescription != nullptr)
+            SetServiceDescription(szSvrName, szDescription);
+
         return 0;
     }
 }
 
-int CSvrCtrl::Remove(wchar_t* szSvrName)
+int CSvrCtrl::Remove(const wchar_t* szSvrName)
 {
+    if (SelfElevat() == true)
+        return 0;
+
     SC_HANDLE schService = OpenService(
         m_hSCManager,       // SCManager database
         szSvrName,          // name of service
@@ -77,8 +90,11 @@ int CSvrCtrl::Remove(wchar_t* szSvrName)
 
 }
 
-int CSvrCtrl::Start(wchar_t* szSvrName)
+int CSvrCtrl::Start(const wchar_t* szSvrName)
 {
+    if (SelfElevat() == true)
+        return 0;
+
 	SC_HANDLE schService;
     SERVICE_STATUS_PROCESS ssStatus;
     DWORD dwOldCheckPoint;
@@ -164,8 +180,11 @@ int CSvrCtrl::Start(wchar_t* szSvrName)
 	return 0;
 }
 
-int CSvrCtrl::Stop(wchar_t* szSvrName)
+int CSvrCtrl::Stop(const wchar_t* szSvrName)
 {
+    if (SelfElevat() == true)
+        return 0;
+
     SC_HANDLE schService = OpenService(m_hSCManager, szSvrName, SERVICE_ALL_ACCESS);
 
     if (schService == NULL)
@@ -180,8 +199,11 @@ int CSvrCtrl::Stop(wchar_t* szSvrName)
     return dwError;
 }
 
-int CSvrCtrl::Pause(wchar_t* szSvrName)
+int CSvrCtrl::Pause(const wchar_t* szSvrName)
 {
+    if (SelfElevat() == true)
+        return 0;
+
     SC_HANDLE schService = OpenService(m_hSCManager, szSvrName, SERVICE_ALL_ACCESS);
 
     if (schService == NULL)
@@ -196,8 +218,11 @@ int CSvrCtrl::Pause(wchar_t* szSvrName)
     return dwError;
 }
 
-int CSvrCtrl::Continue(wchar_t* szSvrName)
+int CSvrCtrl::Continue(const wchar_t* szSvrName)
 {
+    if (SelfElevat() == true)
+        return 0;
+
     SC_HANDLE schService = OpenService(m_hSCManager, szSvrName, SERVICE_ALL_ACCESS);
 
     if (schService == NULL)
@@ -212,7 +237,7 @@ int CSvrCtrl::Continue(wchar_t* szSvrName)
     return dwError;
 }
 
-bool CSvrCtrl::SetServiceDescription(wchar_t* szSvrName, wchar_t* szDescription)
+bool CSvrCtrl::SetServiceDescription(const wchar_t* szSvrName, wchar_t* szDescription)
 {
     // Need to acquire database lock before reconfiguring.
     SC_LOCK sclLock = LockServiceDatabase(m_hSCManager);
@@ -272,4 +297,54 @@ bool CSvrCtrl::SetServiceDescription(wchar_t* szSvrName, wchar_t* szDescription)
 	CloseServiceHandle(schService);
 
     return bRet;
+}
+
+bool CSvrCtrl::SelfElevat()
+{
+    // check Windows version
+    OSVERSIONINFO VersionInfo;
+    VersionInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+    GetVersionEx(&VersionInfo);
+
+    if (VersionInfo.dwMajorVersion < 6)
+        return false;
+
+    // check if elevated on Vista and 7
+    HANDLE Token;
+    TOKEN_ELEVATION Elevation;      // Token type only available with Vista/7
+    DWORD ReturnSize;
+
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &Token) ||
+        !GetTokenInformation(Token, TokenElevation, &Elevation, sizeof(Elevation), &ReturnSize))
+        return false;
+
+    if (Elevation.TokenIsElevated)  // process is elevated
+        return false;
+
+    wstring FileName(MAX_PATH, 0);
+    GetModuleFileName(NULL, &FileName[0], MAX_PATH);
+    FileName.erase(FileName.find_first_of(L'\0'));
+    wstring pStrCmdLine = GetCommandLine();
+
+    size_t nPos = pStrCmdLine.find(FileName);
+    if (nPos != string::npos)
+    {
+        nPos += pStrCmdLine.substr(nPos + FileName.size()).find_first_of(L' ') + 1 + FileName.size();
+        pStrCmdLine.erase(0, nPos);
+    }
+
+    SHELLEXECUTEINFO Info;
+    Info.hwnd = NULL;
+    Info.cbSize = sizeof(Info);
+    Info.fMask = NULL;
+    Info.hwnd = NULL;
+    Info.lpVerb = L"runas";
+    Info.lpFile = &FileName[0];
+    Info.lpParameters = &pStrCmdLine[0];
+    Info.lpDirectory = NULL;
+    Info.nShow = 0;// SW_HIDE;
+    Info.hInstApp = NULL;
+    while (!ShellExecuteEx(&Info));
+
+    return true;
 }

@@ -50,7 +50,7 @@ const static wregex s_rxSepComma(L"\\s*,\\s*");
 class Service : public CBaseSrv
 {
 public:
-    static Service& GetInstance(wchar_t* szSrvName = nullptr)
+    static Service& GetInstance(const wchar_t* szSrvName = nullptr)
     {
         if (s_pInstance == 0)
             s_pInstance.reset(new Service(szSrvName));
@@ -398,7 +398,7 @@ public:
     }
 
 private:
-    Service(wchar_t* szSrvName) : CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
+    Service(const wchar_t* szSrvName) : CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
 
 private:
     static shared_ptr<Service> s_pInstance;
@@ -425,8 +425,8 @@ int main(int argc, const char* argv[])
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF | _CRTDBG_CHECK_ALWAYS_DF | _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG));
     _setmode(_fileno(stdout), _O_U16TEXT);
 
-    wchar_t szDspName[] = { L"HTTP/2 Server" };
-    wchar_t szDescrip[] = { L"Http 2.0 Server by Thomas Hauck" };
+    static const wchar_t szDspName[] = { L"HTTP/2 Server" };
+    static wchar_t szDescrip[] = { L"Http 2.0 Server by Thomas Hauck" };
 
     signal(SIGINT, Service::SignalHandler);
 
@@ -462,7 +462,7 @@ int main(int argc, const char* argv[])
     };
 #endif
 
-    wchar_t szSvrName[] = { L"Http2Serv" };
+    static const wchar_t szSvrName[] = { L"Http2Serv" };
     int iRet = 0;
 
     if (argc > 1)
@@ -475,8 +475,7 @@ int main(int argc, const char* argv[])
                 {
 #if defined(_WIN32) || defined(_WIN64)
                 case 'I':
-                    iRet = CSvrCtrl().Install(szSvrName, szDspName);
-                    CSvrCtrl().SetServiceDescription(szSvrName, szDescrip);
+                    iRet = CSvrCtrl().Install(szSvrName, szDspName, szDescrip);
                     break;
                 case 'R':
                     iRet = CSvrCtrl().Remove(szSvrName);
@@ -496,7 +495,7 @@ int main(int argc, const char* argv[])
 #endif
                 case 'F':
                     {
-                        wcout << L"Http2Serv gestartet" << endl;
+                        wcout << szSvrName << L" gestartet" << endl;
 
                         Service::GetInstance(szSvrName);
 
@@ -515,7 +514,7 @@ int main(int argc, const char* argv[])
                             this_thread::sleep_for(chrono::milliseconds(100));
                         }
 
-                        wcout << L"Http2Serv gestoppt" << endl;
+                        wcout << szSvrName << L" gestoppt" << endl;
                         Service::GetInstance().Stop();
                         th.join();
                     }
