@@ -594,8 +594,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 host = item->second.HeaderList.find(":authority");
             if (host != end(item->second.HeaderList))
             {
-                if (m_vHostParam.find(host->second) != end(m_vHostParam))
-                    szHost = host->second;
+                string strTmp = host->second + (host->second.find(":") == string::npos ? (":" + to_string(GetPort())) : "");
+                if (m_vHostParam.find(strTmp) != end(m_vHostParam))
+                    szHost = strTmp;
             }
         }
         m_mtxConnections.unlock();
@@ -861,8 +862,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         const auto& host = HeaderList.find("host");   // Get the Host Header from the request
         if (host != end(HeaderList))
         {
-            if (m_vHostParam.find(host->second) != end(m_vHostParam))   // If we have it in our configuration, we use the host parameter for logging
-                szHost = host->second;
+            string strTmp = host->second + (host->second.find(":") == string::npos ? (":" + to_string(GetPort())) : "");
+            if (m_vHostParam.find(strTmp) != end(m_vHostParam))   // If we have it in our configuration, we use the host parameter for logging
+                szHost = strTmp;
         }
 
         string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
@@ -900,8 +902,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         const auto& host = HeaderList.find("host");   // Get the Host Header from the request
         if (host != end(HeaderList))
         {
-            if (m_vHostParam.find(host->second) != end(m_vHostParam))   // If we have it in our configuration, we use the host parameter for logging
-                szHost = host->second;
+            string strTmp = host->second + (host->second.find(":") == string::npos ? (":" + to_string(GetPort())) : "");
+            if (m_vHostParam.find(strTmp) != end(m_vHostParam))   // If we have it in our configuration, we use the host parameter for logging
+                szHost = strTmp;
         }
 
         string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
@@ -1045,8 +1048,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             host = lstHeaderFields.find(":authority");
         if (host != end(lstHeaderFields))
         {
-            if (m_vHostParam.find(host->second) != end(m_vHostParam))
-                szHost = host->second;
+            string strTmp = host->second + (host->second.find(":") == string::npos ? (":" + to_string(GetPort())) : "");
+            if (m_vHostParam.find(strTmp) != end(m_vHostParam))
+                szHost = strTmp;
         }
 
         auto itVersion = lstHeaderFields.find(":version");

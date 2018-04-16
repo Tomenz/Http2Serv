@@ -368,7 +368,7 @@ public:
             // Host Parameter holen und setzen
             function<void(wstring, bool)> fuSetHostParam = [&](wstring strListenAddr, bool IsVHost)
             {
-                fnSetParameter(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), IsVHost == true ? string(begin(strListenAddr), end(strListenAddr)) : string());
+                fnSetParameter(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), IsVHost == true ? string(begin(strListenAddr), end(strListenAddr)) + ":" + to_string(HttpServer.GetPort()) : string());
 
                 const wstring strValue = conf.getUnique(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), L"VirtualHost");
                 wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepComma, -1);
