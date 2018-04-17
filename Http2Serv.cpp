@@ -38,7 +38,7 @@ void se_translator(size_t e, _EXCEPTION_POINTERS* p)
 class CBaseSrv
 {
 public:
-    explicit CBaseSrv(wchar_t*) {}
+    explicit CBaseSrv(const wchar_t*) {}
     virtual int Run(void) { Start(); return 0; }
     virtual void Start(void) = 0;
 };
