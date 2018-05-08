@@ -45,7 +45,7 @@ class CHttpProxy
     typedef unordered_map<TcpSocket*, TcpSocket*> REFERENCLIST;
 
 public:
-    CHttpProxy(string strBindIp = "127.0.0.1", short sPort = 8080) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort)
+    CHttpProxy(const string& strBindIp = string("127.0.0.1"), short sPort = 8080) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort)
     {
     }
     CHttpProxy(const CHttpProxy&) = delete;
@@ -73,7 +73,7 @@ public:
     bool Start()
     {
         m_pSocket = new TcpServer();
-        m_pSocket->BindNewConnection(bind(&CHttpProxy::OnNewConnection, this, _1));
+        m_pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpProxy::OnNewConnection, this, _1)));
         m_pSocket->BindErrorFunction(bind(&CHttpProxy::OnSocketError, this, _1));
         return m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
     }

@@ -41,7 +41,7 @@ class HeadList : public vector<pair<string, string>>
 public:
     HeadList() : vector<pair<string, string>>() {}
     explicit HeadList(const vector<pair<string, string>>& v) : vector<pair<string, string>>(v) {}
-    HeadList::iterator find(string strSearch)
+    HeadList::iterator find(const string& strSearch)
     {   // Search strings as of now are always lower case
         return find_if(begin(), end(), [&](auto item) { return strSearch == item.first ? true : false; });
     }

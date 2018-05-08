@@ -151,7 +151,7 @@ class CHttpServ : public Http2Protocol
 
 public:
 
-    CHttpServ(wstring strRootPath = L".", string strBindIp = "127.0.0.1", short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort), m_cLocal(locale("C"))
+    CHttpServ(const wstring& strRootPath = wstring(L"."), const string& strBindIp = string("127.0.0.1"), short sPort = 80, bool bSSL = false) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort), m_cLocal(locale("C"))
     {
         HOSTPARAM hp;
         hp.m_strRootPath = strRootPath;
@@ -190,7 +190,7 @@ public:
             SslTcpServer* pSocket = new SslTcpServer();
             pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str());
             pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str());
-            pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1));
+            pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpServ::OnNewConnection, this, _1)));
 
             for (auto& Item : m_vHostParam)
             {
@@ -206,7 +206,7 @@ public:
         else
         {
             m_pSocket = new TcpServer();
-            m_pSocket->BindNewConnection(bind(&CHttpServ::OnNewConnection, this, _1));
+            m_pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpServ::OnNewConnection, this, _1)));
         }
         m_pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
         return m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
@@ -896,7 +896,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
     }
 
-    void SendErrorRespons(const MetaSocketData soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string strHttpVersion, HeadList& HeaderList, const HeadList& umHeaderList = HeadList())
+    void SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, const HeadList& umHeaderList = HeadList())
     {
         string szHost;
         const auto& host = HeaderList.find("host");   // Get the Host Header from the request

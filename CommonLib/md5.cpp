@@ -360,7 +360,7 @@ std::string MD5::hexdigest() const
 
 //////////////////////////////
 
-std::ostream& operator<<(std::ostream& out, MD5 md5)
+std::ostream& operator<<(std::ostream& out, const MD5& md5)
 {
     return out << md5.hexdigest();
 }
@@ -369,7 +369,5 @@ std::ostream& operator<<(std::ostream& out, MD5 md5)
 
 std::string md5(const std::string& str)
 {
-    MD5 md5 = MD5(str);
-
-    return md5.hexdigest();
+    return MD5(str).hexdigest();
 }

@@ -9,7 +9,7 @@ class HttpFetch : public Http2Protocol
 public:
     HttpFetch(function<void(HttpFetch*, void*)>, void*);
     virtual ~HttpFetch();
-    bool Fetch(string strAdresse, string strMethode = "GET");
+    bool Fetch(const string& strAdresse, const string& strMethode = string("GET"));
     void AddToHeader(string strHeader, string strHeaderValue) { m_umAddHeader.emplace_back(make_pair(strHeader, strHeaderValue)); };
     bool AddContent(void* pBuffer, uint64_t nBufSize);
     uint32_t GetStatus() { return m_uiStatus; }

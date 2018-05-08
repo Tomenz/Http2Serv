@@ -37,7 +37,7 @@ HttpFetch::~HttpFetch()
         delete m_pcClientCon;
 }
 
-bool HttpFetch::Fetch(string strAdresse, string strMethode /*= "GET"*/)
+bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= string("GET")*/)
 {
     m_strServer = strAdresse;
     m_strMethode = strMethode;
@@ -92,7 +92,7 @@ bool HttpFetch::Fetch(string strAdresse, string strMethode /*= "GET"*/)
     if (m_UseSSL == true)
     {
         m_pcClientCon->SetTrustedRootCertificates("./certs/ca-certificates.crt");
-        m_pcClientCon->SetAlpnProtokollNames({ { "h2" }, { "http/1.1" } });
+        m_pcClientCon->SetAlpnProtokollNames(vector<string>({ { "h2" }, { "http/1.1" } }));
     }
 
     return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
