@@ -398,7 +398,7 @@ public:
     }
 
 private:
-    Service(const wchar_t* szSrvName) : CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
+    explicit Service(const wchar_t* szSrvName) : CBaseSrv(szSrvName), m_bStop(false), m_bIsStopped(true) { }
 
 private:
     static shared_ptr<Service> s_pInstance;
@@ -561,8 +561,12 @@ int main(int argc, const char* argv[])
                                         {
                                             if (GetCurrentProcessId() != pBuffer.get()[n])          // but other process
                                             {
-                                                CreateRemoteThread(hProcess, nullptr, 0, RemoteThreadProc, nullptr, 0, nullptr);
+                                                HANDLE hThread = CreateRemoteThread(hProcess, nullptr, 0, RemoteThreadProc, nullptr, 0, nullptr);
                                                 CloseHandle(hProcess);
+                                                DWORD dwExitCode;
+                                                while (GetExitCodeThread(hThread, &dwExitCode) && dwExitCode == STILL_ACTIVE)
+                                                    this_thread::sleep_for(chrono::milliseconds(10));
+                                                CloseHandle(hThread);
                                                 break;
                                             }
                                         }
