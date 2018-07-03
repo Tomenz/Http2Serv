@@ -14,6 +14,7 @@
 #include <regex>
 #include <map>
 #include <algorithm>
+#include <functional>
 #include <iomanip>
 #include <chrono>
 #include <codecvt>
