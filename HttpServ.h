@@ -189,9 +189,13 @@ public:
         if (m_vHostParam[""].m_bSSL == true)
         {
             SslTcpServer* pSocket = new SslTcpServer();
-            pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str());
-            pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str());
             pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpServ::OnNewConnection, this, _1)));
+
+            if (m_vHostParam[""].m_strCAcertificate.empty() == false && m_vHostParam[""].m_strHostCertificate.empty() == false && m_vHostParam[""].m_strHostKey.empty() == false && m_vHostParam[""].m_strDhParam.empty() == false)
+            {
+                pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str());
+                pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str());
+            }
 
             for (auto& Item : m_vHostParam)
             {
