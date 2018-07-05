@@ -2,16 +2,15 @@
 //
 #include <iostream>
 #include <signal.h>
+#include <fcntl.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <conio.h>
 #include <io.h>
-#include <fcntl.h>
 #else
 #include <syslog.h>
 #pragma message("TODO!!! Folge Zeile wieder entfernen.")
 #include <termios.h>
-#include <fcntl.h>
 #include <dirent.h>
 #endif
 
