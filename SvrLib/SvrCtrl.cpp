@@ -1,6 +1,7 @@
 
 #include <string>
 #include ".\svrctrl.h"
+#include <VersionHelpers.h>
 
 using namespace std;
 
@@ -302,11 +303,7 @@ bool CSvrCtrl::SetServiceDescription(const wchar_t* szSvrName, wchar_t* szDescri
 bool CSvrCtrl::SelfElevat()
 {
     // check Windows version
-    OSVERSIONINFO VersionInfo;
-    VersionInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-    GetVersionEx(&VersionInfo);
-
-    if (VersionInfo.dwMajorVersion < 6)
+    if (!IsWindowsVistaOrGreater())
         return false;
 
     // check if elevated on Vista and 7
