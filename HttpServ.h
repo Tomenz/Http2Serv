@@ -139,6 +139,7 @@ class CHttpServ : public Http2Protocol
         string  m_strHostCertificate;
         string  m_strHostKey;
         string  m_strDhParam;
+        string  m_strSslCipher;
         unordered_map<wstring, wstring> m_mstrRewriteRule;
         unordered_map<wstring, tuple<wstring, bool>> m_mstrAliasMatch;
         unordered_map<wstring, wstring> m_mstrForceTyp;
@@ -195,6 +196,8 @@ public:
             {
                 pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str());
                 pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str());
+                if (m_vHostParam[""].m_strSslCipher.empty() == false)
+                    pSocket->SetCipher(m_vHostParam[""].m_strSslCipher.c_str());
             }
 
             for (auto& Item : m_vHostParam)
@@ -203,6 +206,8 @@ public:
                 {
                     pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str());
                     pSocket->SetDHParameter(Item.second.m_strDhParam.c_str());
+                    if (Item.second.m_strSslCipher.empty() == false)
+                        pSocket->SetCipher(Item.second.m_strSslCipher.c_str());
                 }
             }
 
@@ -1252,10 +1257,22 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         else
                             vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=MD5,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
                     }
-                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, vHeader, 0);
+
+                    string strHtmlRespons = LoadErrorHtmlMessage(lstHeaderFields, 401, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
+
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, vHeader, strHtmlRespons.size());
                     if (nStreamId != 0)
-                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                    if (strHtmlRespons.size() > 0)
+                    {
+                        if (nStreamId != 0)
+                        {
+                            BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
+                            soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+                        }
+                        soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
+                    }
                     soMetaDa.fResetTimer();
 
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
