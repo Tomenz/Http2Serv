@@ -23,8 +23,7 @@ public:
 
         m_thWaitThread = thread([&]()
         {
-            mutex mut;
-            unique_lock<mutex> lock(mut);
+            unique_lock<mutex> lock(m_mxCv);
             do
             {
                 if (m_cv.wait_for(lock, chrono::milliseconds(m_tMilliSeconds)) == cv_status::timeout)
@@ -44,6 +43,7 @@ public:
         while (m_bIsStoped == false)
         {
             this_thread::sleep_for(chrono::nanoseconds(1));
+            unique_lock<mutex> lock(m_mxCv);
             m_cv.notify_all();
         }
         if (m_thWaitThread.joinable() == true)
@@ -52,11 +52,13 @@ public:
 
     void Reset() noexcept
     {
+        unique_lock<mutex> lock(m_mxCv);
         m_cv.notify_all();
     }
 
     void Stop() noexcept
     {
+        unique_lock<mutex> lock(m_mxCv);
         m_bStop = true;
         m_cv.notify_all();
     }
@@ -68,6 +70,7 @@ public:
 
     void SetNewTimeout(uint32_t nNewTime)
     {
+        unique_lock<mutex> lock(m_mxCv);
         m_tMilliSeconds = nNewTime;
         m_cv.notify_all();
     }
@@ -78,5 +81,6 @@ private:
     atomic<bool> m_bStop;
     atomic<bool> m_bIsStoped;
     thread m_thWaitThread;
+    mutex m_mxCv;
     condition_variable m_cv;
 };
