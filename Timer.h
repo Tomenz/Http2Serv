@@ -43,8 +43,12 @@ public:
         while (m_bIsStoped == false)
         {
             this_thread::sleep_for(chrono::nanoseconds(1));
-            unique_lock<mutex> lock(m_mxCv);
-            m_cv.notify_all();
+            bool bIsLocked = m_mxCv.try_lock();
+            if (bIsLocked == true)  // if it is not looked, the timeout is right now
+            {
+                m_cv.notify_all();
+                m_mxCv.unlock();
+            }
         }
         if (m_thWaitThread.joinable() == true)
             m_thWaitThread.join();
@@ -52,15 +56,23 @@ public:
 
     void Reset() noexcept
     {
-        unique_lock<mutex> lock(m_mxCv);
-        m_cv.notify_all();
+        bool bIsLocked = m_mxCv.try_lock();
+        if (bIsLocked == true)  // if it is not looked, the timeout is right now
+        {
+            m_cv.notify_all();
+            m_mxCv.unlock();
+        }
     }
 
     void Stop() noexcept
     {
-        unique_lock<mutex> lock(m_mxCv);
         m_bStop = true;
-        m_cv.notify_all();
+        bool bIsLocked = m_mxCv.try_lock();
+        if (bIsLocked == true)  // if it is not looked, the timeout is right now
+        {
+            m_cv.notify_all();
+            m_mxCv.unlock();
+        }
     }
 
     bool IsStopped()
@@ -70,9 +82,13 @@ public:
 
     void SetNewTimeout(uint32_t nNewTime)
     {
-        unique_lock<mutex> lock(m_mxCv);
         m_tMilliSeconds = nNewTime;
-        m_cv.notify_all();
+        bool bIsLocked = m_mxCv.try_lock();
+        if (bIsLocked == true)  // if it is not looked, the timeout is right now
+        {
+            m_cv.notify_all();
+            m_mxCv.unlock();
+        }
     }
 
 private:
