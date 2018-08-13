@@ -16,8 +16,10 @@ int main(int argc, const char* argv[])
 #endif
 
     //locale::global(std::locale(""));
-    bool bFertig = false;
-    HttpFetch fetch([&](HttpFetch* pFetch, void* vpUserData) { bFertig = true; }, 0);
+    bool               bFertig = false;
+    mutex              m_mxStop;
+    condition_variable m_cvStop;
+    HttpFetch fetch([&](HttpFetch* pFetch, void* vpUserData) { bFertig = true; m_cvStop.notify_all(); }, nullptr);
 
 //    fetch.AddToHeader("User-Agent", "http2 Util, webdav 0.1");
     fetch.AddToHeader("User-Agent", "http2fetch version 0.9 beta");
@@ -36,10 +38,11 @@ int main(int argc, const char* argv[])
 //    fetch.AddToHeader("Content-Length", "388");
 //    fetch.AddToHeader("Content-Type", "text/xml; charset=\"utf-8\"");
 //    fetch.AddToHeader("Expect", "100-continue");
-    fetch.AddToHeader("Content-Type", "application/json");
-    fetch.AddToHeader("Authorization", "key=AAAAlg2diDc:APA91bEQZ3CKLWnYA35_5sBR-RzOgtJ0NEapM4C1u3x0gO6fyNdZ5CfmaQ-ASR7uKGe9_9WLPwqWjiaYmsKKlC2QXBDst5GLnzJBszegKoSKn79x6v21i0JUSK7giNvmFzVIs6J-SKjs");
-    fetch.AddToHeader("Content-Length", "119");
-    fetch.AddContent("{\"notification\":{\"title\": \"Firebase -  Test\",\"text\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 119);
+    //fetch.AddToHeader("Content-Type", "application/json");
+    //fetch.AddToHeader("Authorization", "key=AAAAlg2diDc:APA91bEQZ3CKLWnYA35_5sBR-RzOgtJ0NEapM4C1u3x0gO6fyNdZ5CfmaQ-ASR7uKGe9_9WLPwqWjiaYmsKKlC2QXBDst5GLnzJBszegKoSKn79x6v21i0JUSK7giNvmFzVIs6J-SKjs");
+    //fetch.AddToHeader("Content-Length", "119");
+    //fetch.AddContent("{\"notification\":{\"title\": \"Firebase -  Test\",\"text\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 119);
+
     //fetch.AddToHeader("Content-Length", "114");
     //fetch.AddContent("{\"data\":{\"title\": \"Firebase -  Test\",\"message\" : \"Firebase Test from Advanced Rest Client\" },\"to\" : \"/topics/all\"}", 114);
 
@@ -47,7 +50,7 @@ int main(int argc, const char* argv[])
     //fetch.Fetch("https://www.microsoft.com/de-de");
 //    fetch.Fetch("http://192.168.161.1/index.htm");
     //fetch.Fetch("https://192.66.65.226/");
-    //fetch.Fetch("https://www.google.de/");
+    fetch.Fetch("https://www.google.de/");
     //fetch.Fetch("https://www.heise.de/");
     //fetch.Fetch("https://avm.de/");
     //fetch.Fetch("https://www.elumatec.de/");
@@ -55,7 +58,7 @@ int main(int argc, const char* argv[])
     //fetch.Fetch("https://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx");
     //fetch.Fetch("https://tools.keycdn.com/brotli-test");
     //fetch.Fetch("https://tools.keycdn.com/http2-test");
-    fetch.Fetch("https://fcm.googleapis.com/fcm/send", "POST");
+  //fetch.Fetch("https://fcm.googleapis.com/fcm/send", "POST");
 
 
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PUT");
@@ -64,8 +67,8 @@ int main(int argc, const char* argv[])
     //fetch.Fetch("http://192.66.65.226/", "POST");
 
     //while (fetch.RequestFinished() == false)
-    while (bFertig == false)
-        this_thread::sleep_for(chrono::milliseconds(10));
+    unique_lock<mutex> lock(m_mxStop);
+    m_cvStop.wait(lock, [&]() { return bFertig; });
 
 #ifdef _DEBUG
     if (fetch.GetStatus() == 200)
@@ -79,7 +82,7 @@ int main(int argc, const char* argv[])
     }
 #endif
 
-    wcerr << L"\r\nRequest beendet!" << endl;
+    wcerr << L"\r\nRequest beendet mit StatusCode: " << to_wstring(fetch.GetStatus()) << endl;
 
 #if defined(_WIN32) || defined(_WIN64)
     //while (::_kbhit() == 0)

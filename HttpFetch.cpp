@@ -26,7 +26,7 @@
 
 using namespace std::placeholders;
 
-HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_soMetaDa({ 0 }), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0)
+HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0)
 {
 }
 
@@ -412,7 +412,8 @@ void HttpFetch::SocketCloseing(BaseSocket* const pBaseSocket)
 
     if (m_fnNotify != nullptr)
         m_fnNotify(this, m_vpUserData);
-    m_Timer.get()->Stop();
+    if (m_Timer != nullptr)
+        m_Timer.get()->Stop();
 }
 
 void HttpFetch::OnTimeout(Timer* const pTimer)
