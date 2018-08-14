@@ -117,7 +117,7 @@ public:
         const ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
 
         static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 } };
-        static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },{L"ScriptOptionsHdl",10} };
+        static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },{L"ScriptOptionsHdl",10 }, {L"AddHeader", 11 } };
 
         vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
 
@@ -361,6 +361,22 @@ public:
                             for (const auto& strValue : vValues)
                             {
                                 HostParam.m_vOptionsHandler.push_back(strValue);
+                            }
+                            break;
+                        case 11:// AddHeader
+                            for (const auto& strValue : vValues)
+                            {
+                                const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
+                                vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
+                                if (token.size() == 2)
+                                {
+                                    for (size_t n = 0; n < token.size(); ++n)
+                                    {
+                                        token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                                        token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                                    }
+                                    HostParam.m_vHeader.emplace_back(make_pair(Utf8Converter.to_bytes(token[0]), Utf8Converter.to_bytes(token[1])));
+                                }
                             }
                             break;
                         }

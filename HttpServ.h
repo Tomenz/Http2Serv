@@ -123,8 +123,7 @@ class CHttpServ : public Http2Protocol
         ADDCONENTLENGTH = 16,
         GZIPENCODING = 32,
         DEFLATEENCODING = 64,
-        HSTSHEADER = 128,
-        BROTLICODING = 256,
+        BROTLICODING = 128,
     };
 
     typedef struct
@@ -145,10 +144,11 @@ class CHttpServ : public Http2Protocol
         unordered_map<wstring, wstring> m_mstrForceTyp;
         unordered_map<wstring, wstring> m_mFileTypeAction;
         vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;
-        vector<tuple<wstring, wstring, wstring>> m_vEnvIf;
+        vector<tuple<wstring, wstring, wstring>> m_vEnvIf;  //  Request_URI "^/.*" "ENV-Name=ENV-Value"
         vector<string> m_vDeflateTyps;
         vector<wstring> m_vOptionsHandler;
-        unordered_map<wstring, tuple<wstring, wstring, vector<wstring>>> m_mAuthenticate;
+        unordered_map<wstring, tuple<wstring, wstring, vector<wstring>>> m_mAuthenticate;   // Directory, (Realm, Methode, Liste mit Usern)
+        vector<pair<string, string>> m_vHeader; // Header-Name, Header-Value
     } HOSTPARAM;
 
 public:
@@ -768,14 +768,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             nHeaderSize += nReturn;
         }
 
-        if (iFlag & HSTSHEADER)
-        {
-            nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "strict-transport-security", "max-age = 631138519; includeSubdomains; preload");
-            if (nReturn == SIZE_MAX)
-                return 0;
-            nHeaderSize += nReturn;
-        }
-
         return nHeaderSize;
     }
 
@@ -863,7 +855,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         return string();
     }
 
-    void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, const HeadList& umHeaderList = HeadList())
+    void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList& umHeaderList = HeadList())
     {
         if (HeaderList.find(":version") != end(HeaderList) && HeaderList.find(":version")->second == "1")
             iFlag |= HTTPVERSION11;
@@ -878,6 +870,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
 
         string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
+        umHeaderList.insert(end(umHeaderList), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
         char caBuffer[4096];
         size_t nHeaderLen = BuildResponsHeader(caBuffer, sizeof(caBuffer), iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
@@ -906,7 +899,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
     }
 
-    void SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, const HeadList& umHeaderList = HeadList())
+    void SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList& umHeaderList = HeadList())
     {
         string szHost;
         const auto& host = HeaderList.find("host");   // Get the Host Header from the request
@@ -918,10 +911,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         }
 
         string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
+        umHeaderList.insert(end(umHeaderList), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
         const uint32_t nHttp2Offset = nStreamId != 0 ? 9 : 0;
         char caBuffer[4096];
-        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, /*iHeaderFlag | ADDNOCACHE |*/ iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, HeadList(), strHtmlRespons.size());
+        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, /*iHeaderFlag | ADDNOCACHE |*/ iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
         if (nStreamId != 0)
             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
         soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1079,9 +1073,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         if (bCloseConnection == true)
             iHeaderFlag |= ADDCONNECTIONCLOSE;
 
-        if (soMetaDa.bIsSsl == true)
-            iHeaderFlag |= HSTSHEADER;
-
         auto itMethode = lstHeaderFields.find(":method");
         auto itPath = lstHeaderFields.find(":path");
         if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields) || (strHttpVersion.find_first_not_of("01") != string::npos && nStreamId == 0))
@@ -1167,7 +1158,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
                 strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring(begin(szHost), end(szHost)));
 
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, HeadList({make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation))}), 0);
+                HeadList redHeader({ make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation)) });
+                redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, redHeader, 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1259,6 +1253,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     }
 
                     string strHtmlRespons = LoadErrorHtmlMessage(lstHeaderFields, 401, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
+                    vHeader.insert(end(vHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
                     size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 401, vHeader, strHtmlRespons.size());
                     if (nStreamId != 0)
@@ -1414,7 +1409,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         {
             if (strItemPath.back() != L'/')
             {
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 301, HeadList({ make_pair("Location", lstHeaderFields.find(":path")->second + '/') }), 0);
+                HeadList redHeader({ make_pair("Location", lstHeaderFields.find(":path")->second + '/') });
+                redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 301, redHeader, 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1592,6 +1590,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                             umPhpHeaders.emplace_back(make_pair("Transfer-Encoding", "chunked"));
                                             bChunkedTransfer = true;
                                         }
+                                        umPhpHeaders.insert(end(umPhpHeaders), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
                                         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
                                         if (nStreamId != 0)
                                             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
@@ -1691,7 +1690,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         soMetaDa.fSocketWrite("0\r\n\r\n", 5);
                     else if (bEndOfHeader == false)
                     {   // Noch kein Header gesendet
-                        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HeadList(), 0);
+                        HeadList tmpHeader;
+                        tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+                        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
                         if (nStreamId != 0)
                             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                         soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1710,7 +1711,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 }
                 else
                 {
-                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HeadList(), 0);
+                    HeadList tmpHeader;
+                    tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
                     if (nStreamId != 0)
                         BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1723,7 +1726,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
             else
             {
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, HeadList(), 0);
+                HeadList tmpHeader;
+                tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
                 if (nStreamId != 0)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1760,6 +1765,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         umPhpHeaders.emplace_back(make_pair("Last-Modified", strLastModTime.str()));
         umPhpHeaders.emplace_back(make_pair("Cache-Control", "private, must-revalidate"));
         umPhpHeaders.emplace_back(make_pair("ETag", strEtag));
+        umPhpHeaders.insert(end(umPhpHeaders), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
         // Static Content, check if we have a matching etag
         auto ifnonematch = lstHeaderFields.find("if-none-match");
@@ -1821,7 +1827,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         // OPTIONS
         if (itMethode->second == "OPTIONS")
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER | ADDCONENTLENGTH, 200, HeadList({ make_pair("Allow", "OPTIONS, GET, HEAD, POST") }), 0);
+            HeadList optHeader({ make_pair("Allow", "OPTIONS, GET, HEAD, POST") });
+            optHeader.insert(end(optHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER | ADDCONENTLENGTH, 200, optHeader, 0);
             if (nStreamId != 0)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
