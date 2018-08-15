@@ -631,7 +631,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             m_mtxConnections.unlock();
             pTimer->Stop();
             while (pTimer->IsStopped() == false)
+            {
                 this_thread::sleep_for(chrono::nanoseconds(1));
+                pTimer->Stop();
+            }
 
             m_mtxConnections.lock();
             item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));

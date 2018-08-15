@@ -28,7 +28,7 @@ public:
             {
                 if (m_cv.wait_for(lock, chrono::milliseconds(m_tMilliSeconds)) == cv_status::timeout)
                 {
-                    if (m_fTimeOut != 0)
+                    if (m_fTimeOut != 0 && m_bStop == false)
                         m_fTimeOut(this);
                     break;
                 }
