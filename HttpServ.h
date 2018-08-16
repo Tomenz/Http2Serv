@@ -858,7 +858,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         return string();
     }
 
-    void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList& umHeaderList = HeadList())
+    void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList = HeadList())
     {
         if (HeaderList.find(":version") != end(HeaderList) && HeaderList.find(":version")->second == "1")
             iFlag |= HTTPVERSION11;
@@ -902,7 +902,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
     }
 
-    void SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList& umHeaderList = HeadList())
+    void SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList = HeadList())
     {
         string szHost;
         const auto& host = HeaderList.find("host");   // Get the Host Header from the request
