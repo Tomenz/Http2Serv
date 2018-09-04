@@ -92,7 +92,7 @@ void WINAPI CBaseSrv::ServiceCtrlHandler(DWORD Opcode)
 	// Do whatever it takes to stop here.
 		s_This->Stop();
 		s_stSrvStatus.dwCurrentState  = SERVICE_STOP_PENDING;
-        s_stSrvStatus.dwWaitHint = 3000;
+        s_stSrvStatus.dwWaitHint = 5000;
         break;
 
 	case SERVICE_CONTROL_INTERROGATE:
