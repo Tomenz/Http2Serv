@@ -26,7 +26,7 @@ private:
     void SocketError(BaseSocket* pBaseSocket);
     void SocketCloseing(BaseSocket* pBaseSocket);
     void OnTimeout(Timer* pTimer);
-    void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop);
+    void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) override;
 
 private:
     SslTcpSocket*        m_pcClientCon;
@@ -42,6 +42,7 @@ private:
     mutex                m_mtxStreams;
     STREAMLIST           m_umStreamCache;
     STREAMSETTINGS       m_tuStreamSettings = make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096);
+    RESERVEDWINDOWSIZE   m_mResWndSizes;
     shared_ptr<TempFile> m_pTmpFileRec;
     shared_ptr<TempFile> m_pTmpFileSend;
     unique_ptr<Timer>    m_Timer;

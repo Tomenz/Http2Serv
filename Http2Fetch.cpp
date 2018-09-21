@@ -2,11 +2,14 @@
 //
 #include <iostream>
 #include <conio.h>
+#include <unordered_map>
+#include <io.h>
+#include <fcntl.h>
 
 #include "HttpFetch.h"
 #include "CommonLib/Base64.h"
 
-int main(int argc, const char* argv[])
+int main(int argc, const char* argv[], char **envp)
 {
 #if defined(_WIN32) || defined(_WIN64)
     // Detect Memory Leaks
@@ -15,11 +18,68 @@ int main(int argc, const char* argv[])
     //_setmode(_fileno(stdout), _O_U16TEXT);
 #endif
 
+    map<wstring, wstring> mapEnvList;
+    for (char **env = envp; *env != 0; ++env)
+    {
+        string strTmp = *env;
+        wstring wstrTmp = wstring(begin(strTmp), end(strTmp));
+
+        size_t nPos = wstrTmp.find_first_of('=');
+        mapEnvList.emplace(wstrTmp.substr(0, nPos), wstrTmp.substr(nPos + 1));
+    }
+
     //locale::global(std::locale(""));
     bool               bFertig = false;
     mutex              m_mxStop;
     condition_variable m_cvStop;
     HttpFetch fetch([&](HttpFetch* pFetch, void* vpUserData) { bFertig = true; m_cvStop.notify_all(); }, nullptr);
+
+    wstring strMethode;
+    if (find_if(begin(mapEnvList), end(mapEnvList), [&](auto pr) { return pr.first == L"REQUEST_METHOD" ? strMethode = pr.second, true : false;  }) != end(mapEnvList))
+    {
+        wstring strPath;
+        find_if(begin(mapEnvList), end(mapEnvList), [&](auto pr) { return (pr.first == L"PATH_INFO") ? strPath = pr.second, true : false;  });
+
+        wstring strHost;
+        find_if(begin(mapEnvList), end(mapEnvList), [&](auto pr) { return (pr.first == L"HTTP_HOST") ? strHost = pr.second, true : false;  });
+
+        wstring strHttps;
+        find_if(begin(mapEnvList), end(mapEnvList), [&](auto pr) { return (pr.first == L"HTTPS") ? strHttps = pr.second, true : false;  });
+
+        wstring strQuery;
+        find_if(begin(mapEnvList), end(mapEnvList), [&](auto pr) { return (pr.first == L"QUERY_STRING") ? strQuery = pr.second, true : false;  });
+
+#if defined(_WIN32) || defined(_WIN64)
+        _setmode(_fileno(stdin), O_BINARY);
+        _setmode(_fileno(stdout), O_BINARY);
+#endif
+
+        for (auto& itEnv : mapEnvList)
+        {
+            if (itEnv.first.find(L"HTTP_") == 0 && itEnv.first.compare(L"HTTP_HOST") != 0)
+            {
+                string strHeader(begin(itEnv.first) + 5, end(itEnv.first));
+                transform(begin(strHeader), end(strHeader), begin(strHeader), tolower);
+                replace(begin(strHeader), end(strHeader), '_', '-');
+                strHeader[0] = toupper(strHeader[0]);
+                fetch.AddToHeader(strHeader, string(begin(itEnv.second), end(itEnv.second)));
+            }
+        }
+
+        fetch.AddContent(cin.rdbuf(), cin.rdbuf()->in_avail());
+        fetch.Fetch(strHttps.compare(L"on") == 0 ? string("https://") : string("http://") + string(begin(strHost), end(strHost)) + string(begin(strPath), end(strPath)), string(begin(strMethode), end(strMethode)));
+
+        unique_lock<mutex> lock(m_mxStop);
+        m_cvStop.wait(lock, [&]() { return bFertig; });
+
+        HeadList umRespHeader = fetch.GetHeaderList();
+        for (auto& itHeader : umRespHeader)
+            cout << itHeader.first << ": " << itHeader.second << "\r\n";
+        cout << "\r\n";
+        cout << (TempFile&)fetch << flush;
+
+        return 0;
+    }
 
 //    fetch.AddToHeader("User-Agent", "http2 Util, webdav 0.1");
     fetch.AddToHeader("User-Agent", "http2fetch version 0.9 beta");
@@ -66,7 +126,6 @@ int main(int argc, const char* argv[])
 //    fetch.Fetch("https://webdav.magentacloud.de/", "PROPFIND");
     //fetch.Fetch("http://192.66.65.226/", "POST");
 
-    //while (fetch.RequestFinished() == false)
     unique_lock<mutex> lock(m_mxStop);
     m_cvStop.wait(lock, [&]() { return bFertig; });
 
@@ -85,14 +144,10 @@ int main(int argc, const char* argv[])
     wcerr << L"\r\nRequest beendet mit StatusCode: " << to_wstring(fetch.GetStatus()) << endl;
 
 #if defined(_WIN32) || defined(_WIN64)
-    //while (::_kbhit() == 0)
-    //    this_thread::sleep_for(chrono::milliseconds(1));
     _getch();
 #else
     getchar();
 #endif
-
-//	fetch.Stop();
 
     return 0;
 }
