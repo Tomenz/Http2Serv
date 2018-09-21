@@ -117,7 +117,7 @@ public:
         const ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
 
         static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 } };
-        static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },{L"ScriptOptionsHdl",10 }, {L"AddHeader", 11 } };
+        static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },{L"ScriptOptionsHdl",10 },{L"AddHeader", 11 },{L"ReverseProxy", 12} };
 
         vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
 
@@ -379,6 +379,19 @@ public:
                                 }
                             }
                             break;
+                        case 12:// ReverseProxy
+                            for (const auto& strValue : vValues)
+                            {
+                                wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
+                                if (token != wsregex_token_iterator())
+                                {
+                                    if (HostParam.m_mstrReverseProxy.find(token->str()) == end(HostParam.m_mstrReverseProxy))
+                                        HostParam.m_mstrReverseProxy.emplace(token->str(), next(token)->str());//strValue.substr(token->str().size() + 1));
+                                    else
+                                        HostParam.m_mstrReverseProxy[token->str()] = next(token)->str();
+                                }
+                            }
+                            break;
                         }
                     }
                 }
@@ -603,7 +616,7 @@ int main(int argc, const char* argv[])
 #else
                         pid_t nMyId = getpid();
                         string strMyName(64, 0);
-                        FILE* fp = fopen("/proc/self/comm", "r"); 
+                        FILE* fp = fopen("/proc/self/comm", "r");
                         if (fp)
                         {
                             if (fgets(&strMyName[0], strMyName.size(), fp) != NULL)

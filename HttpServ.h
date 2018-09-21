@@ -100,6 +100,7 @@ class CHttpServ : public Http2Protocol
         shared_ptr<mutex> mutStreams;
         STREAMLIST H2Streams;
         STREAMSETTINGS StreamParam;
+        RESERVEDWINDOWSIZE StreamResWndSizes;
         shared_ptr<atomic_bool> atStop;
     } CONNECTIONDETAILS;
 
@@ -149,6 +150,7 @@ class CHttpServ : public Http2Protocol
         vector<wstring> m_vOptionsHandler;
         unordered_map<wstring, tuple<wstring, wstring, vector<wstring>>> m_mAuthenticate;   // Directory, (Realm, Methode, Liste mit Usern)
         vector<pair<string, string>> m_vHeader; // Header-Name, Header-Value
+        unordered_map<wstring, wstring> m_mstrReverseProxy;
     } HOSTPARAM;
 
 public:
@@ -190,12 +192,15 @@ public:
         if (m_vHostParam[""].m_bSSL == true)
         {
             SslTcpServer* pSocket = new SslTcpServer();
-            pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpServ::OnNewConnection, this, _1)));
 
             if (m_vHostParam[""].m_strCAcertificate.empty() == false && m_vHostParam[""].m_strHostCertificate.empty() == false && m_vHostParam[""].m_strHostKey.empty() == false && m_vHostParam[""].m_strDhParam.empty() == false)
             {
-                pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str());
-                pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str());
+                if (pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str()) == false
+                || pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str()) == false)
+                {
+                    delete pSocket;
+                    return false;
+                }
                 if (m_vHostParam[""].m_strSslCipher.empty() == false)
                     pSocket->SetCipher(m_vHostParam[""].m_strSslCipher.c_str());
             }
@@ -204,8 +209,12 @@ public:
             {
                 if (Item.first != "" && Item.second.m_bSSL == true)
                 {
-                    pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str());
-                    pSocket->SetDHParameter(Item.second.m_strDhParam.c_str());
+                    if (pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str()) == false
+                    || pSocket->SetDHParameter(Item.second.m_strDhParam.c_str()) == false)
+                    {
+                        delete pSocket;
+                        return false;
+                    }
                     if (Item.second.m_strSslCipher.empty() == false)
                         pSocket->SetCipher(Item.second.m_strSslCipher.c_str());
                 }
@@ -214,10 +223,9 @@ public:
             m_pSocket = pSocket;
         }
         else
-        {
             m_pSocket = new TcpServer();
-            m_pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpServ::OnNewConnection, this, _1)));
-        }
+
+        m_pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpServ::OnNewConnection, this, _1)));
         m_pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
         return m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
     }
@@ -294,7 +302,7 @@ private:
             m_mtxConnections.lock();
             for (auto& pSocket : vCache)
             {
-                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), make_shared<atomic_bool>(false) }));
+                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false) }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();
@@ -372,7 +380,7 @@ private:
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) });
 
                     size_t nRet;
-                    if (nRet = Http2StreamProto(soMetaDa, pBuf.get(), nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->TmpFile, pConDetails->atStop.get()), nRet != SIZE_MAX)
+                    if (nRet = Http2StreamProto(soMetaDa, pBuf.get(), nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->TmpFile, pConDetails->atStop.get()), nRet != SIZE_MAX)
                     {
                         pConDetails->strBuffer.erase(0,  pConDetails->strBuffer.size() - nLen);
                         m_mtxConnections.unlock();
@@ -381,6 +389,7 @@ private:
 
                     // After a GOAWAY we terminate the connection
                     // we wait, until all action thread's are finished, otherwise we remove the connection while the action thread is still using it = crash
+                    *pConDetails->atStop.get() = true;
                     m_ActThrMutex.lock();
                     for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
                     {
@@ -461,7 +470,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                                 parLastHeader->second += " " + line->str();
                             }
                             else
-                            {   // header without a : char are a bad request 
+                            {   // header without a : char are a bad request
                                 parLastHeader = end(pConDetails->HeaderList);
                                 SendErrorRespons(pTcpSocket, pConDetails->pTimer, 400, 0, pConDetails->HeaderList);
                                 pTcpSocket->Close();
@@ -544,7 +553,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         nStreamId = 1;
 
                         size_t nRet;
-                        if (nRet = Http2StreamProto(soMetaDa, upTmpBuffer.get(), nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->TmpFile, pConDetails->atStop.get()), nRet == SIZE_MAX)
+                        if (nRet = Http2StreamProto(soMetaDa, upTmpBuffer.get(), nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->TmpFile, pConDetails->atStop.get()), nRet == SIZE_MAX)
                         {
                             *pConDetails->atStop.get() = true;
                             // After a GOAWAY we terminate the connection
@@ -560,10 +569,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) });
 
                     pConDetails->mutStreams->lock();
-                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(pConDetails->StreamParam))));
+                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam)));
                     pConDetails->mutStreams->unlock();
                     m_mtxConnections.unlock();
-                    DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
+                    DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
 
                     lock_guard<mutex> lock1(m_mtxConnections);
                     if (m_vConnections.find(pTcpSocket) == end(m_vConnections))
@@ -945,7 +954,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
     }
 
-    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
+    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2& hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
     {
         const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
@@ -957,7 +966,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         auto fuExitDoAction = [&]()
         {
-            lock_guard<mutex> lock1(*pmtxStream);
+            lock_guard<mutex> lock(*pmtxStream);
             auto StreamItem = hw2.StreamList.find(nStreamId);
             if (StreamItem != end(hw2.StreamList))
                 STREAMSTATE(StreamItem) |= RESET_STREAM;    // hw2.StreamList.erase(StreamItem);
@@ -979,26 +988,55 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return true;
         };
 
-        auto fnSendCueReady = [&](int32_t& nStreamWndSize, size_t& nSendBufLen, uint64_t nBufSize, uint64_t nRestLenToSend) -> bool
+        auto fnSendCueReady = [&](int64_t& nStreamWndSize, size_t& nSendBufLen, uint64_t nBufSize, uint64_t nRestLenToSend) -> bool
         {
+            bool bRet = true;
             size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
             if (nInQue >= 0x200000 || nStreamWndSize <= 0)
             {
-                this_thread::sleep_for(chrono::nanoseconds(1));
-                return false;
+                nSendBufLen = 0;
+                bRet = false;
+            }
+            else
+                nSendBufLen = min(static_cast<size_t>(min(nBufSize, nRestLenToSend)), static_cast<uint64_t>(nStreamWndSize));
+
+            // Liste der reservierten Window Sizes für das nächste senden bereinigen
+            pmtxStream->lock();
+            auto it = maResWndSizes.find(nStreamId);
+            if (it != end(maResWndSizes))
+            {
+                maResWndSizes[0] -= it->second;
+                maResWndSizes.erase(it);
             }
 
-            nSendBufLen = min(static_cast<size_t>(min(nBufSize, nRestLenToSend)), static_cast<size_t>(nStreamWndSize));
-            return true;
+            if (nSendBufLen > 0)
+            {
+                maResWndSizes[0] += static_cast<uint64_t>(nSendBufLen);
+                maResWndSizes[nStreamId] = static_cast<uint64_t>(nSendBufLen);
+            }
+            pmtxStream->unlock();
+
+            if (bRet == false)
+                this_thread::sleep_for(chrono::nanoseconds(1));
+
+            return bRet;
         };
 
-        auto fnGetStreamWindowSize = [&](int32_t& iStreamWndSize) -> bool
+        auto fnGetStreamWindowSize = [&](int64_t& iStreamWndSize) -> bool
         {
             if (nStreamId != 0)
             {
-                int32_t iTotaleWndSize = UINT16_MAX;
+                int64_t iTotaleWndSize = UINT16_MAX;
 
-                lock_guard<mutex> lock0(*pmtxStream);
+                lock_guard<mutex> lock(*pmtxStream);
+                // Liste der reservierten Window Sizes für das nächste senden bereinigen
+                auto it = maResWndSizes.find(nStreamId);
+                if (it != end(maResWndSizes))
+                {
+                    maResWndSizes[0] -= it->second;
+                    maResWndSizes.erase(it);
+                }
+
                 auto StreamItem = hw2.StreamList.find(nStreamId);
                 if (StreamItem != end(hw2.StreamList))
                     iStreamWndSize = WINDOWSIZE(StreamItem);
@@ -1006,10 +1044,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     return false;  // Stream Item was removed, properly the stream was reseted
                 StreamItem = hw2.StreamList.find(0);
                 if (StreamItem != end(hw2.StreamList))
-                    iTotaleWndSize = WINDOWSIZE(StreamItem);
+                    iTotaleWndSize = WINDOWSIZE(StreamItem) - maResWndSizes[0];
                 else
                     return false;  // Stream Item was removed, properly the stream was reseted
                 iStreamWndSize = min(iStreamWndSize, iTotaleWndSize);
+
+                maResWndSizes[0] += iStreamWndSize;
+                maResWndSizes[nStreamId] = iStreamWndSize;
             }
             return true;
         };
@@ -1019,6 +1060,14 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             if (nStreamId != 0)
             {
                 lock_guard<mutex> lock(*pmtxStream);
+
+                auto it = maResWndSizes.find(nStreamId);
+                if (it != end(maResWndSizes))
+                {
+                    maResWndSizes[0] -= it->second;
+                    maResWndSizes.erase(it);
+                }
+
                 auto StreamItem = hw2.StreamList.find(nStreamId);
                 if (StreamItem != end(hw2.StreamList))
                     WINDOWSIZE(StreamItem) -= static_cast<uint32_t>(nSendBufLen);
@@ -1031,6 +1080,18 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     return -1;  // Stream Item was removed, properly the stream was reseted
             }
             return 0;
+        };
+
+        auto fnResetReservierteWindowSize = [&]()
+        {
+            lock_guard<mutex> lock(*pmtxStream);
+            // Liste der reservierten Window Sizes für das nächste senden bereinigen
+            auto it = maResWndSizes.find(nStreamId);
+            if (it != end(maResWndSizes))
+            {
+                maResWndSizes[0] -= it->second;
+                maResWndSizes.erase(it);
+            }
         };
 
         const uint32_t nHttp2Offset = nStreamId != 0 ? 9 : 0;
@@ -1185,6 +1246,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
         }
 
+        // Check for RewriteRule
+        for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)
+        {
+            strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
+        }
+
         vector<wstring> vStrEnvVariable;
         // Check for SetEnvIf
         for (auto& strEnvIf : m_vHostParam[szHost].m_vEnvIf)
@@ -1214,12 +1281,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         CLogFile::SetDontLog();
                 }
             }
-        }
-
-        // Check for RewriteRule
-        for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)
-        {
-            strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
         }
 
         // Test for forbidden element /.. /aux /lpt /com .htaccess .htpasswd .htgroup
@@ -1643,7 +1704,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             size_t nBytesTransfered = 0;
                             while (nBytesTransfered < static_cast<size_t>(nRead) && (*patStop).load() == false)
                             {
-                                int32_t nStreamWndSize = INT32_MAX;
+                                int64_t nStreamWndSize = INT32_MAX;
                                 if (fnGetStreamWindowSize(nStreamWndSize) == false)
                                     break;  // Stream Item was removed, properly the stream was reseted
 
@@ -1670,6 +1731,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                 if (fnUpdateStreamParam(nSendBufLen) == -1)
                                     break;  // Stream Item was removed, properly the stream was reseted
                             }
+                            fnResetReservierteWindowSize();
 
                             nTotal += nBytesTransfered;
                         }
@@ -1941,7 +2003,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     int iRet;
                     do
                     {
-                        int32_t nStreamWndSize = INT32_MAX;
+                        int64_t nStreamWndSize = INT32_MAX;
                         if (fnGetStreamWindowSize(nStreamWndSize) == false || (*patStop).load() == true)
                             break;  // Stream Item was removed, properly the stream was reseted
 
@@ -1983,6 +2045,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             }
                         } while (iRet == Z_OK && nBytesConverted == 0 && (*patStop).load() == false);
                     } while (iRet == Z_OK);
+
+                    fnResetReservierteWindowSize();
 
                     if (nStreamId != 0)
                     {
@@ -2026,7 +2090,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 uint64_t nBytesTransfered = 0;
                 while ((*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                 {
-                    int32_t nStreamWndSize = INT32_MAX;
+                    int64_t nStreamWndSize = INT32_MAX;
                     if (fnGetStreamWindowSize(nStreamWndSize) == false)
                         break;  // Stream Item was removed, properly the stream was reseted
 
@@ -2071,6 +2135,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         break;
                 }
 
+                fnResetReservierteWindowSize();
+
                 if (nStreamId != 0)
                 {
                     BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()), 0, 0x0, 0x1, nStreamId);
@@ -2096,7 +2162,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 uint64_t nBytesTransfered = 0;
                 while (nBytesTransfered < nFSize && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                 {
-                    int32_t nStreamWndSize = INT32_MAX;
+                    int64_t nStreamWndSize = INT32_MAX;
                     if (fnGetStreamWindowSize(nStreamWndSize) == false)
                         break;  // Stream Item was removed, properly the stream was reseted
 
@@ -2115,6 +2181,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     if (fnUpdateStreamParam(nSendBufLen) == -1)
                         break;  // Stream Item was removed, properly the stream was reseted
                 }
+                fnResetReservierteWindowSize();
             }
             fin.close();
 
@@ -2139,7 +2206,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         fuExitDoAction();
     }
 
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) override
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) override
     {
         auto StreamPara = StreamList.find(streamId);
         if (StreamPara != end(StreamList))
@@ -2149,7 +2216,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 throw H2ProtoException(H2ProtoException::WRONG_HEADER);
         }
 
-        thread(&CHttpServ::DoAction, this, soMetaDa, streamId, HEADERWRAPPER2{ ref(StreamList)}, ref(tuStreamSettings), pmtxStream, move(pTmpFile), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop).detach();
+        thread(&CHttpServ::DoAction, this, soMetaDa, streamId, HEADERWRAPPER2{ ref(StreamList)}, ref(tuStreamSettings), pmtxStream, ref(maResWndSizes), move(pTmpFile), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop).detach();
     }
 
 private:

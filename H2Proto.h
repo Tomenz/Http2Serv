@@ -23,15 +23,16 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #if !defined(_WIN32) && !defined(_WIN64) && __GNUC__ < 7
 typedef atomic<size_t> atomic_int32_t;
 #endif
-typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, shared_ptr<atomic_int32_t>> STREAMITEM;
+typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, int64_t> STREAMITEM;
 #define STREAMSTATE(x) get<0>(x->second)
 #define DATALIST(x) get<1>(x->second)
 #define GETHEADERLIST(x) get<2>(x->second)
 #define CONTENTLENGTH(x) get<3>(x->second)
 #define CONTENTRESCIV(x) get<4>(x->second)
-#define WINDOWSIZE(x) *get<5>(x->second).get()
+#define WINDOWSIZE(x) get<5>(x->second)
 
 typedef map<unsigned long, STREAMITEM> STREAMLIST;
+typedef map<unsigned long, uint64_t>   RESERVEDWINDOWSIZE;
 
 //typedef tuple<string, short, string, short, bool, function<uint32_t(const void*, uint32_t)>, function<void()>, function<uint32_t()>> MetaSocketData;
 //#define SocketWrite(x) get<5>(x)
@@ -110,7 +111,7 @@ public:
             MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
-    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
+    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
     {
         size_t nReturn = 0;
 
@@ -172,7 +173,7 @@ public:
                 auto streamData = umStreamCache.find(h2f.streamId);
                 if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
                 {
-                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings))));
                     streamData = umStreamCache.find(h2f.streamId);
                 }
 
@@ -284,7 +285,7 @@ public:
                                 if (umStreamCache.rbegin()->first > h2f.streamId)   // New stream id is smaller that existing stream id
                                     throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR, h2f.streamId);
 
-                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, INITWINDOWSIZE(tuStreamSettings))));
                                 if (insert.second == false)
                                     throw H2ProtoException(H2ProtoException::INTERNAL_ERROR, h2f.streamId);
                                 else
@@ -323,7 +324,7 @@ public:
                         }
                         else
                         {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, make_shared<atomic_int32_t>(INITWINDOWSIZE(tuStreamSettings)))));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings))));
                             if (insert.second == true)
                             {
                                 auto data = shared_ptr<char>(new char[h2f.size - PadLen]);
@@ -497,7 +498,6 @@ public:
 
                         // After a GOAWAY we terminate the connection
                         Http2Goaway(soMetaDa.fSocketWrite, 0, umStreamCache.rbegin()->first, 0);  // GOAWAY
-                        soMetaDa.fSocketClose();
                     }
                     pmtxStream->unlock();
                     break;
@@ -518,7 +518,7 @@ public:
                             throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
                         else if (lValue >= 1 && lValue <= 2147483647)    // 2^31 - 1
                         {
-                            if ((static_cast<unsigned long>(WINDOWSIZE(streamData)) + lValue) > 2147483647)  // 2^31 - 1
+                            if (WINDOWSIZE(streamData) + lValue > 2147483647)  // 2^31 - 1
                                 throw H2ProtoException(H2ProtoException::WINDOW_SIZE_TO_HIGH, h2f.streamId);
                             WINDOWSIZE(streamData) += lValue;
                         }
@@ -599,7 +599,7 @@ public:
             for (auto& item : CallAction)
             {
                 pmtxStream->lock();
-                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, pTmpFile, patStop);
+                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, pTmpFile, patStop);
                 pmtxStream->unlock();
             }
 
@@ -682,5 +682,5 @@ public:
     }
 
 private:
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) = 0;
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) = 0;
 };
