@@ -127,6 +127,9 @@ class CHttpServ : public Http2Protocol
         BROTLICODING = 128,
     };
 
+    const char* SERVERSIGNATUR = "Http2Serv/1.0.0";
+
+public:
     typedef struct
     {
         vector<wstring> m_vstrDefaultItem;
@@ -705,7 +708,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return 0;
         nHeaderSize += nReturn;
 
-        nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "server", "Http2Serv");
+        nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "server", SERVERSIGNATUR);
         if (nReturn == SIZE_MAX)
             return 0;
         nHeaderSize += nReturn;
@@ -794,7 +797,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         const auto& itRespText = RespText.find(iRespCode);
         strRespons += itRespText != end(RespText) ? itRespText->second : "undefined";
         strRespons += "\r\n";
-        strRespons += "Server: Http2Serv/1.0\r\n";
+        strRespons += "Server: ";
+        strRespons += SERVERSIGNATUR;
+        strRespons += "\r\n";
 
         strRespons += "Date: ";
         auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
@@ -954,7 +959,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
     }
 
-    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2& hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
+    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
     {
         const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
@@ -998,7 +1003,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 bRet = false;
             }
             else
-                nSendBufLen = min(static_cast<size_t>(min(nBufSize, nRestLenToSend)), static_cast<uint64_t>(nStreamWndSize));
+                nSendBufLen = min(min(nBufSize, nRestLenToSend), static_cast<uint64_t>(nStreamWndSize));
 
             // Liste der reservierten Window Sizes für das nächste senden bereinigen
             pmtxStream->lock();
@@ -1566,7 +1571,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     }
                 }
 
-                run.AddEnvironment("SERVER_SOFTWARE=Http2Serv/1.0");
+                run.AddEnvironment("SERVER_SOFTWARE=" + string(SERVERSIGNATUR));
                 run.AddEnvironment("REDIRECT_STATUS=200");
                 run.AddEnvironment("REMOTE_ADDR=" + soMetaDa.strIpClient);
                 run.AddEnvironment("SERVER_PORT=" + to_string(soMetaDa.sPortInterFace));
@@ -2220,10 +2225,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
     }
 
 private:
-#pragma message("TODO!!! Folge Zeile wieder entfernen.")
-    friend int main(int, const char*[]);
-    friend void sigusr1_handler(int);
-    friend class Service;
     TcpServer*             m_pSocket;
     CONNECTIONLIST         m_vConnections;
     mutex                  m_mtxConnections;
