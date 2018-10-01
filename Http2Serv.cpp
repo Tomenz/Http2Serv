@@ -375,7 +375,13 @@ public:
                                         token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
                                         token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
                                     }
-                                    HostParam.m_vHeader.emplace_back(make_pair(Utf8Converter.to_bytes(token[0]), Utf8Converter.to_bytes(token[1])));
+
+                                    string strKeyWord = Utf8Converter.to_bytes(token[0]);
+                                    auto& itHeader = find_if(begin(HostParam.m_vHeader), end(HostParam.m_vHeader), [&](auto& itHeader) { return get<0>(itHeader).compare(strKeyWord) == 0 ? true : false; });
+                                    if (itHeader == end(HostParam.m_vHeader))
+                                        HostParam.m_vHeader.emplace_back(make_pair(strKeyWord, Utf8Converter.to_bytes(token[1])));
+                                    else
+                                        get<1>(*itHeader) = Utf8Converter.to_bytes(token[1]);
                                 }
                             }
                             break;

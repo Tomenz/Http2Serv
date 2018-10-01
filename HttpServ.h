@@ -1005,21 +1005,23 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             else
                 nSendBufLen = min(min(nBufSize, nRestLenToSend), static_cast<uint64_t>(nStreamWndSize));
 
-            // Liste der reservierten Window Sizes für das nächste senden bereinigen
-            pmtxStream->lock();
-            auto it = maResWndSizes.find(nStreamId);
-            if (it != end(maResWndSizes))
+            if (nStreamId != 0)
             {
-                maResWndSizes[0] -= it->second;
-                maResWndSizes.erase(it);
-            }
+                // Liste der reservierten Window Sizes für das nächste senden bereinigen
+                lock_guard<mutex> lock(*pmtxStream);
+                auto it = maResWndSizes.find(nStreamId);
+                if (it != end(maResWndSizes))
+                {
+                    maResWndSizes[0] -= it->second;
+                    maResWndSizes.erase(it);
+                }
 
-            if (nSendBufLen > 0)
-            {
-                maResWndSizes[0] += static_cast<uint64_t>(nSendBufLen);
-                maResWndSizes[nStreamId] = static_cast<uint64_t>(nSendBufLen);
+                if (nSendBufLen > 0)
+                {
+                    maResWndSizes[0] += static_cast<uint64_t>(nSendBufLen);
+                    maResWndSizes[nStreamId] = static_cast<uint64_t>(nSendBufLen);
+                }
             }
-            pmtxStream->unlock();
 
             if (bRet == false)
                 this_thread::sleep_for(chrono::nanoseconds(1));
@@ -1054,8 +1056,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     return false;  // Stream Item was removed, properly the stream was reseted
                 iStreamWndSize = min(iStreamWndSize, iTotaleWndSize);
 
-                maResWndSizes[0] += iStreamWndSize;
-                maResWndSizes[nStreamId] = iStreamWndSize;
+                if (iStreamWndSize > 0)
+                {
+                    maResWndSizes[0] += iStreamWndSize;
+                    maResWndSizes[nStreamId] = iStreamWndSize;
+                }
             }
             return true;
         };
@@ -2008,15 +2013,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     int iRet;
                     do
                     {
-                        int64_t nStreamWndSize = INT32_MAX;
-                        if (fnGetStreamWindowSize(nStreamWndSize) == false || (*patStop).load() == true)
-                            break;  // Stream Item was removed, properly the stream was reseted
-
-                        size_t nSendBufLen;
-                        if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered) == false)
-                            continue;
-
-                        streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSendBufLen).gcount();
+                        streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
                         if (nBytesRead == 0)
                             break;
                         nBytesTransfered += nBytesRead;
@@ -2030,30 +2027,44 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             nBytesConverted = nSizeSendBuf - nHttp2Offset;
                             iRet = gzipEncoder.Enflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, nFlush);
 
-                            if ((iRet == Z_OK || iRet == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted) != 0)
+                            size_t nOffset = 0;
+                            while ((iRet == Z_OK || iRet == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                             {
+                                int64_t nStreamWndSize = INT32_MAX;
+                                if (fnGetStreamWindowSize(nStreamWndSize) == false)
+                                    break;  // Stream Item was removed, properly the stream was reseted
+
+                                size_t nSendBufLen;
+                                if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset)) == false)
+                                    continue;
+
                                 if (nStreamId != 0)
-                                    BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()), ((nSizeSendBuf - nHttp2Offset) - nBytesConverted), 0x0, /*(nFSize == nBytesTransfered ? 0x1 : 0x0)*/0, nStreamId);
+                                    BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()) + nOffset, nSendBufLen, 0x0, 0, nStreamId);
                                 else
                                 {
                                     stringstream ss;
-                                    ss << hex << ::uppercase << ((nSizeSendBuf - nHttp2Offset) - nBytesConverted) + nHttp2Offset << "\r\n";
+                                    ss << hex << ::uppercase << nSendBufLen << "\r\n";
                                     soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
                                 }
-                                soMetaDa.fSocketWrite(dstBuf.get(), ((nSizeSendBuf - nHttp2Offset) - nBytesConverted) + nHttp2Offset);
+                                soMetaDa.fSocketWrite(dstBuf.get() + nOffset, nSendBufLen + nHttp2Offset);
                                 if (nStreamId == 0)
                                     soMetaDa.fSocketWrite("\r\n", 2);
                                 soMetaDa.fResetTimer();
 
                                 if (fnUpdateStreamParam(nSendBufLen) == -1)
                                     break;  // Stream Item was removed, properly the stream was reseted
+
+                                //nBytesConverted += nSendBufLen;
+                                nOffset += nSendBufLen;
                             }
-                        } while (iRet == Z_OK && nBytesConverted == 0 && (*patStop).load() == false);
-                    } while (iRet == Z_OK);
 
-                    fnResetReservierteWindowSize();
+                            fnResetReservierteWindowSize();
 
-                    if (nStreamId != 0)
+                        } while (iRet == Z_OK && nBytesConverted == 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false);
+
+                    } while (iRet == Z_OK && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false);
+
+                    if (nStreamId != 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                     {
                         BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()), 0, 0x0, 0x1, nStreamId);
                         soMetaDa.fSocketWrite(dstBuf.get(), nHttp2Offset);
@@ -2095,14 +2106,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 uint64_t nBytesTransfered = 0;
                 while ((*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                 {
-                    int64_t nStreamWndSize = INT32_MAX;
-                    if (fnGetStreamWindowSize(nStreamWndSize) == false)
-                        break;  // Stream Item was removed, properly the stream was reseted
-
-                    size_t nSendBufLen;
-                    if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered) == false)
-                        continue;
-
                     if (nBytIn == 0)
                     {
                         streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
@@ -2114,17 +2117,26 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     if (!BrotliEncoderCompressStream(s, nBytIn == 0 ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_PROCESS, &nBytIn, &input, &nBytOut, &output, NULL))
                         break;
 
-                    if (nBytOut != nSizeSendBuf - nHttp2Offset)
+                    size_t nOffset = 0;
+                    while (nBytOut != nSizeSendBuf - nHttp2Offset && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                     {
+                        int64_t nStreamWndSize = INT32_MAX;
+                        if (fnGetStreamWindowSize(nStreamWndSize) == false)
+                            break;  // Stream Item was removed, properly the stream was reseted
+
+                        size_t nSendBufLen;
+                        if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), ((nSizeSendBuf - nHttp2Offset) - nBytOut)) == false)
+                            continue;
+
                         if (nStreamId != 0)
-                            BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()), ((nSizeSendBuf - nHttp2Offset) - nBytOut), 0x0, /*(nFSize - nBytesTransfered == 0 ? 0x1 : 0x0)*/0, nStreamId);
+                            BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()) + nOffset, nSendBufLen, 0x0, 0, nStreamId);
                         else
                         {
                             stringstream ss;
-                            ss << hex << ::uppercase << ((nSizeSendBuf - nHttp2Offset) - nBytOut) + nHttp2Offset << "\r\n";
+                            ss << hex << ::uppercase << nSendBufLen << "\r\n";
                             soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
                         }
-                        soMetaDa.fSocketWrite(dstBuf.get(), ((nSizeSendBuf - nHttp2Offset) - nBytOut) + nHttp2Offset);
+                        soMetaDa.fSocketWrite(dstBuf.get() + nOffset, nSendBufLen + nHttp2Offset);
                         if (nStreamId == 0)
                             soMetaDa.fSocketWrite("\r\n", 2);
                         soMetaDa.fResetTimer();
@@ -2132,17 +2144,19 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         if (fnUpdateStreamParam(nSendBufLen) == -1)
                             break;  // Stream Item was removed, properly the stream was reseted
 
-                        nBytOut = nSizeSendBuf - nHttp2Offset;
-                        output = dstBuf.get() + nHttp2Offset;
+                        nBytOut += nSendBufLen;
+                        nOffset += nSendBufLen;
                     }
+
+                    fnResetReservierteWindowSize();
 
                     if (BrotliEncoderIsFinished(s))
                         break;
+
+                    output = dstBuf.get() + nHttp2Offset;
                 }
 
-                fnResetReservierteWindowSize();
-
-                if (nStreamId != 0)
+                if (nStreamId != 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
                 {
                     BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()), 0, 0x0, 0x1, nStreamId);
                     soMetaDa.fSocketWrite(dstBuf.get(), nHttp2Offset);
