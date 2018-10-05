@@ -377,7 +377,7 @@ public:
                                     }
 
                                     string strKeyWord = Utf8Converter.to_bytes(token[0]);
-                                    auto& itHeader = find_if(begin(HostParam.m_vHeader), end(HostParam.m_vHeader), [&](auto& itHeader) { return get<0>(itHeader).compare(strKeyWord) == 0 ? true : false; });
+                                    const auto& itHeader = find_if(begin(HostParam.m_vHeader), end(HostParam.m_vHeader), [&](auto& itHeader) { return get<0>(itHeader).compare(strKeyWord) == 0 ? true : false; });
                                     if (itHeader == end(HostParam.m_vHeader))
                                         HostParam.m_vHeader.emplace_back(make_pair(strKeyWord, Utf8Converter.to_bytes(token[1])));
                                     else
