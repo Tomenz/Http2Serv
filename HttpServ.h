@@ -377,13 +377,11 @@ private:
                         m_mtxConnections.unlock();
                         return;
                     }
-                    unique_ptr<char> pBuf(new char[nLen]);
-                    copy(begin(pConDetails->strBuffer), begin(pConDetails->strBuffer) + nLen, pBuf.get());
 
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) });
 
                     size_t nRet;
-                    if (nRet = Http2StreamProto(soMetaDa, pBuf.get(), nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->TmpFile, pConDetails->atStop.get()), nRet != SIZE_MAX)
+                    if (nRet = Http2StreamProto(soMetaDa, &pConDetails->strBuffer[0], nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->atStop.get()), nRet != SIZE_MAX)
                     {
                         pConDetails->strBuffer.erase(0,  pConDetails->strBuffer.size() - nLen);
                         m_mtxConnections.unlock();
@@ -545,8 +543,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     {
                         string strHttp2Settings = Base64::Decode(http2SettingsHeader->second, true);
                         size_t nHeaderLen = strHttp2Settings.size();
-                        auto upTmpBuffer = make_unique<char[]>(nHeaderLen);
-                        copy(begin(strHttp2Settings), begin(strHttp2Settings) + nHeaderLen, upTmpBuffer.get());
 
                         MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) });
 
@@ -556,7 +552,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                         nStreamId = 1;
 
                         size_t nRet;
-                        if (nRet = Http2StreamProto(soMetaDa, upTmpBuffer.get(), nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->TmpFile, pConDetails->atStop.get()), nRet == SIZE_MAX)
+                        if (nRet = Http2StreamProto(soMetaDa, &strHttp2Settings[0], nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->atStop.get()), nRet == SIZE_MAX)
                         {
                             *pConDetails->atStop.get() = true;
                             // After a GOAWAY we terminate the connection
@@ -572,10 +568,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     MetaSocketData soMetaDa({ pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) });
 
                     pConDetails->mutStreams->lock();
-                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam)));
+                    pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam), move(pConDetails->TmpFile)));
                     pConDetails->mutStreams->unlock();
                     m_mtxConnections.unlock();
-                    DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, move(pConDetails->TmpFile), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
+                    DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
 
                     lock_guard<mutex> lock1(m_mtxConnections);
                     if (m_vConnections.find(pTcpSocket) == end(m_vConnections))
@@ -959,7 +955,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
     }
 
-    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile> pTmpFile, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
+    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
     {
         const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
@@ -1118,6 +1114,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             return;
         }
         HeadList& lstHeaderFields = GETHEADERLIST(hw2.StreamList.find(nStreamId));
+        shared_ptr<TempFile>& pTmpFile = UPLOADFILE(hw2.StreamList.find(nStreamId));
         pmtxStream->unlock();
 
         string szHost;
@@ -2225,7 +2222,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
         fuExitDoAction();
     }
 
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) override
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) override
     {
         auto StreamPara = StreamList.find(streamId);
         if (StreamPara != end(StreamList))
@@ -2235,7 +2232,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 throw H2ProtoException(H2ProtoException::WRONG_HEADER);
         }
 
-        thread(&CHttpServ::DoAction, this, soMetaDa, streamId, HEADERWRAPPER2{ ref(StreamList)}, ref(tuStreamSettings), pmtxStream, ref(maResWndSizes), move(pTmpFile), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop).detach();
+        thread(&CHttpServ::DoAction, this, soMetaDa, streamId, HEADERWRAPPER2{ ref(StreamList)}, ref(tuStreamSettings), pmtxStream, ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop).detach();
     }
 
 private:

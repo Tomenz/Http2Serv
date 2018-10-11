@@ -23,13 +23,14 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #if !defined(_WIN32) && !defined(_WIN64) && __GNUC__ < 7
 typedef atomic<size_t> atomic_int32_t;
 #endif
-typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, int64_t> STREAMITEM;
+typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, int64_t, shared_ptr<TempFile>> STREAMITEM;
 #define STREAMSTATE(x) get<0>(x->second)
 #define DATALIST(x) get<1>(x->second)
 #define GETHEADERLIST(x) get<2>(x->second)
 #define CONTENTLENGTH(x) get<3>(x->second)
 #define CONTENTRESCIV(x) get<4>(x->second)
 #define WINDOWSIZE(x) get<5>(x->second)
+#define UPLOADFILE(x) get<6>(x->second)
 
 typedef map<unsigned long, STREAMITEM> STREAMLIST;
 typedef map<unsigned long, uint64_t>   RESERVEDWINDOWSIZE;
@@ -111,7 +112,7 @@ public:
             MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
-    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile>& pTmpFile, atomic<bool>* patStop)
+    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* patStop)
     {
         size_t nReturn = 0;
 
@@ -173,7 +174,7 @@ public:
                 auto streamData = umStreamCache.find(h2f.streamId);
                 if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
                 {
-                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings))));
+                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>())));
                     streamData = umStreamCache.find(h2f.streamId);
                 }
 
@@ -205,22 +206,22 @@ public:
                         Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
                         Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
 
-                        if (pTmpFile.get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
+                        if (UPLOADFILE(streamData).get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                         {
                             auto contentLength = GETHEADERLIST(streamData).find("content-length");
                             if (contentLength != end(GETHEADERLIST(streamData)))
                                 CONTENTLENGTH(streamData) = stoull(contentLength->second);
 
-                            pTmpFile = make_shared<TempFile>();
-                            pTmpFile.get()->Open();
+                            UPLOADFILE(streamData) = make_shared<TempFile>();
+                            UPLOADFILE(streamData).get()->Open();
                         }
 
-                        pTmpFile.get()->Write(szBuf, min(static_cast<size_t>(h2f.size) - PadLen, nLen));
+                        UPLOADFILE(streamData).get()->Write(szBuf, min(static_cast<size_t>(h2f.size) - PadLen, nLen));
                         CONTENTRESCIV(streamData) += min(static_cast<size_t>(h2f.size) - PadLen, nLen);
 
                         if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM
                         {
-                            pTmpFile.get()->Close();
+                            UPLOADFILE(streamData).get()->Close();
 
                             if (CONTENTLENGTH(streamData) > 0 && CONTENTLENGTH(streamData) != CONTENTRESCIV(streamData))
                                 Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1);   // 1 = PROTOCOL_ERROR       throw H2ProtoException(H2ProtoException::DATASIZE_MISSMATCH, h2f.streamId);
@@ -285,7 +286,7 @@ public:
                                 if (umStreamCache.rbegin()->first > h2f.streamId)   // New stream id is smaller that existing stream id
                                     throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR, h2f.streamId);
 
-                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, INITWINDOWSIZE(tuStreamSettings))));
+                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>())));
                                 if (insert.second == false)
                                     throw H2ProtoException(H2ProtoException::INTERNAL_ERROR, h2f.streamId);
                                 else
@@ -324,7 +325,7 @@ public:
                         }
                         else
                         {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings))));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>())));
                             if (insert.second == true)
                             {
                                 auto data = shared_ptr<char>(new char[h2f.size - PadLen]);
@@ -376,12 +377,12 @@ public:
                         ::memcpy(&lError, szBuf, 4);
                         lError = ntohl(lError);
                         MyTrace("    Error = 0x", hex, lError, "");
-                        pTmpFile.reset();
 
                         if (streamData == end(umStreamCache) || h2f.streamId == 0)
                             throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
 
                         STREAMSTATE(streamData) |= RESET_STREAM;
+                        UPLOADFILE(streamData).reset();
                     }
                     pmtxStream->unlock();
                     break;
@@ -599,7 +600,7 @@ public:
             for (auto& item : CallAction)
             {
                 pmtxStream->lock();
-                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, pTmpFile, patStop);
+                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop);
                 pmtxStream->unlock();
             }
 
@@ -682,5 +683,5 @@ public:
     }
 
 private:
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, shared_ptr<TempFile>& pTmpFile, atomic<bool>* const patStop) = 0;
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) = 0;
 };
