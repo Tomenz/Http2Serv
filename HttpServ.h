@@ -340,8 +340,8 @@ private:
                 {
                     if ( pConDetails->strBuffer.size() >= 24 && pConDetails->strBuffer.compare(0, 24, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") == 0 && pConDetails->nContentsSoll == 0)
                     {
-                        pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x10\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and 1048576 Value + ParaID(5) and 16384 Value
-                        pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\xf\x0\x1", 13);       // WINDOW_UPDATE frame (8) with value ?1048576? (minus 65535) == 983041
+                        pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x60\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and ?6291456? Value + ParaID(5) and 16384 Value
+                        pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\x5f\x0\x1", 13);       // WINDOW_UPDATE frame (8) with value ??6291456?? (minus 65535) == ?6225921?
                         pConDetails->bIsH2Con = true;
                         pConDetails->strBuffer.erase(0, 24);
 
@@ -640,7 +640,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             pTimer->Stop();
             while (pTimer->IsStopped() == false)
             {
-                this_thread::sleep_for(chrono::nanoseconds(1));
+                this_thread::sleep_for(chrono::microseconds(1));
                 pTimer->Stop();
             }
 
@@ -1020,7 +1020,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
 
             if (bRet == false)
-                this_thread::sleep_for(chrono::nanoseconds(1));
+                this_thread::sleep_for(chrono::microseconds(10));
 
             return bRet;
         };

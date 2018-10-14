@@ -203,8 +203,11 @@ public:
                         if (h2f.size < PadLen)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_VALUE, h2f.streamId);
 
-                        Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
-                        Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
+                        if (h2f.size > 0)
+                        {
+                            Http2WindowUpdate(soMetaDa.fSocketWrite, 0, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
+                            Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
+                        }
 
                         if (UPLOADFILE(streamData).get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                         {
@@ -382,7 +385,8 @@ public:
                             throw H2ProtoException(H2ProtoException::MISSING_STREAMID);
 
                         STREAMSTATE(streamData) |= RESET_STREAM;
-                        UPLOADFILE(streamData).reset();
+                        if ((STREAMSTATE(streamData) & END_OF_STREAM) == 0)    // END_STREAM
+                            UPLOADFILE(streamData).reset();
                     }
                     pmtxStream->unlock();
                     break;

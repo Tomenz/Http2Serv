@@ -280,7 +280,7 @@ private:
             Timer* pTimer = item->second.pTimer.get();
             m_mtxConnections.unlock();
             while (pTimer->IsStopped() == false)
-                this_thread::sleep_for(chrono::nanoseconds(1));
+                this_thread::sleep_for(chrono::microseconds(1));
 
             m_mtxConnections.lock();
             item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));

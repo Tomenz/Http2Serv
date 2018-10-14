@@ -42,7 +42,7 @@ public:
         Stop();
         while (m_bIsStoped == false)
         {
-            this_thread::sleep_for(chrono::nanoseconds(1));
+            this_thread::sleep_for(chrono::microseconds(1));
             bool bIsLocked = m_mxCv.try_lock();
             if (bIsLocked == true)  // if it is not looked, the timeout is right now
             {
