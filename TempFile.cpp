@@ -6,6 +6,7 @@
 #include <io.h>
 #else
 #include <stdio.h>
+#include <unistd.h>
 #define _tempnam tempnam
 #endif
 
@@ -48,14 +49,23 @@ void TempFile::Open()
     do
     {
         lock_guard<mutex> lock(s_mxFileName);
+#if defined (_WIN32) || defined (_WIN64)
         char* szTempFileName = _tempnam(s_strTempDir.c_str(), "H2U_");
         if (szTempFileName != nullptr)
         {
-            m_strTmpFileName = szTempFileName;
+            m_strTmpFileName = string(szTempFileName) + ".tmp";
             free(szTempFileName);
-            m_strTmpFileName += ".tmp";
-            m_theFile.open(m_strTmpFileName.c_str(), ios::out | ios::in | ios::trunc | ios::binary);
+            m_theFile.open(m_strTmpFileName.c_str(), ios::out | ios::in | ios::trunc | ios::binary, _SH_DENYRW);
         }
+#else
+        m_strTmpFileName = s_strTempDir + "/H2U_XXXXXX";
+        int fNr = mkstemp(&m_strTmpFileName[0]);
+        if (fNr != -1)
+        {
+            m_theFile.open(m_strTmpFileName.c_str(), ios::out | ios::in | ios::trunc | ios::binary);
+            close(fNr);
+        }
+#endif
     } while (m_theFile.is_open() == false);
 
     m_bIsFile = true;
