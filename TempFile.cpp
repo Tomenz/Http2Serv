@@ -150,18 +150,16 @@ wostream& operator<<(wostream& os, TempFile& cTmpFile)
 {
     if (cTmpFile.m_theFile.is_open() == false)
         cTmpFile.m_theFile.open(cTmpFile.m_strTmpFileName, ios::in | ios::binary);
-    else
-        cTmpFile.m_theFile.seekg(0, ios_base::beg);
+
+    cTmpFile.m_theFile.seekg(0, ios_base::end);
+    streamoff nFSize = cTmpFile.m_theFile.tellg();
+    cTmpFile.m_theFile.seekg(0, ios_base::beg);
 
     //  http://wordaligned.org/articles/cpp-streambufs
     //  http://www.cplusplus.com/reference/fstream/ofstream/rdbuf/
 
-    char c = cTmpFile.m_theFile.rdbuf()->sbumpc();
-    while (c != EOF)
-    {
-        os.rdbuf()->sputc(c);
-        c = cTmpFile.m_theFile.rdbuf()->sbumpc();
-    }
+    while (nFSize--)
+        os.rdbuf()->sputc(cTmpFile.m_theFile.rdbuf()->sbumpc());
 
     cTmpFile.Close();
 
@@ -172,18 +170,16 @@ ostream& operator<<(ostream& os, TempFile& cTmpFile)
 {
     if (cTmpFile.m_theFile.is_open() == false)
         cTmpFile.m_theFile.open(cTmpFile.m_strTmpFileName, ios::in | ios::binary);
-    else
-        cTmpFile.m_theFile.seekg(0, ios_base::beg);
+
+    cTmpFile.m_theFile.seekg(0, ios_base::end);
+    streamoff nFSize = cTmpFile.m_theFile.tellg();
+    cTmpFile.m_theFile.seekg(0, ios_base::beg);
 
     //  http://wordaligned.org/articles/cpp-streambufs
     //  http://www.cplusplus.com/reference/fstream/ofstream/rdbuf/
 
-    char c = cTmpFile.m_theFile.rdbuf()->sbumpc();
-    while (c != EOF)
-    {
-        os.rdbuf()->sputc(c);
-        c = cTmpFile.m_theFile.rdbuf()->sbumpc();
-    }
+    while (nFSize--)
+        os.rdbuf()->sputc(cTmpFile.m_theFile.rdbuf()->sbumpc());
 
     cTmpFile.Close();
 

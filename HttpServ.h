@@ -1631,9 +1631,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     {
                         bStillRunning = run.StillSpawning();
 
+                        bool bHasRead = false;
                         int nRead;
-                        if (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0)
+                        while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0)
                         {
+                            bHasRead = true;
                             nRead += nOffset;
                             nOffset = 0;
 
@@ -1647,10 +1649,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     if (nPosEnd == string::npos)
                                         nPosEnd = nRead;
 
-                                    if (nPosStart == 0)
+                                    if (nPosStart == 0) // second crlf = end of header
                                     {
                                         // Build response header
                                         auto itCgiHeader = umPhpHeaders.ifind("status");
+                                        if (itCgiHeader == end(umPhpHeaders))
+                                            itCgiHeader = umPhpHeaders.ifind(":status");
                                         if (itCgiHeader != end(umPhpHeaders))
                                         {
                                             iStatus = stoi(itCgiHeader->second);
@@ -1677,8 +1681,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     }
                                     else if (nPosStart != string::npos)
                                     {
-                                        size_t nPos2 = strBuffer.substr(0, nPosStart).find(":");
-                                        if (nPos2 != string::npos)
+                                        size_t nPos2 = strBuffer.substr(1, nPosStart).find(":");
+                                        if (nPos2++ != string::npos)
                                         {
                                             auto iter = umPhpHeaders.emplace(umPhpHeaders.end(), make_pair(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1))));
                                             if (iter != end(umPhpHeaders))
@@ -1706,6 +1710,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                                 if (nRead == 0)
                                     continue;
+                            }
+
+                            if (nStreamId != 0)
+                            {
+                                nOffset = min(nRead, 10);
+                                nRead -= nOffset;
                             }
 
                             size_t nBytesTransfered = 0;
@@ -1741,12 +1751,13 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             fnResetReservierteWindowSize();
 
                             nTotal += nBytesTransfered;
+                            copy(pBuf.get() + nHttp2Offset + nBytesTransfered, pBuf.get() + nHttp2Offset + nBytesTransfered + nOffset, pBuf.get() + nHttp2Offset);
                         }
-                        else if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get()), static_cast<int>(65536)), nRead > 0)
+                        if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get()), static_cast<int>(65536)), nRead > 0)
                         {
                             CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] CGI error output: ", string(pBuf.get(), nRead));
                         }
-                        else if (bStillRunning == true)
+                        else if (bStillRunning == true && bHasRead == false)
                             this_thread::sleep_for(chrono::milliseconds(1));
                     }
 
@@ -1754,8 +1765,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                     if (bEndOfHeader == true && nStreamId != 0)
                     {
-                        BuildHttp2Frame(pBuf.get(), 0, 0x0, 0x1, nStreamId);
-                        soMetaDa.fSocketWrite(pBuf.get(), nHttp2Offset);
+                        BuildHttp2Frame(pBuf.get(), nOffset, 0x0, 0x1, nStreamId);
+                        soMetaDa.fSocketWrite(pBuf.get(), nHttp2Offset + nOffset);
                         soMetaDa.fResetTimer();
                     }
                     else if (bEndOfHeader == true && bChunkedTransfer == true)
@@ -2036,7 +2047,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                                     continue;
 
                                 if (nStreamId != 0)
-                                    BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()) + nOffset, nSendBufLen, 0x0, 0, nStreamId);
+                                {
+                                    bool bLastPaket = false;
+                                    if (iRet == Z_STREAM_END && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) == nSendBufLen) // Letztes Paket
+                                        bLastPaket = true;
+                                    BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()) + nOffset, nSendBufLen, 0x0, bLastPaket == true ? 0x1 : 0x0, nStreamId);
+                                }
                                 else
                                 {
                                     stringstream ss;
@@ -2061,12 +2077,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                     } while (iRet == Z_OK && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false);
 
-                    if (nStreamId != 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
-                    {
-                        BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()), 0, 0x0, 0x1, nStreamId);
-                        soMetaDa.fSocketWrite(dstBuf.get(), nHttp2Offset);
-                    }
-                    else
+                    if (nStreamId == 0 && (*patStop).load() == false)
                         soMetaDa.fSocketWrite("0\r\n\r\n", 5);
                 }
             }
@@ -2126,7 +2137,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             continue;
 
                         if (nStreamId != 0)
-                            BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()) + nOffset, nSendBufLen, 0x0, 0, nStreamId);
+                            BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()) + nOffset, nSendBufLen, 0x0, BrotliEncoderIsFinished(s) == 1 ? 0x1 : 0x0, nStreamId);
                         else
                         {
                             stringstream ss;
@@ -2153,12 +2164,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     output = dstBuf.get() + nHttp2Offset;
                 }
 
-                if (nStreamId != 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
-                {
-                    BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()), 0, 0x0, 0x1, nStreamId);
-                    soMetaDa.fSocketWrite(dstBuf.get(), nHttp2Offset);
-                }
-                else
+                if (nStreamId == 0 && (*patStop).load() == false)
                     soMetaDa.fSocketWrite("0\r\n\r\n", 5);
 
                 BrotliEncoderDestroyInstance(s);
