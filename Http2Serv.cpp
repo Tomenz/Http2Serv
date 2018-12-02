@@ -238,7 +238,6 @@ public:
                         case 9: // ScriptAliasMatch
                             for (const auto& strValue : vValues)
                             {
-                                //const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
                                 const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\\"");
                                 vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
                                 if (token.size() == 2)
@@ -273,10 +272,9 @@ public:
                         case 4: // FileTyps
                             for (const auto& strValue : vValues)
                             {
-                                //const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\\\"]+)\\\"");
                                 const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\\"");
                                 vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
-                                if (token.size() == 2)
+                                if (token.size() >= 2)
                                 {
                                     for (size_t n = 0; n < token.size(); ++n)
                                     {
@@ -286,9 +284,10 @@ public:
                                         token[n] = regex_replace(token[n], wregex(L"`"), L"\"");
                                     }
                                     if (HostParam.m_mFileTypeAction.find(token[0]) == end(HostParam.m_mFileTypeAction))
-                                        HostParam.m_mFileTypeAction.emplace(token[0], token[1]);//strValue.substr(token->str().size() + 1));
+                                        HostParam.m_mFileTypeAction.emplace(token[0], token);
                                     else
-                                        HostParam.m_mFileTypeAction[token[0]] = token[1];
+                                        HostParam.m_mFileTypeAction[token[0]] = token;
+                                    HostParam.m_mFileTypeAction[token[0]].erase(HostParam.m_mFileTypeAction[token[0]].begin());
                                 }
                             }
                             break;

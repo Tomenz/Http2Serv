@@ -146,7 +146,7 @@ public:
 
         try
         {
-            char* szBufStart = szBuf;
+            //char* szBufStart = szBuf;
             vector<uint32_t> CallAction;
 
             while (nLen >= 9)   // Settings ACK Frame is 9 Bytes long
@@ -160,8 +160,8 @@ public:
 
                 if (h2f.size > nLen - 9)
                 {   // We have less Data in the buffer than the next frame needs to be processed, we put it back into the revive Que
-                    ::memmove(szBufStart, szBuf, nLen);
-                    return nLen;
+                    //::memmove(szBufStart, szBuf, nLen);
+                    break;
                 }
 
                 nLen -= 9;

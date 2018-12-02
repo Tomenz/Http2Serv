@@ -146,7 +146,7 @@ public:
         unordered_map<wstring, wstring> m_mstrRewriteRule;
         unordered_map<wstring, tuple<wstring, bool>> m_mstrAliasMatch;
         unordered_map<wstring, wstring> m_mstrForceTyp;
-        unordered_map<wstring, wstring> m_mFileTypeAction;
+        unordered_map<wstring, vector<wstring>> m_mFileTypeAction;
         vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;
         vector<tuple<wstring, wstring, wstring>> m_vEnvIf;  //  Request_URI "^/.*" "ENV-Name=ENV-Value"
         vector<string> m_vDeflateTyps;
@@ -351,7 +351,7 @@ private:
                             return;
                         }
                     }
-                    else if (pConDetails->nContentsSoll != 0 && pConDetails->nContentRecv < pConDetails->nContentsSoll)  // File Download in progress
+                    else if (pConDetails->nContentsSoll != 0 && pConDetails->nContentRecv < pConDetails->nContentsSoll)  // File upload in progress
                     {
                         size_t nBytesToWrite = static_cast<size_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
                         pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
@@ -497,6 +497,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                         }
                     }
 
+                    // is data (body) on the request, only HTTP/1.1
                     auto contentLength = pConDetails->HeaderList.find("content-length");
                     if (contentLength != end(pConDetails->HeaderList))
                     {
@@ -509,11 +510,11 @@ auto dwStart = chrono::high_resolution_clock::now();
                             pConDetails->TmpFile = make_unique<TempFile>();
                             pConDetails->TmpFile->Open();
 
-                            if ( pConDetails->strBuffer.size() > 0)
+                            if ( pConDetails->strBuffer.size() > 0) // is data in the received buffer avalible
                             {
-                                size_t nBytesToWrite = static_cast<size_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll - pConDetails->nContentRecv));
+                                size_t nBytesToWrite = static_cast<size_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll));
                                 pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
-                                pConDetails->nContentRecv += nBytesToWrite;
+                                pConDetails->nContentRecv = nBytesToWrite;
                                 pConDetails->strBuffer.erase(0, nBytesToWrite);
                             }
 
@@ -560,6 +561,9 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             m_mtxConnections.unlock();
                             return;
                         }
+                        else if (nHeaderLen != 0)
+                            pConDetails->strBuffer.insert(0, strHttp2Settings.substr(strHttp2Settings.size() - nHeaderLen));
+
                     }
                 }
 
@@ -1219,6 +1223,20 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 strItemPath += static_cast<wchar_t>(itPath->second.at(n));
         }
 
+        // Check for RewriteRule
+        for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)
+        {
+            strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
+        }
+
+        // Falls der RewriteRile dem QueryString was dazumacht
+        size_t nPos = strItemPath.find_first_of(L'?');
+        if (nPos != -1)
+        {
+            strQuery += (strQuery.empty() == false ? "&" : "") + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath.substr(nPos + 1));
+            strItemPath.erase(nPos);
+        }
+
         // Check for redirect
         for (auto& tuRedirect : m_vHostParam[szHost].m_vRedirMatch)    // RedirectMatch
         {
@@ -1251,12 +1269,6 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 fuExitDoAction();
                 return;
             }
-        }
-
-        // Check for RewriteRule
-        for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)
-        {
-            strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
         }
 
         vector<wstring> vStrEnvVariable;
@@ -1337,7 +1349,8 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                             BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
                             soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
                         }
-                        soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
+                        if (fnIsStreamReset(nStreamId) == false)
+                            soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
                     }
                     soMetaDa.fResetTimer();
 
@@ -1537,10 +1550,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
         uint32_t iStatus = 200;
 
-        const auto strFileTyp = m_vHostParam[szHost].m_mFileTypeAction.find(strFileExtension);
-        if ((strFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) || bExecAsScript == true) && (itMethode->second != "OPTIONS" || bOptionsHandlerInScript == true))
+        const auto itFileTyp = m_vHostParam[szHost].m_mFileTypeAction.find(strFileExtension);
+        if ((itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) || bExecAsScript == true) && (itMethode->second != "OPTIONS" || bOptionsHandlerInScript == true))
         {
-            if (bExecAsScript == true || strFileTyp->second.empty() == false)
+            if (bExecAsScript == true || (itFileTyp->second.empty() == false && itFileTyp->second.back().empty() == false))
             {
                 uint64_t nSollLen = 0, nPostLen = 0;
                 if (pTmpFile != 0)
@@ -1598,7 +1611,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     run.AddEnvironment("QUERY_STRING=" + strQuery);
                 run.AddEnvironment(L"SCRIPT_FILENAME=" + strItemPath);
 
-                if (run.Spawn((bExecAsScript == true ? strItemPath : regex_replace(strFileTyp->second, wregex(L"\\$1"), /*L"\" \"" +*/ strItemPath)), strItemPath.substr(0, strItemPath.find_last_of(L"\\/"))) == 0)
+                if (run.Spawn((bExecAsScript == true ? strItemPath : regex_replace(itFileTyp->second.back(), wregex(L"\\$1"), /*L"\" \"" +*/ strItemPath)), strItemPath.substr(0, strItemPath.find_last_of(L"\\/"))) == 0)
                 {
                     if (nPostLen > 0)
                     {

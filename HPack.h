@@ -98,7 +98,7 @@ public:
             else
                 break;
 
-            if (nLen * 8 < TotalBits)    // Das letzte Byte ist über unserer Länge des Bitstreams
+            if (nLen * 8 < TotalBits)    // Das letzte Byte ist über unserer Länge des Bit streams
                 break;
 
             if (iCode != -1 && iCode < static_cast<int>(sizeof(SYMTABLE)))
@@ -148,7 +148,7 @@ public:
         (*pnLen)--;
 
         if ((nStrLen & 0x7f) == 0x7f)    // 7 Bit prefix
-            nStrLen += DecodeInteger(pszBuf, pnLen);// , ::OutputDebugString(L"Integer decoden\r\n");
+            nStrLen += DecodeInteger(pszBuf, pnLen);// , ::OutputDebugString(L"Integer decodieren\r\n");
 
         if (*pnLen < nStrLen)
             throw H2ProtoException(H2ProtoException::BUFFSIZE_ERROR);
@@ -174,7 +174,7 @@ public:
         (*pnLen)--;
 
         if ((iIndex & nBitMask) == nBitMask)
-            iIndex += DecodeInteger(pszBuf, pnLen);// , ::OutputDebugString(L"Integer decoden\r\n");
+            iIndex += DecodeInteger(pszBuf, pnLen);// , ::OutputDebugString(L"Integer decodieren\r\n");
 
         return iIndex;
     }
