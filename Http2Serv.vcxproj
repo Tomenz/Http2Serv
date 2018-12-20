@@ -168,6 +168,7 @@
   <ItemGroup>
     <ClCompile Include="ConfFile.cpp" />
     <ClCompile Include="Http2Serv.cpp" />
+    <ClCompile Include="HttpServ.cpp" />
     <ClCompile Include="LogFile.cpp" />
     <ClCompile Include="SpawnProcess.cpp" />
     <ClCompile Include="TempFile.cpp" />

@@ -2,6 +2,8 @@
 //
 
 #include <iostream>
+#include <regex>
+#include <codecvt>
 #include <signal.h>
 #include <fcntl.h>
 
@@ -17,6 +19,7 @@
 
 #include "ConfFile.h"
 #include "HttpServ.h"
+#include "SpawnProcess.h"
 
 #ifndef _UTFCONVERTER
 #define _UTFCONVERTER
