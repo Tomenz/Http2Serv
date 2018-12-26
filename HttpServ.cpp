@@ -9,8 +9,6 @@
  *
  */
 
-#pragma once
-
 #include <regex>
 #include <map>
 #include <algorithm>
@@ -1157,7 +1155,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
 
     // Falls der RewriteRile dem QueryString was dazumacht
     size_t nPos = strItemPath.find_first_of(L'?');
-    if (nPos != -1)
+    if (nPos != string::npos)
     {
         strQuery += (strQuery.empty() == false ? "&" : "") + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath.substr(nPos + 1));
         strItemPath.erase(nPos);

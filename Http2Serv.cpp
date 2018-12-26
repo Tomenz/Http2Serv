@@ -15,6 +15,8 @@
 #pragma message("TODO!!! Folge Zeile wieder entfernen.")
 #include <termios.h>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 #include "ConfFile.h"
