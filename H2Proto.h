@@ -23,22 +23,27 @@ typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #if !defined(_WIN32) && !defined(_WIN64) && __GNUC__ < 7
 typedef atomic<size_t> atomic_int32_t;
 #endif
-typedef tuple<uint32_t, deque<DATAITEM>, HeadList, uint64_t, uint64_t, int64_t, shared_ptr<TempFile>> STREAMITEM;
-#define STREAMSTATE(x) get<0>(x->second)
-#define DATALIST(x) get<1>(x->second)
-#define GETHEADERLIST(x) get<2>(x->second)
-#define CONTENTLENGTH(x) get<3>(x->second)
-#define CONTENTRESCIV(x) get<4>(x->second)
-#define WINDOWSIZE(x) get<5>(x->second)
-#define UPLOADFILE(x) get<6>(x->second)
+typedef struct
+{
+    uint32_t nState;
+    deque<DATAITEM> lstData;
+    HeadList lstHeader;
+    uint64_t nContentLength;
+    uint64_t nContentResived;
+    int64_t iWndSize;
+    shared_ptr<TempFile> pTempFile;
+} STREAMITEM;
+#define STREAMSTATE(x) x->second.nState
+#define DATALIST(x) x->second.lstData
+#define GETHEADERLIST(x) x->second.lstHeader
+#define CONTENTLENGTH(x) x->second.nContentLength
+#define CONTENTRESCIV(x) x->second.nContentResived
+#define WINDOWSIZE(x) x->second.iWndSize
+#define UPLOADFILE(x) x->second.pTempFile
 
 typedef map<unsigned long, STREAMITEM> STREAMLIST;
 typedef map<unsigned long, uint64_t>   RESERVEDWINDOWSIZE;
 
-//typedef tuple<string, short, string, short, bool, function<uint32_t(const void*, uint32_t)>, function<void()>, function<uint32_t()>> MetaSocketData;
-//#define SocketWrite(x) get<5>(x)
-//#define SocketClose(x) get<6>(x)
-//#define FnSockGetOutBytesInQue(x) get<7>(x)
 typedef struct
 {
     string strIpClient;
@@ -174,7 +179,7 @@ public:
                 auto streamData = umStreamCache.find(h2f.streamId);
                 if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
                 {
-                    umStreamCache.insert(make_pair(0, STREAMITEM(0, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>())));
+                    umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>() })));
                     streamData = umStreamCache.find(h2f.streamId);
                 }
 
@@ -289,7 +294,7 @@ public:
                                 if (umStreamCache.rbegin()->first > h2f.streamId)   // New stream id is smaller that existing stream id
                                     throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR, h2f.streamId);
 
-                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>())));
+                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM({ HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>() })));
                                 if (insert.second == false)
                                     throw H2ProtoException(H2ProtoException::INTERNAL_ERROR, h2f.streamId);
                                 else
@@ -328,7 +333,7 @@ public:
                         }
                         else
                         {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM(HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>())));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM({ HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>() })));
                             if (insert.second == true)
                             {
                                 auto data = shared_ptr<char>(new char[h2f.size - PadLen]);

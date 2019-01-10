@@ -39,11 +39,6 @@ class CHttpServ : public Http2Protocol
         shared_ptr<atomic_bool> atStop;
     } CONNECTIONDETAILS;
 
-    typedef struct
-    {
-        STREAMLIST& StreamList;
-    }HEADERWRAPPER2;
-
     typedef unordered_map<TcpSocket*, CONNECTIONDETAILS> CONNECTIONLIST;
 
     typedef tuple<const wchar_t*, const char*> MIMEENTRY;
@@ -122,7 +117,7 @@ private:
     void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList = HeadList());
     void SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList = HeadList());
 
-    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop);
+    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop);
     virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) override;
 
 private:

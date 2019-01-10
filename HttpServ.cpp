@@ -496,10 +496,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) };
 
                 pConDetails->mutStreams->lock();
-                pConDetails->H2Streams.emplace(nStreamId, STREAMITEM(0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam), move(pConDetails->TmpFile)));
+                pConDetails->H2Streams.emplace(nStreamId, STREAMITEM({ 0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam), move(pConDetails->TmpFile) }));
                 pConDetails->mutStreams->unlock();
                 m_mtxConnections.unlock();
-                DoAction(soMetaDa, nStreamId, HEADERWRAPPER2{ pConDetails->H2Streams }, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
+                DoAction(soMetaDa, nStreamId, pConDetails->H2Streams, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
 
                 lock_guard<mutex> lock1(m_mtxConnections);
                 if (m_vConnections.find(pTcpSocket) == end(m_vConnections))
@@ -883,7 +883,7 @@ void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t 
     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
 }
 
-void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, HEADERWRAPPER2 hw2, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
+void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop)
 {
     const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
@@ -896,9 +896,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     auto fuExitDoAction = [&]()
     {
         lock_guard<mutex> lock(*pmtxStream);
-        auto StreamItem = hw2.StreamList.find(nStreamId);
-        if (StreamItem != end(hw2.StreamList))
-            STREAMSTATE(StreamItem) |= RESET_STREAM;    // hw2.StreamList.erase(StreamItem);
+        auto StreamItem = StreamList.find(nStreamId);
+        if (StreamItem != end(StreamList))
+            STREAMSTATE(StreamItem) |= RESET_STREAM;    // StreamList.erase(StreamItem);
 
         if (patStop != nullptr)
         {
@@ -911,8 +911,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     {
         if (nId == 0) return false;
         lock_guard<mutex> lock(*pmtxStream);
-        auto StreamItem = hw2.StreamList.find(nId);
-        if (StreamItem != end(hw2.StreamList))
+        auto StreamItem = StreamList.find(nId);
+        if (StreamItem != end(StreamList))
             return ((STREAMSTATE(StreamItem) & RESET_STREAM) == RESET_STREAM ? true : false);
         return true;
     };
@@ -968,13 +968,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
                 maResWndSizes.erase(it);
             }
 
-            auto StreamItem = hw2.StreamList.find(nStreamId);
-            if (StreamItem != end(hw2.StreamList))
+            auto StreamItem = StreamList.find(nStreamId);
+            if (StreamItem != end(StreamList))
                 iStreamWndSize = WINDOWSIZE(StreamItem);
             else
                 return false;  // Stream Item was removed, properly the stream was reseted
-            StreamItem = hw2.StreamList.find(0);
-            if (StreamItem != end(hw2.StreamList))
+            StreamItem = StreamList.find(0);
+            if (StreamItem != end(StreamList))
                 iTotaleWndSize = WINDOWSIZE(StreamItem) - maResWndSizes[0];
             else
                 return false;  // Stream Item was removed, properly the stream was reseted
@@ -1002,13 +1002,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
                 maResWndSizes.erase(it);
             }
 
-            auto StreamItem = hw2.StreamList.find(nStreamId);
-            if (StreamItem != end(hw2.StreamList))
+            auto StreamItem = StreamList.find(nStreamId);
+            if (StreamItem != end(StreamList))
                 WINDOWSIZE(StreamItem) -= static_cast<uint32_t>(nSendBufLen);
             else
                 return -1;  // Stream Item was removed, properly the stream was reseted
-            StreamItem = hw2.StreamList.find(0);
-            if (StreamItem != end(hw2.StreamList))
+            StreamItem = StreamList.find(0);
+            if (StreamItem != end(StreamList))
                 WINDOWSIZE(StreamItem) -= static_cast<uint32_t>(nSendBufLen);
             else
                 return -1;  // Stream Item was removed, properly the stream was reseted
@@ -1035,14 +1035,14 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     string strHttpVersion("0");
 
     pmtxStream->lock();
-    if (hw2.StreamList.size() == 0 || hw2.StreamList.find(nStreamId) == end(hw2.StreamList))
+    if (StreamList.size() == 0 || StreamList.find(nStreamId) == end(StreamList))
     {
         pmtxStream->unlock();
         fuExitDoAction();
         return;
     }
-    HeadList& lstHeaderFields = GETHEADERLIST(hw2.StreamList.find(nStreamId));
-    shared_ptr<TempFile>& pTmpFile = UPLOADFILE(hw2.StreamList.find(nStreamId));
+    HeadList& lstHeaderFields = GETHEADERLIST(StreamList.find(nStreamId));
+    shared_ptr<TempFile>& pTmpFile = UPLOADFILE(StreamList.find(nStreamId));
     pmtxStream->unlock();
 
     string szHost;
@@ -2175,7 +2175,7 @@ void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
             throw H2ProtoException(H2ProtoException::WRONG_HEADER);
     }
 
-    thread(&CHttpServ::DoAction, this, soMetaDa, streamId, HEADERWRAPPER2{ ref(StreamList)}, ref(tuStreamSettings), pmtxStream, ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop).detach();
+    thread(&CHttpServ::DoAction, this, soMetaDa, streamId, ref(StreamList), ref(tuStreamSettings), pmtxStream, ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop).detach();
 }
 
 const array<CHttpServ::MIMEENTRY, 111>  CHttpServ::MimeListe = { {
