@@ -83,6 +83,17 @@ public:
     Http2Protocol() {}
     virtual ~Http2Protocol() {}
 
+    void BuildHttp2Frame(char* const szBuf, size_t nDataLen, uint8_t cTyp, uint8_t cFlag, uint32_t nStreamId) const noexcept
+    {
+        H2FRAME h2f = { static_cast<unsigned long>(nDataLen), cTyp, cFlag, nStreamId, false };
+        h2f.size = htonl(h2f.size) & 0xffffff00;
+        ::memcpy(szBuf, ((char*)&h2f.size) + 1, 3);
+        szBuf[3] = h2f.typ;
+        szBuf[4] = h2f.flag;
+        h2f.streamId = htonl(h2f.streamId) & 0xfffffff7;
+        ::memcpy(&szBuf[5], &h2f.streamId, 4);
+    }
+
     void Http2WindowUpdate(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulStreamSize) const
     {
         char caBuffer[20];

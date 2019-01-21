@@ -445,17 +445,6 @@ public:
         return nBytesWritten;
     }
 
-    void BuildHttp2Frame(char* const szBuf, size_t nDataLen, uint8_t cTyp, uint8_t cFlag, uint32_t nStreamId) const noexcept
-    {
-        H2FRAME h2f = { static_cast<unsigned long>(nDataLen), cTyp, cFlag, nStreamId, false };
-        h2f.size = htonl(h2f.size) & 0xffffff00;
-        ::memcpy(szBuf, ((char*)&h2f.size) + 1, 3);
-        szBuf[3] = h2f.typ;
-        szBuf[4] = h2f.flag;
-        h2f.streamId = htonl(h2f.streamId) & 0xfffffff7;
-        ::memcpy(&szBuf[5], &h2f.streamId, 4);
-    }
-
     size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HeadList& lstHeaderFields, STREAMSETTINGS& tuStreamSettings) const
     {
         uint32_t nHeaderCount = 0;
