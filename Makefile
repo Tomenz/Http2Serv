@@ -25,7 +25,7 @@ CLEANDIRS = $(DIRS:%=clean-%)
 INC_PATH = -I ../openssl-1.0.2f/include -I ./brotli/include
 LIB_PATH = -L ./zlib -L ./socketlib -L ../openssl-1.0.2f -L ./brotli -L ./CommonLib
 
-OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o TempFile.o SpawnProcess.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
+OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o TempFile.o SpawnProcess.o HPack.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
 LIB = -l zlib -l socketlib -l brotlilib -l crypto -l ssl -l commonlib
 

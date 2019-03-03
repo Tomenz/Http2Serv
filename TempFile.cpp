@@ -178,7 +178,7 @@ ostream& operator<<(ostream& os, TempFile& cTmpFile)
     //  http://wordaligned.org/articles/cpp-streambufs
     //  http://www.cplusplus.com/reference/fstream/ofstream/rdbuf/
 
-    while (nFSize--)
+    while (nFSize-- && cTmpFile.m_theFile.is_open() == true)
         os.rdbuf()->sputc(cTmpFile.m_theFile.rdbuf()->sbumpc());
 
     cTmpFile.Close();

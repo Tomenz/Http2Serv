@@ -183,6 +183,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ConfFile.cpp" />
+    <ClCompile Include="HPack.cpp" />
     <ClCompile Include="Http2Serv.cpp" />
     <ClCompile Include="HttpServ.cpp" />
     <ClCompile Include="LogFile.cpp" />
