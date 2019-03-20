@@ -1076,7 +1076,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     auto itPath = lstHeaderFields.find(":path");
     if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields) || (strHttpVersion.find_first_not_of("01") != string::npos && nStreamId == 0))
     {
-        SendErrorRespons(soMetaDa, nStreamId, BuildRespHeader, 400, iHeaderFlag, strHttpVersion, lstHeaderFields);
+        // Just end the connection, do not send anything back.
         if (nStreamId == 0)
             soMetaDa.fSocketClose();
         fuExitDoAction();

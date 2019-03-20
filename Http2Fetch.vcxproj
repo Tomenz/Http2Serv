@@ -166,6 +166,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="HPack.cpp" />
     <ClCompile Include="Http2Fetch.cpp" />
     <ClCompile Include="HttpFetch.cpp" />
     <ClCompile Include="TempFile.cpp" />
