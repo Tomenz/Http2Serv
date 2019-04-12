@@ -8,18 +8,18 @@
 
 #ifdef _DEBUG
 #ifdef _WIN64
-#pragma comment(lib, "x64/Debug/socketlib")
+#pragma comment(lib, "x64/Debug/socketlib64d")
 #pragma comment(lib, "x64/Debug/brotli")
 #else
-#pragma comment(lib, "Debug/socketlib")
+#pragma comment(lib, "Debug/socketlib32d")
 #pragma comment(lib, "Debug/brotli")
 #endif
 #else
 #ifdef _WIN64
-#pragma comment(lib, "x64/Release/socketlib")
+#pragma comment(lib, "x64/Release/socketlib64")
 #pragma comment(lib, "x64/Release/brotli")
 #else
-#pragma comment(lib, "Release/socketlib")
+#pragma comment(lib, "Release/socketlib32")
 #pragma comment(lib, "Release/brotli")
 #endif
 #endif
