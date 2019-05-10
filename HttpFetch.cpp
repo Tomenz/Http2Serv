@@ -59,11 +59,7 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
     {
         m_sPort = 443, m_UseSSL = true;
         m_strServer.erase(0, 1);
-
-        m_pcClientCon = new SslTcpSocket();
     }
-    else
-        m_pcClientCon = reinterpret_cast<SslTcpSocket*>(new TcpSocket());
 
     if (m_strServer.compare(0, 3, "://") != 0)
         return false;
@@ -85,15 +81,20 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
         m_strServer.erase(nPos);
     }
 
+    if (m_UseSSL == true)
+    {
+        SslTcpSocket* pSocket = new SslTcpSocket();
+        pSocket->SetTrustedRootCertificates("./certs/ca-certificates.crt");
+        pSocket->SetAlpnProtokollNames(vector<string>({ { "h2" }, { "http/1.1" } }));
+        m_pcClientCon = pSocket;
+    }
+    else
+        m_pcClientCon = new TcpSocket();
+
     m_pcClientCon->BindFuncConEstablished(bind(&HttpFetch::Connected, this, _1));
     m_pcClientCon->BindFuncBytesRecived(bind(&HttpFetch::DatenEmpfangen, this, _1));
     m_pcClientCon->BindErrorFunction(bind(&HttpFetch::SocketError, this, _1));
     m_pcClientCon->BindCloseFunction(bind(&HttpFetch::SocketCloseing, this, _1));
-    if (m_UseSSL == true)
-    {
-        m_pcClientCon->SetTrustedRootCertificates("./certs/ca-certificates.crt");
-        m_pcClientCon->SetAlpnProtokollNames(vector<string>({ { "h2" }, { "http/1.1" } }));
-    }
 
     return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
 }
@@ -121,9 +122,11 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
     string Protocoll;
     if (m_UseSSL == true)
     {
-        long nResult = m_pcClientCon->CheckServerCertificate(m_strServer.c_str());
+        long nResult = reinterpret_cast<SslTcpSocket*>(m_pcClientCon)->CheckServerCertificate(m_strServer.c_str());
+        if (nResult != 0)
+            OutputDebugString(L"Http2Fetch::Connected Zertifikat not verifyd\r\n");
 
-        Protocoll = m_pcClientCon->GetSelAlpnProtocol();
+        Protocoll = reinterpret_cast<SslTcpSocket*>(m_pcClientCon)->GetSelAlpnProtocol();
     }
 
     if (Protocoll == "h2")
@@ -231,12 +234,12 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
 
         if (m_bIsHttp2 == true)
         {
-            size_t nRet;
+            size_t nRet, nReadSave = nRead;
             if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_mResWndSizes, nullptr), nRet != SIZE_MAX)
             {
                 // no GOAWAY frame
-                if (nRet > 0)
-                    m_strBuffer.append(spBuffer.get(), nRet);
+                if (nRead > 0)
+                    m_strBuffer.append(spBuffer.get() + (nReadSave - nRead), nRead);
             }
             else
                 pTcpSocket->Close();

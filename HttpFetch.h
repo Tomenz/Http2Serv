@@ -1,6 +1,6 @@
 #pragma once
 
-#include "socketlib/SslSocket.h"
+#include "socketlib/SocketLib.h"
 #include "Timer.h"
 #include "H2Proto.h"
 
@@ -29,7 +29,7 @@ private:
     void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) override;
 
 private:
-    SslTcpSocket*        m_pcClientCon;
+    TcpSocket*           m_pcClientCon;
     string               m_strMethode;
     string               m_strServer;
     short                m_sPort;
