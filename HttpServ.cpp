@@ -229,7 +229,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
         m_mtxConnections.lock();
         for (auto& pSocket : vCache)
         {
-            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1)), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false) }));
+            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), nullptr), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false) }));
             pSocket->StartReceiving();
         }
         m_mtxConnections.unlock();
@@ -599,7 +599,7 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
     m_mtxConnections.unlock();
 }
 
-void CHttpServ::OnTimeout(Timer* const pTimer)
+void CHttpServ::OnTimeout(const Timer* const pTimer, void*)
 {
     lock_guard<mutex> lock(m_mtxConnections);
     for (auto it = begin(m_vConnections); it != end(m_vConnections); ++it)
@@ -1379,7 +1379,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     {
         wregex rx(strTyp.first);
         if (regex_search(strItemPath, rx, regex_constants::format_first_only) == true)
-            strMineType = string(begin(strTyp.second), end(strTyp.second));
+            strMineType = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strTyp.second);
     }
 
     // Get base directory and build filename

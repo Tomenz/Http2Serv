@@ -109,7 +109,7 @@ private:
     void OnDataRecieved(TcpSocket* const pTcpSocket);
     void OnSocketError(BaseSocket* const pBaseSocket);
     void OnSocketCloseing(BaseSocket* const pBaseSocket);
-    void OnTimeout(Timer* const pTimer);
+    void OnTimeout(const Timer* const pTimer, void*);
 
     size_t BuildH2ResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HeadList& umHeaderList, uint64_t nContentSize = 0);
     size_t BuildResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HeadList& umHeaderList, uint64_t nContentSize = 0);

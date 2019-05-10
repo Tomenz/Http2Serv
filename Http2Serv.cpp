@@ -134,7 +134,7 @@ public:
         deque<CHttpServ> vNewServers;
         for (const auto& strListen : vListen)
         {
-            string strIp = string(begin(strListen), end(strListen));
+            string strIp = Utf8Converter.to_bytes(strListen);
             vector<wstring>&& vPort = conf.get(L"Listen", strListen);
             if (vPort.empty() == true)
                 vPort.push_back(L"80");
@@ -144,7 +144,7 @@ public:
                     mIpPortCombi.emplace(strIp, vector<wstring>({ strPort }));
                 else
                     mIpPortCombi.find(strIp)->second.push_back(strPort);
-                if (find_if(begin(m_vServers), end(m_vServers), [strPort, strListen](auto& HttpServer) { return HttpServer.GetPort() == stoi(strPort) && HttpServer.GetBindAdresse() == string(begin(strListen), end(strListen)) ? true : false; }) != end(m_vServers))
+                if (find_if(begin(m_vServers), end(m_vServers), [strPort, strListen](auto& HttpServer) { return HttpServer.GetPort() == stoi(strPort) && HttpServer.GetBindAdresse() == Utf8Converter.to_bytes(strListen) ? true : false; }) != end(m_vServers))
                     continue;
                 vNewServers.emplace_back(m_strModulePath + L".", strIp, stoi(strPort), false);
             }
@@ -413,7 +413,7 @@ public:
             // Host Parameter holen und setzen
             function<void(wstring, bool)> fuSetHostParam = [&](wstring strListenAddr, bool IsVHost)
             {
-                fnSetParameter(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), IsVHost == true ? string(begin(strListenAddr), end(strListenAddr)) + ":" + to_string(HttpServer.GetPort()) : string());
+                fnSetParameter(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), IsVHost == true ? Utf8Converter.to_bytes(strListenAddr) + ":" + to_string(HttpServer.GetPort()) : string());
 
                 const wstring strValue = conf.getUnique(strListenAddr + L":" + to_wstring(HttpServer.GetPort()), L"VirtualHost");
                 wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepComma, -1);

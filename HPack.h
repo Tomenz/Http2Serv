@@ -14,6 +14,7 @@
 #include <array>
 #include <tuple>
 #include <vector>
+#include <deque>
 
 #if !defined (_WIN32) && !defined (_WIN64)
 #include <arpa/inet.h>

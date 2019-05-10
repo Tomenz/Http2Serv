@@ -12,11 +12,12 @@
 #pragma once
 
 #include <condition_variable>
+#include <atomic>
 
 class Timer
 {
 public:
-    Timer(uint32_t tMilliSeconds, function<void(Timer*)> fTimeOut) : m_tMilliSeconds(tMilliSeconds), /*m_tpStart(chrono::system_clock::now()),*/ m_fTimeOut(fTimeOut)
+    Timer(uint32_t tMilliSeconds, function<void(const Timer*, void*)> fTimeOut, void* pUserData = nullptr) : m_tMilliSeconds(tMilliSeconds), m_fTimeOut(fTimeOut), m_pUserData(pUserData)
     {
         atomic_init(&m_bStop, false);
         atomic_init(&m_bIsStoped, false);
@@ -29,7 +30,7 @@ public:
                 if (m_cv.wait_for(lock, chrono::milliseconds(m_tMilliSeconds)) == cv_status::timeout)
                 {
                     if (m_fTimeOut != 0 && m_bStop == false)
-                        m_fTimeOut(this);
+                        m_fTimeOut(this, m_pUserData);
                     break;
                 }
             } while (m_bStop == false);
@@ -93,7 +94,8 @@ public:
 
 private:
     uint32_t m_tMilliSeconds;
-    function<void(Timer*)> m_fTimeOut;
+    function<void(const Timer*, void*)> m_fTimeOut;
+    void* m_pUserData;
     atomic<bool> m_bStop;
     atomic<bool> m_bIsStoped;
     thread m_thWaitThread;
