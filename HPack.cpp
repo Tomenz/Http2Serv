@@ -12,6 +12,14 @@
 #include <deque>
 #include <memory>
 #include <algorithm>
+#if defined(_WIN32) || defined(_WIN64)
+#include <Windows.h>
+#else
+#include <arpa/inet.h>
+#include <string.h>
+#define _stricmp strcasecmp
+#endif
+
 #include "HPack.h"
 
 HPack::HPack() 

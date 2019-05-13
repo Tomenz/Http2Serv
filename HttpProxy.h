@@ -7,12 +7,13 @@
 #include <regex>
 #include <fstream>
 
-#include "socketlib/StdSocket.h"
+#include "socketlib/SocketLib.h"
 #include "Timer.h"
 
 using namespace std;
 using namespace std::placeholders;
 
+#include <Windows.h>
 #ifdef _DEBUG
 #ifdef _WIN64
 #pragma comment(lib, "x64/Debug/socketlib64d")
@@ -132,7 +133,7 @@ private:
             m_mtxConnections.lock();
             for (auto& pSocket : vCache)
             {
-                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(600000, bind(&CHttpProxy::OnTimeout, this, _1)), string(), nullptr, string(), string(), false, false, nullptr }));
+                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(600000, bind(&CHttpProxy::OnTimeout, this, _1, _2), nullptr), string(), nullptr, string(), string(), false, false, nullptr }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();
@@ -310,7 +311,7 @@ private:
         m_mtxConnections.unlock();
     }
 
-    void OnTimeout(Timer* const pTimer)
+    void OnTimeout(const Timer* const pTimer, void*)
     {
         lock_guard<mutex> lock(m_mtxConnections);
         for (auto it = begin(m_vConnections); it != end(m_vConnections); ++it)
