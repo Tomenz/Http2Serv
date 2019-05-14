@@ -128,7 +128,6 @@ public:
     };
 
 protected:
-#pragma  pack(1)
         typedef struct h2Frame
         {
             unsigned long size;
@@ -137,7 +136,6 @@ protected:
             uint32_t streamId;
             bool R;
         }H2FRAME;
-#pragma pack()
 
 private:
     static const vector<pair<uint32_t, uint32_t>> HUFFCODES;

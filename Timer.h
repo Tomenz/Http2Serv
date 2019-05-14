@@ -13,6 +13,7 @@
 
 #include <condition_variable>
 #include <atomic>
+#include <thread>
 
 class Timer
 {
