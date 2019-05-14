@@ -175,8 +175,11 @@ public:
             while (nLen >= 9)   // Settings ACK Frame is 9 Bytes long
             {
                 H2FRAME h2f = { 0 };
-                ::memcpy(((char*)&h2f.size) + 1, szBuf, 9);
+                ::memcpy(((char*)&h2f.size) + 1, szBuf, 3);
                 h2f.size = ntohl(h2f.size) & 0x00ffffff;
+                h2f.typ = *(szBuf + 3);
+                h2f.flag = *(szBuf + 4);
+                ::memcpy(((char*)& h2f.streamId), szBuf + 5, 4);
                 h2f.streamId = ntohl(h2f.streamId);
                 h2f.R = (h2f.streamId & 0x80000000) == 0x80000000 ? true : false;
                 h2f.streamId &= 0x7fffffff;
