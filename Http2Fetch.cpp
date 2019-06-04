@@ -81,6 +81,39 @@ int main(int argc, const char* argv[], char **envp)
         return 0;
     }
 
+    if (argc > 1)
+    {
+#if defined(_WIN32) || defined(_WIN64)
+        _setmode(_fileno(stdin), O_BINARY);
+        _setmode(_fileno(stdout), O_BINARY);
+#endif
+
+        string strUrl;
+        while (++argv, --argc)
+        {
+            if (argv[0][0] == '-')
+            {
+                switch ((argv[0][1] & 0xdf))
+                {
+                }
+            }
+            else
+                strUrl = argv[0];
+        }
+
+        if (strUrl.empty() == false)
+        {
+            fetch.Fetch(strUrl);
+
+            unique_lock<mutex> lock(m_mxStop);
+            m_cvStop.wait(lock, [&]() { return bFertig; });
+
+            cout << (TempFile&)fetch << flush;
+            return 0;
+        }
+        return -1;
+    }
+
 //    fetch.AddToHeader("User-Agent", "http2 Util, webdav 0.1");
     fetch.AddToHeader("User-Agent", "http2fetch version 0.9 beta");
 //    fetch.AddToHeader("Upgrade", "h2c");

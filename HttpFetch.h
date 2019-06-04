@@ -25,7 +25,7 @@ private:
     void DatenEmpfangen(TcpSocket* pTcpSocket);
     void SocketError(BaseSocket* pBaseSocket);
     void SocketCloseing(BaseSocket* pBaseSocket);
-    void OnTimeout(Timer* pTimer);
+    void OnTimeout(const Timer* const pTimer, void*);
     void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) override;
 
 private:

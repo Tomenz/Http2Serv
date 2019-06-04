@@ -201,7 +201,7 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
         }
     }
 
-    m_Timer = make_unique<Timer>(30000, bind(&HttpFetch::OnTimeout, this, _1));
+    m_Timer = make_unique<Timer>(30000, bind(&HttpFetch::OnTimeout, this, _1, _2));
     m_soMetaDa = { m_pcClientCon->GetClientAddr(), m_pcClientCon->GetClientPort(), m_pcClientCon->GetInterfaceAddr(), m_pcClientCon->GetInterfacePort(), m_pcClientCon->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()), bind(&Timer::SetNewTimeout, m_Timer.get(), _1) };
 }
 
@@ -420,7 +420,7 @@ void HttpFetch::SocketCloseing(BaseSocket* const pBaseSocket)
         m_Timer.get()->Stop();
 }
 
-void HttpFetch::OnTimeout(Timer* const pTimer)
+void HttpFetch::OnTimeout(const Timer* const pTimer, void* /*pUser*/)
 {
     OutputDebugString(L"Http2Fetch::OnTimeout\r\n");
     m_pcClientCon->Close();
