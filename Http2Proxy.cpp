@@ -1,6 +1,7 @@
 // Http2Proxy.cpp : Definiert den Einstiegspunkt für die Konsolenanwendung.
 //
 #include <iostream>
+#include <codecvt>
 #include <signal.h>
 #include <fcntl.h>
 
@@ -81,7 +82,7 @@ public:
         map<string, vector<wstring>> mIpPortCombi;
         for (const auto& strListen : vListen)
         {
-            string strIp = string(begin(strListen), end(strListen));
+            string strIp = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strListen);
             vector<wstring>&& vPort = conf.get(L"Listen", strListen);
             if (vPort.empty() == true)
                 vPort.push_back(L"8080");
@@ -91,7 +92,7 @@ public:
                     mIpPortCombi.emplace(strIp, vector<wstring>({ strPort }));
                 else
                     mIpPortCombi.find(strIp)->second.push_back(strPort);
-                if (find_if(begin(m_vServers), end(m_vServers), [strPort, strListen](auto& HttpProxy) { return HttpProxy.GetPort() == stoi(strPort) && HttpProxy.GetBindAdresse() == string(begin(strListen), end(strListen)) ? true : false; }) != end(m_vServers))
+                if (find_if(begin(m_vServers), end(m_vServers), [strPort, strListen](auto& HttpProxy) { return HttpProxy.GetPort() == stoi(strPort) && HttpProxy.GetBindAdresse() == wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strListen) ? true : false; }) != end(m_vServers))
                     continue;
                 m_vServers.emplace_back(strIp, stoi(strPort));
             }

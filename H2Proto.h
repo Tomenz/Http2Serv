@@ -13,6 +13,13 @@
 
 #include <algorithm>
 #include <map>
+#if defined (_WIN32) || defined (_WIN64)
+ // https://support.microsoft.com/de-de/kb/257460
+ //#include <winsock2.h>
+#include <Ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#endif
 #include "HPack.h"
 #include "TempFile.h"
 

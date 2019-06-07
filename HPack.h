@@ -16,14 +16,6 @@
 #include <vector>
 #include <deque>
 
-#if !defined (_WIN32) && !defined (_WIN64)
-#include <arpa/inet.h>
-#include <string.h>
-#define _stricmp strcasecmp
-#else
-#include <Windows.h>
-#endif
-
 #include "Trace.h"
 
 using namespace std;

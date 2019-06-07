@@ -3,6 +3,7 @@
 #include <iostream>
 #include <conio.h>
 #include <unordered_map>
+#include <codecvt>
 #include <io.h>
 #include <fcntl.h>
 
@@ -58,16 +59,16 @@ int main(int argc, const char* argv[], char **envp)
         {
             if (itEnv.first.find(L"HTTP_") == 0 && itEnv.first.compare(L"HTTP_HOST") != 0)
             {
-                string strHeader(begin(itEnv.first) + 5, end(itEnv.first));
+                string strHeader = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itEnv.first.substr(5));
                 transform(begin(strHeader), end(strHeader), begin(strHeader), tolower);
                 replace(begin(strHeader), end(strHeader), '_', '-');
                 strHeader[0] = toupper(strHeader[0]);
-                fetch.AddToHeader(strHeader, string(begin(itEnv.second), end(itEnv.second)));
+                fetch.AddToHeader(strHeader, wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itEnv.second));
             }
         }
 
         fetch.AddContent(cin.rdbuf(), cin.rdbuf()->in_avail());
-        fetch.Fetch(strHttps.compare(L"on") == 0 ? string("https://") : string("http://") + string(begin(strHost), end(strHost)) + string(begin(strPath), end(strPath)), string(begin(strMethode), end(strMethode)));
+        fetch.Fetch(strHttps.compare(L"on") == 0 ? string("https://") : string("http://") + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strHost + strPath), wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strMethode));
 
         unique_lock<mutex> lock(m_mxStop);
         m_cvStop.wait(lock, [&]() { return bFertig; });
