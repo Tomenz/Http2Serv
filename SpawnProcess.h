@@ -21,6 +21,7 @@ public:
     void CloseWritePipe() noexcept;
     void AddEnvironment(const wstring& strEnvironment) noexcept { m_vstrEnvironment.push_back(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strEnvironment)); }
     void AddEnvironment(const string& strEnvironment) noexcept { m_vstrEnvironment.push_back(strEnvironment); }
+    void AddEnvironment(const string& strEnvVar, const string& strEnvValue) noexcept { m_vstrEnvironment.push_back(strEnvVar + "=" + strEnvValue); }
 
     static mutex s_mtxIOstreams;
 
