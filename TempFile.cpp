@@ -4,14 +4,18 @@
 
 #if defined (_WIN32) || defined (_WIN64)
 #include <io.h>
+#include <Windows.h>
 #else
 #include <stdio.h>
 #include <unistd.h>
 #define _tempnam tempnam
+extern void OutputDebugString(const wchar_t* pOut);
+extern void OutputDebugStringA(const char* pOut);
 #endif
 
 mutex TempFile::s_mxFileName;
 string TempFile::s_strTempDir;
+string TempFile::s_strPreFix;
 
 TempFile::TempFile() : m_bIsFile(false)
 {
@@ -23,8 +27,10 @@ TempFile::TempFile() : m_bIsFile(false)
             szTmpDir = getenv("TEMP");
         if (szTmpDir != nullptr)
             s_strTempDir = szTmpDir;
+        s_strPreFix = "H2U_" + to_string(GetCurrentProcessId()) + "_";
 #else
-        s_strTempDir = "/tmp";
+        s_strTempDir = "/tmp/";
+        s_strPreFix = "H2U_" + to_string(getpid()) + "_XXXXXX";
 #endif
     }
 }
@@ -34,13 +40,11 @@ TempFile::~TempFile()
     if (m_bIsFile == true)
     {
         Close();
-        thread([](string strTmpFileName) {
-            while (remove(strTmpFileName.c_str()) != 0)
-            {
-                //wstringstream ss; ss << L"Error removeing tempfile: " << strTmpFileName.c_str() << L" Errorcode: " << errno << endl; OutputDebugString(ss.str().c_str());
-                this_thread::sleep_for(chrono::milliseconds(100));
-            }
-        }, m_strTmpFileName).detach();
+        while (remove(m_strTmpFileName.c_str()) != 0)
+        {
+            OutputDebugStringA(string("Error removeing tempfile: " + m_strTmpFileName + " Errorcode: " + to_string(errno) + "\r\n").c_str());
+            this_thread::sleep_for(chrono::milliseconds(100));
+        }
     }
 }
 
@@ -50,7 +54,7 @@ void TempFile::Open()
     {
         lock_guard<mutex> lock(s_mxFileName);
 #if defined (_WIN32) || defined (_WIN64)
-        char* szTempFileName = _tempnam(s_strTempDir.c_str(), "H2U_");
+        char* szTempFileName = _tempnam(s_strTempDir.c_str(), s_strPreFix.c_str());
         if (szTempFileName != nullptr)
         {
             m_strTmpFileName = string(szTempFileName) + ".tmp";
@@ -58,7 +62,7 @@ void TempFile::Open()
             m_theFile.open(m_strTmpFileName.c_str(), ios::out | ios::in | ios::trunc | ios::binary, _SH_DENYRW);
         }
 #else
-        m_strTmpFileName = s_strTempDir + "/H2U_XXXXXX";
+        m_strTmpFileName = s_strTempDir + s_strPreFix;
         int fNr = mkstemp(&m_strTmpFileName[0]);
         if (fNr != -1)
         {

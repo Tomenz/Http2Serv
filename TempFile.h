@@ -13,6 +13,7 @@
 
 #include <fstream>
 #include <mutex>
+#include <string>
 
 using namespace std;
 
@@ -41,4 +42,5 @@ private:
 
     static mutex  s_mxFileName;
     static string s_strTempDir;
+    static string s_strPreFix;
 };

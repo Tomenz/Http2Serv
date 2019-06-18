@@ -17,6 +17,21 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
+void OutputDebugString(const wchar_t* pOut)
+{   // mkfifo /tmp/dbgout  ->  tail -f /tmp/dbgout
+	wstring strTmp(pOut);
+	OutputDebugStringA(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strTmp).c_str());
+}
+void OutputDebugStringA(const char* pOut)
+{   // mkfifo /tmp/dbgout  ->  tail -f /tmp/dbgout
+	int fdPipe = open("/tmp/dbgout", O_WRONLY | O_NONBLOCK);
+	if (fdPipe >= 0)
+	{
+		std::string strTmp(pOut);
+		write(fdPipe, strTmp.c_str(), strTmp.size());
+		close(fdPipe);
+	}
+}
 #endif
 
 #include "ConfFile.h"
