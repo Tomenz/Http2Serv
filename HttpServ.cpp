@@ -1547,6 +1547,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
                             run.WriteToSpawn(pBuf.get(), static_cast<int>(iRead)), nWritePipe += iRead;
                         else
                             break;
+                        soMetaDa.fResetTimer();
                     } while (nWritePipe < nPostLen && (*patStop).load() == false);
                 }
 
