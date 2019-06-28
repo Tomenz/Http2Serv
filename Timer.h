@@ -25,10 +25,16 @@ public:
 
         m_thWaitThread = thread([&]()
         {
+            m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
             unique_lock<mutex> lock(m_mxCv);
             do
             {
-                if (m_cv.wait_for(lock, chrono::milliseconds(m_tMilliSeconds)) == cv_status::timeout)
+                uint32_t nDifMilliSeconds = static_cast<uint32_t>((chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()) - m_tStart).count());
+                uint32_t tRestMilliSeconds = 1;
+                if (nDifMilliSeconds < m_tMilliSeconds)
+                    tRestMilliSeconds = m_tMilliSeconds - nDifMilliSeconds;
+
+                if (m_cv.wait_for(lock, chrono::milliseconds(tRestMilliSeconds)) == cv_status::timeout)
                 {
                     if (m_fTimeOut != 0 && m_bStop == false)
                         m_fTimeOut(this, m_pUserData);
@@ -58,6 +64,7 @@ public:
 
     void Reset() noexcept
     {
+        m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
         bool bIsLocked = m_mxCv.try_lock();
         if (bIsLocked == true)  // if it is not looked, the timeout is right now
         {
@@ -85,6 +92,7 @@ public:
     void SetNewTimeout(uint32_t nNewTime)
     {
         m_tMilliSeconds = nNewTime;
+        m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
         bool bIsLocked = m_mxCv.try_lock();
         if (bIsLocked == true)  // if it is not looked, the timeout is right now
         {
@@ -95,6 +103,7 @@ public:
 
 private:
     uint32_t m_tMilliSeconds;
+    chrono::milliseconds m_tStart;
     function<void(const Timer*, void*)> m_fTimeOut;
     void* m_pUserData;
     atomic<bool> m_bStop;

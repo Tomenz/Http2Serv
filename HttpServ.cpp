@@ -228,7 +228,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
         m_mtxConnections.lock();
         for (auto& pSocket : vCache)
         {
-            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), nullptr), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false) }));
+            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), pSocket), string(), false, 0, 0, shared_ptr<TempFile>(), {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false) }));
             pSocket->StartReceiving();
         }
         m_mtxConnections.unlock();
@@ -598,17 +598,22 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
     m_mtxConnections.unlock();
 }
 
-void CHttpServ::OnTimeout(const Timer* const pTimer, void*)
+void CHttpServ::OnTimeout(const Timer* const pTimer, void* vpData)
 {
+    TcpSocket* pSocket = reinterpret_cast<TcpSocket*>(vpData);
+
     lock_guard<mutex> lock(m_mtxConnections);
-    for (auto it = begin(m_vConnections); it != end(m_vConnections); ++it)
+    auto item = m_vConnections.find(pSocket);
+    if (item != end(m_vConnections))
     {
-        if (it->second.pTimer.get() == pTimer)
-        {
-            *it->second.atStop.get() = true;
-            it->first->Close();
-            break;
-        }
+        if (item->second.nContentsSoll != 0 && item->second.nContentRecv < item->second.nContentsSoll)  // File upload in progress HTTP/1.1
+            SendErrorRespons(pSocket, item->second.pTimer, 400, 0, item->second.HeaderList);
+
+        if (item->second.bIsH2Con == true)
+            Http2Goaway(bind(&TcpSocket::Write, pSocket, _1, _2), 0, 0, 0);    // 0 = Gracefull shutdown
+
+        *item->second.atStop.get() = true;
+        pSocket->Close();
     }
 }
 
