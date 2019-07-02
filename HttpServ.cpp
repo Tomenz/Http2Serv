@@ -424,8 +424,14 @@ auto dwStart = chrono::high_resolution_clock::now();
                 auto contentLength = pConDetails->HeaderList.find("content-length");
                 if (contentLength != end(pConDetails->HeaderList))
                 {
-                    //stringstream ssTmp(contentLength->second);
-                    //ssTmp >> pConDetails->nContentsSoll;
+                    if (stoll(contentLength->second) < 0)
+                    {   // other expect is not yet supported
+                        SendErrorRespons(pTcpSocket, pConDetails->pTimer, 400, 0, pConDetails->HeaderList);
+                        pTcpSocket->Close();
+                        m_mtxConnections.unlock();
+                        return;
+                    }
+
                     pConDetails->nContentsSoll = stoull(contentLength->second);
 
                     if (pConDetails->nContentsSoll > 0)
@@ -607,7 +613,7 @@ void CHttpServ::OnTimeout(const Timer* const pTimer, void* vpData)
     if (item != end(m_vConnections))
     {
         if (item->second.nContentsSoll != 0 && item->second.nContentRecv < item->second.nContentsSoll)  // File upload in progress HTTP/1.1
-            SendErrorRespons(pSocket, item->second.pTimer, 400, 0, item->second.HeaderList);
+            SendErrorRespons(pSocket, item->second.pTimer, 408, 0, item->second.HeaderList);
 
         if (item->second.bIsH2Con == true)
             Http2Goaway(bind(&TcpSocket::Write, pSocket, _1, _2), 0, 0, 0);    // 0 = Gracefull shutdown
@@ -1080,7 +1086,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     auto itPath = lstHeaderFields.find(":path");
     if (itMethode == end(lstHeaderFields) || itPath == end(lstHeaderFields) || (strHttpVersion.find_first_not_of("01") != string::npos && nStreamId == 0))
     {
-        // Just end the connection, do not send anything back.
+        SendErrorRespons(soMetaDa, nStreamId, BuildRespHeader, 400, iHeaderFlag, strHttpVersion, lstHeaderFields);
         if (nStreamId == 0)
             soMetaDa.fSocketClose();
         fuExitDoAction();
@@ -1231,7 +1237,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     }
 
     // Test for forbidden element /.. /aux /lpt /com .htaccess .htpasswd .htgroup
-    const static wregex rxForbidden(L"/\\.\\.|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);
+    const static wregex rxForbidden(L"/\\.\\.|\\\\\\.\\.|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);
     if (regex_search(strItemPath.c_str(), rxForbidden) == true)
     {
         SendErrorRespons(soMetaDa, nStreamId, BuildRespHeader, 403, iHeaderFlag, strHttpVersion, lstHeaderFields);
@@ -1447,7 +1453,6 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
             if (_waccess(FN_CA((strItemPath + strDefItem)), 0) == 0)
             {
                 strItemPath += strDefItem;
-//                  itPath->second += string(strDefItem.begin(), strDefItem.end());
                 break;
             }
         }
