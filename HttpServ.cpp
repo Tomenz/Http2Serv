@@ -1236,9 +1236,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
         }
     }
 
-    // Test for forbidden element /.. /aux /lpt /com .htaccess .htpasswd .htgroup
-    const static wregex rxForbidden(L"/\\.\\.|\\\\\\.\\.|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);
-    if (regex_search(strItemPath.c_str(), rxForbidden) == true)
+    // Test for forbidden element /.. \.. ../ ..\ /aux /lpt /com .htaccess .htpasswd .htgroup
+    const static wregex rxForbidden(L"/\\.\\.|\\\\\\.\\.|\\.\\./|\\.\\.\\\\|/aux$|/noel$|/prn$|/con$|/lpt[0-9]+$|/com[0-9]+$|\\.htaccess|\\.htpasswd|\\.htgroup", regex_constants::ECMAScript | regex_constants::icase);
+    if (regex_search(strItemPath.c_str(), rxForbidden) == true || strItemPath == L"." || strItemPath == L"..")
     {
         SendErrorRespons(soMetaDa, nStreamId, BuildRespHeader, 403, iHeaderFlag, strHttpVersion, lstHeaderFields);
         if (nStreamId == 0)
