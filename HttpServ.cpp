@@ -1175,8 +1175,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     for (auto& tuRedirect : m_vHostParam[szHost].m_vRedirMatch)    // RedirectMatch
     {
         wregex rx(get<1>(tuRedirect));
-        wsmatch match;
-        if (regex_match(strItemPath.cbegin(), strItemPath.cend(), match, rx) == true)
+        if (regex_match(strItemPath, rx) == true)
         {
             wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
             strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring(begin(szHost), end(szHost)));
@@ -1218,10 +1217,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
             switch (itKeyWord->second)
             {
             case 2: // REMOTE_ADDR
-                bFound = regex_match(begin(soMetaDa.strIpClient), end(soMetaDa.strIpClient), regex(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<1>(strEnvIf))));
+                bFound = regex_match(soMetaDa.strIpClient, regex(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<1>(strEnvIf))));
                 break;
             case 6: // REQUEST_URI
-                bFound = regex_match(begin(strItemPath), end(strItemPath), wregex(get<1>(strEnvIf)));
+                bFound = regex_match(strItemPath, wregex(get<1>(strEnvIf)));
                 break;
             }
 
@@ -1776,6 +1775,44 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
         return;
     }
 
+    // evaluating Range header
+    vector<pair<uint64_t, uint64_t>> vecRanges;
+    auto range = lstHeaderFields.find("range");
+    if (range != end(lstHeaderFields))
+    {
+        static const regex rx("\\s*(?:(?:bytes\\s*=)|,)\\s*(\\d*)\\s*-\\s*(\\d*)");
+        smatch match;
+        string strSearch(range->second);
+        while (regex_search(strSearch, match, rx) == true && match.size() == 3)
+        {
+            vecRanges.push_back(make_pair(match[1].length() == 0 ? 0 : stoull(match[1].str()), match[2].length() == 0 ? stFileInfo.st_size : stoull(match[2].str())));
+            strSearch = strSearch.substr(match[0].str().size());
+        }
+        sort(begin(vecRanges), end(vecRanges), [](auto& elm1, auto& elm2) { return elm1.first == elm2.first ? (elm1.second < elm2.second ? true : false) : (elm1.first < elm2.first ? true : false); });
+        for (size_t n = 0; vecRanges.size() > 1 && n < vecRanges.size() - 1; ++n)
+        {
+            if (vecRanges[n].first >= vecRanges[n].second || vecRanges[n + 1].first >= vecRanges[n + 1].second || vecRanges[n].first >= static_cast<uint64_t>(stFileInfo.st_size) || vecRanges[n + 1].first >= static_cast<uint64_t>(stFileInfo.st_size))
+            {
+                SendErrorRespons(soMetaDa, nStreamId, BuildRespHeader, 416, iHeaderFlag, strHttpVersion, lstHeaderFields);
+
+                if (nStreamId == 0)
+                    soMetaDa.fSocketClose();
+
+                fuExitDoAction();
+                return;
+            }
+
+            if ((vecRanges[n].first >= vecRanges[n + 1].first && vecRanges[n].first <= vecRanges[n + 1].second)
+            || (vecRanges[n + 1].first > vecRanges[n].first && vecRanges[n + 1].first <= vecRanges[n].second))
+            {
+                vecRanges[n].first = min(vecRanges[n].first, vecRanges[n + 1].first);
+                vecRanges[n].second = max(vecRanges[n].second, vecRanges[n + 1].second);
+                vecRanges.erase(next(begin(vecRanges), n + 1));
+                --n;
+            }
+        }
+    }
+
     // Calc ETag
     string strEtag = "\"" + md5(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath) + ":" + to_string(stFileInfo.st_mtime) + ":" + to_string(stFileInfo.st_size)) + "\"";
 
@@ -1854,6 +1891,25 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
         }
     }
 
+    auto ifrange = lstHeaderFields.find("if-range");
+    if (ifrange != end(lstHeaderFields))
+    {
+        if (ifrange->second.find_first_of(",:") != string::npos)    // Datum
+        {
+            tm tmIfModified = { 0 };
+            stringstream ss(ifrange->second);
+            ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
+            double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
+            if (fabs(dTimeDif) > 0.001)
+                vecRanges.clear();
+        }
+        else // etag
+        {
+            if (ifrange->second != strEtag)
+                vecRanges.clear();
+        }
+    }
+
     // OPTIONS
     if (itMethode->second == "OPTIONS")
     {
@@ -1893,6 +1949,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
     // HEAD
     if (itMethode->second == "HEAD")
     {
+        umPhpHeaders.emplace_back(make_pair("Accept-Ranges", "bytes"));
+
         // Build response header
         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, sizeof(caBuffer) - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, stFileInfo.st_size);
         if (nStreamId != 0)
@@ -1925,13 +1983,20 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
         return;
     }
 
-    uint64_t nFSize = 0;
-
     // Load file
     fstream fin(FN_CA(strItemPath), ios_base::in | ios_base::binary);
     if (fin.is_open() == true)
     {
-        nFSize = stFileInfo.st_size;
+        uint64_t nFSize = stFileInfo.st_size;
+        if (vecRanges.size() == 1)  // Momentan nur 1 Range
+        {
+            nFSize = vecRanges[0].second - vecRanges[0].first;
+            fin.seekg(vecRanges[0].first, ios_base::beg);
+            umPhpHeaders.emplace_back(make_pair("Content-Range", "bytes " + to_string(vecRanges[0].first) + "-" + to_string(vecRanges[0].second) + "/" + to_string(stFileInfo.st_size)));
+            iStatus = 206;
+        }
+        else
+            umPhpHeaders.emplace_back(make_pair("Accept-Ranges", "bytes"));
 
         auto acceptencoding = lstHeaderFields.find("accept-encoding");
         if (acceptencoding != end(lstHeaderFields))
