@@ -1579,7 +1579,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
 
                     bool bHasRead = false;
                     int nRead;
-                    while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0)
+                    while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0 && (*patStop).load() == false)
                     {
                         bHasRead = true;
                         nRead += nOffset;
@@ -1708,6 +1708,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId
                 }
 
                 soMetaDa.fSetNewTimeout(30000);   // back to 30 Seconds
+
+                if ((*patStop).load() == true)  // Socket closed during cgi
+                {
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Socket closed during cgi: ", itPath->second);
+                    run.KillProcess();
+                    while (run.StillSpawning() == true)
+                        this_thread::sleep_for(chrono::milliseconds(1));
+                    fuExitDoAction();
+                    return;
+                }
 
                 if (bEndOfHeader == true && nStreamId != 0)
                 {

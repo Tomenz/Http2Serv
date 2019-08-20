@@ -14,6 +14,7 @@ public:
     virtual ~SpawnProcess() noexcept;
 
     int Spawn(const wstring& strCmd, const wstring& strWorkingDir = wstring()) noexcept;
+    int KillProcess() noexcept;
     bool StillSpawning() noexcept;
     int ReadFromSpawn(unsigned char* const pBuffer, const unsigned int nBufSize) noexcept;
     int ReadErrFromSpawn(unsigned char* const pBuffer, const unsigned int nBufSize) noexcept;

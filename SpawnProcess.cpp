@@ -221,6 +221,17 @@ int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = 
 }
 #endif
 
+int SpawnProcess::KillProcess() noexcept
+{
+#if defined(_WIN32) || defined(_WIN64)
+    return TerminateProcess(m_hProcess, 0) != 0 ? 0 : GetLastError();
+#else
+    int iRet = kill(m_hProcess, SIGTERM);
+    sleep(2);   // The process has 2 sec. to shut down untill we kill him hard
+    return iRet | kill(m_hProcess, SIGKILL);
+#endif
+}
+
 bool SpawnProcess::StillSpawning() noexcept
 {
     int nExitCode;
