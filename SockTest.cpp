@@ -69,16 +69,16 @@ public:
         }*/
 
         m_cClientCon.BindFuncConEstablished(bind(&EchoServer::ClientConnected, this, _1));
-        m_cClientCon.BindFuncBytesRecived(bind(&EchoServer::ClientDatenEmpfangen, this, _1));
+        m_cClientCon.BindFuncBytesReceived(bind(&EchoServer::ClientDatenEmpfangen, this, _1));
         m_cClientCon.BindErrorFunction(bind(&EchoServer::ClientSocketError, this, _1));
         if (m_cClientCon.Connect("192.168.161.5", 8080) == false)
             ;// OutputDebugString(L"Verbindung zu xxx.xxx.xxx.xxx konnte nicht hergestellt werden\r\n");
 
-        m_cUpnP.BindFuncBytesRecived(bind(&EchoServer::UpnPDatenEmpfangen, this, _1));
+        m_cUpnP.BindFuncBytesReceived(bind(&EchoServer::UpnPDatenEmpfangen, this, _1));
         m_cUpnP.Create("0.0.0.0", 1900);
         m_cUpnP.AddToMulticastGroup("239.255.255.250");
 
-		m_cAdv.BindFuncBytesRecived(bind(&EchoServer::UpnPDatenEmpfangen, this, _1));
+		m_cAdv.BindFuncBytesReceived(bind(&EchoServer::UpnPDatenEmpfangen, this, _1));
 		m_cAdv.Create("0.0.0.0", 0);
 
         string strSend1("M-SEARCH * HTTP/1.1\r\nHost: 239.255.255.250:1900\r\nST: ssdp:all\r\nMan: \"ssdp:discover\"\r\nMX: 3\r\nUSER-AGENT: windows/6.1 UPnP/1.1 SOT/1.0\r\n\r\n");
@@ -113,7 +113,7 @@ public:
             TcpSocket* pSocket = pTcpServer->GetNextPendingConnection();
             if (pSocket != nullptr)
             {
-                pSocket->BindFuncBytesRecived(bind(&EchoServer::DatenEmpfangen, this, _1));
+                pSocket->BindFuncBytesReceived(bind(&EchoServer::DatenEmpfangen, this, _1));
                 pSocket->BindErrorFunction(bind(&EchoServer::SocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&EchoServer::SocketCloseing, this, _1));
                 lock_guard<mutex> lock(m_mtConnections);
@@ -289,7 +289,7 @@ public:
             SslTcpSocket* pSocket = pSslTcpServer->GetNextPendingConnection();
             if (pSocket != nullptr)
             {
-                pSocket->BindFuncBytesRecived(bind(&EchoServer::DatenEmpfangen, this, _1));
+                pSocket->BindFuncBytesReceived(bind(&EchoServer::DatenEmpfangen, this, _1));
                 pSocket->BindErrorFunction(bind(&EchoServer::SocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&EchoServer::SocketCloseing, this, _1));
                 lock_guard<mutex> lock(m_mtConnections);

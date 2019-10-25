@@ -92,7 +92,7 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
         m_pcClientCon = new TcpSocket();
 
     m_pcClientCon->BindFuncConEstablished(bind(&HttpFetch::Connected, this, _1));
-    m_pcClientCon->BindFuncBytesRecived(bind(&HttpFetch::DatenEmpfangen, this, _1));
+    m_pcClientCon->BindFuncBytesReceived(bind(&HttpFetch::DatenEmpfangen, this, _1));
     m_pcClientCon->BindErrorFunction(bind(&HttpFetch::SocketError, this, _1));
     m_pcClientCon->BindCloseFunction(bind(&HttpFetch::SocketCloseing, this, _1));
 

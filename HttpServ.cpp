@@ -217,7 +217,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     {
         if (pSocket != nullptr)
         {
-            pSocket->BindFuncBytesRecived(bind(&CHttpServ::OnDataRecieved, this, _1));
+            pSocket->BindFuncBytesReceived(bind(&CHttpServ::OnDataRecieved, this, _1));
             pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
             pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
             vCache.push_back(pSocket);

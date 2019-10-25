@@ -122,7 +122,7 @@ private:
         {
             if (pSocket != nullptr)
             {
-                pSocket->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecieved, this, _1));
+                pSocket->BindFuncBytesReceived(bind(&CHttpProxy::OnDataRecieved, this, _1));
                 pSocket->BindErrorFunction(bind(&CHttpProxy::OnSocketError, this, _1));
                 pSocket->BindCloseFunction(bind(&CHttpProxy::OnSocketCloseing, this, _1));
                 vCache.push_back(pSocket);
@@ -224,7 +224,7 @@ private:
                             m_vReferencList.emplace(pConDetails->pClientSocket, pTcpSocket);
 
                             pConDetails->pClientSocket->BindFuncConEstablished(bind(&CHttpProxy::Connected, this, _1));
-                            pConDetails->pClientSocket->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedDest, this, _1));
+                            pConDetails->pClientSocket->BindFuncBytesReceived(bind(&CHttpProxy::OnDataRecievedDest, this, _1));
                             pConDetails->pClientSocket->BindErrorFunction(bind(&CHttpProxy::SocketErrorDest, this, _1));
                             pConDetails->pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDest, this, _1));
 
@@ -337,7 +337,7 @@ private:
             {
                 conn->second.pTimer->Reset();
                 conn->second.bConncted = true;
-                conn->first->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedClient, this, _1));
+                conn->first->BindFuncBytesReceived(bind(&CHttpProxy::OnDataRecievedClient, this, _1));
 
                 if (conn->second.strMethode == "CONNECT")
                 {
@@ -453,7 +453,7 @@ private:
                                 m_vReferencList.emplace(item->second.pClientSocket, pTcpSocket);
 
                                 item->second.pClientSocket->BindFuncConEstablished(bind(&CHttpProxy::Connected, this, _1));
-                                item->second.pClientSocket->BindFuncBytesRecived(bind(&CHttpProxy::OnDataRecievedDest, this, _1));
+                                item->second.pClientSocket->BindFuncBytesReceived(bind(&CHttpProxy::OnDataRecievedDest, this, _1));
                                 item->second.pClientSocket->BindErrorFunction(bind(&CHttpProxy::SocketErrorDest, this, _1));
                                 item->second.pClientSocket->BindCloseFunction(bind(&CHttpProxy::SocketCloseingDest, this, _1));
 
