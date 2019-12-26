@@ -21,7 +21,6 @@
 #include <arpa/inet.h>
 #endif
 #include "HPack.h"
-#include "TempFile.h"
 
 typedef tuple<shared_ptr<char>, size_t> DATAITEM;
 #define BUFFER(x) get<0>(x)
@@ -38,7 +37,8 @@ typedef struct
     uint64_t nContentLength;
     uint64_t nContentResived;
     int64_t iWndSize;
-    shared_ptr<TempFile> pTempFile;
+    shared_ptr<mutex> mutReqData;
+    deque<unique_ptr<char[]>> vecReqData;
 } STREAMITEM;
 #define STREAMSTATE(x) x->second.nState
 #define DATALIST(x) x->second.lstData
@@ -46,7 +46,6 @@ typedef struct
 #define CONTENTLENGTH(x) x->second.nContentLength
 #define CONTENTRESCIV(x) x->second.nContentResived
 #define WINDOWSIZE(x) x->second.iWndSize
-#define UPLOADFILE(x) x->second.pTempFile
 
 typedef map<unsigned long, STREAMITEM> STREAMLIST;
 typedef map<unsigned long, uint64_t>   RESERVEDWINDOWSIZE;
@@ -83,7 +82,7 @@ protected:
         STREAM_END      = 0x2,
         HEADER_END      = 0x4,
         RESET_STREAM    = 0x8,
-        ACTION_CALLED   = 0x16
+        ACTION_CALLED   = 0x10
     };
 
 public:
@@ -200,7 +199,7 @@ public:
                 auto streamData = umStreamCache.find(h2f.streamId);
                 if (streamData == end(umStreamCache) && umStreamCache.size() == 0)  // First call we not have any stream 0 object, so we make it
                 {
-                    umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>() })));
+                    umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), make_shared<mutex>(), {} })));
                     streamData = umStreamCache.find(h2f.streamId);
                 }
 
@@ -235,6 +234,15 @@ public:
                             Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
                         }
 
+                        size_t nBytesToWrite = min(static_cast<size_t>(h2f.size) - PadLen, nLen);
+
+                        streamData->second.mutReqData.get()->lock();
+                        streamData->second.vecReqData.push_back(make_unique<char[]>(nBytesToWrite + 4));
+                        copy(szBuf, szBuf + nBytesToWrite, streamData->second.vecReqData.back().get() + 4);
+                        *reinterpret_cast<uint32_t*>(streamData->second.vecReqData.back().get()) = static_cast<uint32_t>(nBytesToWrite);
+//OutputDebugString(wstring(L"X. Datenempfang: " + to_wstring(nBytesToWrite) + L" Bytes\r\n").c_str());
+                        streamData->second.mutReqData.get()->unlock();
+                        /*
                         if (UPLOADFILE(streamData).get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
                         {
                             auto contentLength = GETHEADERLIST(streamData).find("content-length");
@@ -245,17 +253,26 @@ public:
                             UPLOADFILE(streamData).get()->Open();
                         }
 
-                        UPLOADFILE(streamData).get()->Write(szBuf, min(static_cast<size_t>(h2f.size) - PadLen, nLen));
-                        CONTENTRESCIV(streamData) += min(static_cast<size_t>(h2f.size) - PadLen, nLen);
+                        UPLOADFILE(streamData).get()->Write(szBuf, min(static_cast<size_t>(h2f.size) - PadLen, nLen));*/
+                        CONTENTRESCIV(streamData) += nBytesToWrite; // min(static_cast<size_t>(h2f.size) - PadLen, nLen);
 
                         if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM
                         {
-                            UPLOADFILE(streamData).get()->Close();
+                            streamData->second.mutReqData.get()->lock();
+                            streamData->second.vecReqData.push_back(unique_ptr<char[]>(nullptr));
+//OutputDebugString(wstring(L"Datenempfang beendet\r\n").c_str());
+                            streamData->second.mutReqData.get()->unlock();
 
                             if (CONTENTLENGTH(streamData) > 0 && CONTENTLENGTH(streamData) != CONTENTRESCIV(streamData))
                                 Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1);   // 1 = PROTOCOL_ERROR       throw H2ProtoException(H2ProtoException::DATASIZE_MISSMATCH, h2f.streamId);
 
-                            STREAMSTATE(streamData) |= STREAM_END | ACTION_CALLED;
+                            //STREAMSTATE(streamData) |= STREAM_END | ACTION_CALLED;
+                            //CallAction.push_back(h2f.streamId);
+                        }
+
+                        if ((STREAMSTATE(streamData) & ACTION_CALLED) == 0)
+                        {
+                            STREAMSTATE(streamData) |= ACTION_CALLED;
                             CallAction.push_back(h2f.streamId);
                         }
                     }
@@ -315,7 +332,7 @@ public:
                                 if (umStreamCache.rbegin()->first > h2f.streamId)   // New stream id is smaller that existing stream id
                                     throw H2ProtoException(H2ProtoException::PROTOCOL_ERROR, h2f.streamId);
 
-                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM({ HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>() })));
+                                auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM({ HEADER_END, deque<DATAITEM>(), move(lstHeaderFields), 0, 0, INITWINDOWSIZE(tuStreamSettings), make_shared<mutex>(), {} })));
                                 if (insert.second == false)
                                     throw H2ProtoException(H2ProtoException::INTERNAL_ERROR, h2f.streamId);
                                 else
@@ -354,7 +371,7 @@ public:
                         }
                         else
                         {   // Save the Data. The next frame must be a CONTINUATION (9) frame
-                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM({ HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), shared_ptr<TempFile>() })));
+                            auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM({ HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), make_shared<mutex>(), {} })));
                             if (insert.second == true)
                             {
                                 auto data = shared_ptr<char>(new char[h2f.size - PadLen]);
@@ -412,7 +429,11 @@ public:
 
                         STREAMSTATE(streamData) |= RESET_STREAM;
                         if ((STREAMSTATE(streamData) & END_OF_STREAM) == 0)    // END_STREAM
-                            UPLOADFILE(streamData).reset();
+                        {
+                            streamData->second.mutReqData.get()->lock();
+                            streamData->second.vecReqData.clear();
+                            streamData->second.mutReqData.get()->unlock();
+                        }
                     }
                     pmtxStream->unlock();
                     break;
@@ -630,7 +651,7 @@ public:
             for (auto& item : CallAction)
             {
                 pmtxStream->lock();
-                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop);
+                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop, umStreamCache[item].mutReqData.get(), &umStreamCache[item].vecReqData);
                 pmtxStream->unlock();
             }
 
@@ -713,5 +734,5 @@ public:
     }
 
 private:
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) = 0;
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop, mutex* const pmtxReqdata, deque<unique_ptr<char[]>>* vecData) = 0;
 };

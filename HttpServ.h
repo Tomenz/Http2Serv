@@ -15,7 +15,6 @@
 
 #include "socketlib/SocketLib.h"
 #include "Timer.h"
-#include "TempFile.h"
 #include "H2Proto.h"
 
 using namespace std;
@@ -29,7 +28,6 @@ class CHttpServ : public Http2Protocol
         bool bIsH2Con;
         uint64_t nContentsSoll;
         uint64_t nContentRecv;
-        shared_ptr<TempFile> TmpFile;
         HeadList HeaderList;
         deque<HEADERENTRY> lstDynTable;
         shared_ptr<mutex> mutStreams;
@@ -37,6 +35,8 @@ class CHttpServ : public Http2Protocol
         STREAMSETTINGS StreamParam;
         RESERVEDWINDOWSIZE StreamResWndSizes;
         shared_ptr<atomic_bool> atStop;
+        shared_ptr<mutex> mutReqData;
+        deque<unique_ptr<char[]>> vecReqData;
     } CONNECTIONDETAILS;
 
     typedef unordered_map<TcpSocket*, CONNECTIONDETAILS> CONNECTIONLIST;
@@ -115,10 +115,10 @@ private:
     size_t BuildResponsHeader(char* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HeadList& umHeaderList, uint64_t nContentSize = 0);
     string LoadErrorHtmlMessage(HeadList& HeaderList, int iRespCode, const wstring& strMsgDir);
     void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList = HeadList());
-    void SendErrorRespons(const MetaSocketData& soMetaDa, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList = HeadList());
+    void SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList = HeadList());
 
-    void DoAction(const MetaSocketData soMetaDa, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop);
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) override;
+    void DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop, mutex* const pmtxReqdata, deque<unique_ptr<char[]>>* vecData);
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop, mutex* const pmtxReqdata, deque<unique_ptr<char[]>>* vecData) override;
 
 private:
     TcpServer*             m_pSocket;

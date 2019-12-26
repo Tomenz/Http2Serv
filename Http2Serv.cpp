@@ -22,6 +22,7 @@
 #include "ConfFile.h"
 #include "HttpServ.h"
 #include "SpawnProcess.h"
+#include "LogFile.h"
 
 #ifndef _UTFCONVERTER
 #define _UTFCONVERTER
@@ -426,7 +427,10 @@ public:
 
         // Server starten und speichern
         for (auto& HttpServer : m_vServers)
-            HttpServer.Start();
+        {
+            if (HttpServer.Start() == false)
+                CLogFile::GetInstance(HttpServer.GetParameterBlockRef(string()).m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] could not start server on: ", HttpServer.GetBindAdresse());
+        }
     }
 
     static void SignalHandler(int iSignal)
