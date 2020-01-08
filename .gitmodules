@@ -4,6 +4,7 @@
 [submodule "SocketLib"]
 	path = SocketLib
 	url = https://github.com/Tomenz/SocketLib
+	ignore = untracked
 [submodule "brotli"]
 	path = brotli
 	url = https://github.com/google/brotli.git
