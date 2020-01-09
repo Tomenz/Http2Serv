@@ -258,16 +258,14 @@ public:
 
                         if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM
                         {
+                            STREAMSTATE(streamData) |= STREAM_END;
+
                             streamData->second.mutReqData.get()->lock();
                             streamData->second.vecReqData.push_back(unique_ptr<char[]>(nullptr));
-//OutputDebugString(wstring(L"Datenempfang beendet\r\n").c_str());
                             streamData->second.mutReqData.get()->unlock();
 
                             if (CONTENTLENGTH(streamData) > 0 && CONTENTLENGTH(streamData) != CONTENTRESCIV(streamData))
                                 Http2StreamError(soMetaDa.fSocketWrite, h2f.streamId, 1);   // 1 = PROTOCOL_ERROR       throw H2ProtoException(H2ProtoException::DATASIZE_MISSMATCH, h2f.streamId);
-
-                            //STREAMSTATE(streamData) |= STREAM_END | ACTION_CALLED;
-                            //CallAction.push_back(h2f.streamId);
                         }
 
                         if ((STREAMSTATE(streamData) & ACTION_CALLED) == 0)
@@ -361,6 +359,11 @@ public:
                                 STREAMSTATE(streamData) |= STREAM_END;
                                 if (GETHEADERLIST(streamData).find(":scheme") == end(GETHEADERLIST(streamData)))
                                     throw H2ProtoException(H2ProtoException::WRONG_HEADER);
+
+                                streamData->second.mutReqData.get()->lock();
+                                streamData->second.vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                                streamData->second.mutReqData.get()->unlock();
+
                                 STREAMSTATE(streamData) |= ACTION_CALLED;
                                 CallAction.push_back(h2f.streamId);
                             }
@@ -621,6 +624,12 @@ public:
 
                             if ((STREAMSTATE(streamData) & STREAM_END) == STREAM_END)
                             {
+                                STREAMSTATE(streamData) |= STREAM_END;
+
+                                streamData->second.mutReqData.get()->lock();
+                                streamData->second.vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                                streamData->second.mutReqData.get()->unlock();
+
                                 STREAMSTATE(streamData) |= ACTION_CALLED;
                                 CallAction.push_back(h2f.streamId);
                             }

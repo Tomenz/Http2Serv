@@ -1,6 +1,6 @@
 #pragma once
 
-#include "socketlib/SocketLib.h"
+#include "SocketLib/SocketLib.h"
 #include "Timer.h"
 #include "H2Proto.h"
 

@@ -34,6 +34,9 @@
     <ClInclude Include="SpawnProcess.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
+    <ClInclude Include="FastCgi\FastCgi.h">
+      <Filter>FastCgi</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Headerdateien">
@@ -44,6 +47,9 @@
     </Filter>
     <Filter Include="SvrLib">
       <UniqueIdentifier>{c0cc47f4-391f-4e1e-8a16-f79e56ce3b02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FastCgi">
+      <UniqueIdentifier>{1220d2a8-49b5-4f3c-8972-3a35139916e7}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -73,6 +79,9 @@
     </ClCompile>
     <ClCompile Include="HPack.cpp">
       <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="FastCgi\FastCgi.cpp">
+      <Filter>FastCgi</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

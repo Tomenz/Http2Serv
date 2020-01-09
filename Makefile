@@ -14,7 +14,7 @@ CFLAGS = -Wall -O3 -std=c++14 -D ZLIB_CONST -pthread -ffunction-sections -fdata-
 #CFLAGS = -w -std=c++14 -pthread -lstdc++fs # -lstdc++fs -ffunction-sections -fdata-sections -fomit-frame-pointer -DPOSIX
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++ # -lstdc++fs
 TARGET = Http2Serv
-DIRS = zlib socketlib brotli CommonLib
+DIRS = zlib SocketLib brotli CommonLib
 OBJLIBS = libzlib.a libsocketlib.a libbrotlilib.a libcommonlib.a
 
 BUILDDIRS = $(DIRS:%=build-%)

@@ -246,7 +246,7 @@ public:
                             {
                                 const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\\"");
                                 vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
-                                if (token.size() == 2)
+                                if (token.size() >= 2)
                                 {
                                     for (size_t n = 0; n < token.size(); ++n)
                                     {
@@ -256,9 +256,10 @@ public:
                                         token[n] = regex_replace(token[n], wregex(L"`"), L"\"");
                                     }
                                     if (HostParam.m_mstrAliasMatch.find(token[0]) == end(HostParam.m_mstrAliasMatch))
-                                        HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token[1], strKey.second == 9 ? true : false));
+                                        HostParam.m_mstrAliasMatch.emplace(token[0], make_tuple(token, strKey.second == 9 ? true : false));
                                     else
-                                        HostParam.m_mstrAliasMatch[token[0]] = make_tuple(token[1], strKey.second == 9 ? true : false);
+                                        HostParam.m_mstrAliasMatch[token[0]] = make_tuple(token, strKey.second == 9 ? true : false);
+                                    get<0>(HostParam.m_mstrAliasMatch[token[0]]).erase(get<0>(HostParam.m_mstrAliasMatch[token[0]]).begin());
                                 }
                             }
                             break;

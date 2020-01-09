@@ -13,7 +13,7 @@
 
 #include <unordered_map>
 
-#include "socketlib/SocketLib.h"
+#include "SocketLib/SocketLib.h"
 #include "Timer.h"
 #include "H2Proto.h"
 
@@ -74,7 +74,7 @@ public:
         string  m_strDhParam;
         string  m_strSslCipher;
         unordered_map<wstring, wstring> m_mstrRewriteRule;
-        unordered_map<wstring, tuple<wstring, bool>> m_mstrAliasMatch;
+        unordered_map<wstring, tuple<vector<wstring>, bool>> m_mstrAliasMatch;
         unordered_map<wstring, wstring> m_mstrForceTyp;
         unordered_map<wstring, vector<wstring>> m_mFileTypeAction;
         vector<tuple<wstring, wstring, wstring>> m_vRedirMatch;

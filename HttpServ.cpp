@@ -28,6 +28,7 @@
 #include "CommonLib/md5.h"
 #include "CommonLib/UrlCode.h"
 #include "SpawnProcess.h"
+#include "FastCgi\FastCgi.h"
 
 using namespace std;
 using namespace std::placeholders;
@@ -297,7 +298,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                     if (pConDetails->nContentRecv == pConDetails->nContentsSoll)    // Last byte of Data, we signal this with a empty vector entry
                     {
                         pConDetails->mutReqData->lock();
-                        pConDetails->vecReqData.push_back(unique_ptr<char[]>(nullptr)/*make_unique<char[]>(0)*/);
+                        pConDetails->vecReqData.push_back(unique_ptr<char[]>(nullptr));
 //OutputDebugString(wstring(L"Datenempfang beendet\r\n").c_str());
                         pConDetails->nContentRecv = pConDetails->nContentsSoll = 0;
                         pConDetails->mutReqData->unlock();
@@ -312,19 +313,6 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                         m_mtxConnections.unlock();
                         return;
                     }
-
-                    /*
-                    pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
-                    pConDetails->nContentRecv += nBytesToWrite;
-                    pConDetails->strBuffer.erase(0, nBytesToWrite);
-
-                    if (pConDetails->nContentRecv < pConDetails->nContentsSoll)
-                    {
-                        m_mtxConnections.unlock();
-                        return;
-                    }
-
-                    pConDetails->TmpFile->Close();*/
                 }
             }
 
@@ -457,6 +445,11 @@ auto dwStart = chrono::high_resolution_clock::now();
                     }
                 }
 
+                // set end of data signal preliminary
+                pConDetails->mutReqData->lock();
+                pConDetails->vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                pConDetails->mutReqData->unlock();
+
                 // is data (body) on the request, only HTTP/1.1
                 auto contentLength = pConDetails->HeaderList.find("content-length");
                 if (contentLength != end(pConDetails->HeaderList))
@@ -473,45 +466,26 @@ auto dwStart = chrono::high_resolution_clock::now();
 
                     if (pConDetails->nContentsSoll > 0)
                     {
+                        pConDetails->mutReqData->lock();
+                        pConDetails->vecReqData.clear();    // Clear the end of Data entry
+
                         size_t nBytesToWrite = static_cast<size_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll));
                         if (nBytesToWrite > 0)
                         {
-                            pConDetails->mutReqData->lock();
                             pConDetails->vecReqData.push_back(make_unique<char[]>(nBytesToWrite + 4));
                             copy(&pConDetails->strBuffer[0], &pConDetails->strBuffer[nBytesToWrite], pConDetails->vecReqData.back().get() + 4);
                             *reinterpret_cast<uint32_t*>(pConDetails->vecReqData.back().get()) = static_cast<uint32_t>(nBytesToWrite);
 //OutputDebugString(wstring(L"1. Datenempfang: " + to_wstring(nBytesToWrite) + L" Bytes\r\n").c_str());
-                            pConDetails->mutReqData->unlock();
                             pConDetails->nContentRecv = nBytesToWrite;
                             pConDetails->strBuffer.erase(0, nBytesToWrite);
                         }
                         if (pConDetails->nContentRecv == pConDetails->nContentsSoll)    // Last byte of Data, we signal this with a empty vector entry
                         {
-                            pConDetails->mutReqData->lock();
-                            pConDetails->vecReqData.push_back(unique_ptr<char[]>(nullptr)/*make_unique<char[]>(0)*/);
+                            pConDetails->vecReqData.push_back(unique_ptr<char[]>(nullptr));
 //OutputDebugString(wstring(L"Datenempfang sofort beendet\r\n").c_str());
                             pConDetails->nContentRecv = pConDetails->nContentsSoll = 0;
-                            pConDetails->mutReqData->unlock();
                         }
-                        /*
-                        pConDetails->TmpFile = make_unique<TempFile>();
-                        pConDetails->TmpFile->Open();
-
-                        if ( pConDetails->strBuffer.size() > 0) // is data in the received buffer available
-                        {
-                            size_t nBytesToWrite = static_cast<size_t>(min(static_cast<uint64_t>(pConDetails->strBuffer.size()), pConDetails->nContentsSoll));
-                            pConDetails->TmpFile->Write( pConDetails->strBuffer.c_str(), nBytesToWrite);
-                            pConDetails->nContentRecv = nBytesToWrite;
-                            pConDetails->strBuffer.erase(0, nBytesToWrite);
-                        }
-
-                        if (pConDetails->nContentRecv < pConDetails->nContentsSoll)
-                        {
-                            m_mtxConnections.unlock();
-                            return;
-                        }
-                        pConDetails->TmpFile->Close();
-                        */
+                        pConDetails->mutReqData->unlock();
                     }
                 }
 auto dwDif = chrono::high_resolution_clock::now();
@@ -1445,13 +1419,15 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     // AliasMatch
     bool bNewRootSet = false;
     bool bExecAsScript = false;
+    vector<wstring>* pveAlaisMatch = nullptr;
     for (auto& strAlias : m_vHostParam[szHost].m_mstrAliasMatch)
     {
-        wstring strNewPath = regex_replace(strItemPath, wregex(strAlias.first), get<0>(strAlias.second), regex_constants::format_first_only);
+        wstring strNewPath = regex_replace(strItemPath, wregex(strAlias.first), get<0>(strAlias.second).back(), regex_constants::format_first_only);
         if (strNewPath != strItemPath)
         {
             strItemPath = strNewPath;
             bNewRootSet = true;
+            pveAlaisMatch = &get<0>(strAlias.second);
             bExecAsScript = get<1>(strAlias.second);
             break;
         }
@@ -1534,7 +1510,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     }
 
     // OPTIONS
-    if (strItemPath != L"*")
+    if (strItemPath != L"*" && bExecAsScript == false)
     {
         if (iRet != 0 || (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR || (stFileInfo.st_mode & _S_IFREG) == 0)
         {
@@ -1560,66 +1536,350 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     const auto itFileTyp = m_vHostParam[szHost].m_mFileTypeAction.find(strFileExtension);
     if ((itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) || bExecAsScript == true) && (itMethode->second != "OPTIONS" || bOptionsHandlerInScript == true))
     {
-        if (bExecAsScript == true || (itFileTyp->second.empty() == false && itFileTyp->second.back().empty() == false))
-        {
-            uint64_t nSollLen = 0, nPostLen = 0;
-            auto itContLen = lstHeaderFields.find("content-length");
-            if (itContLen != end(lstHeaderFields))
-                nSollLen = stoll(itContLen->second);
+        uint64_t nSollLen = 0, nPostLen = 0;
+        auto itContLen = lstHeaderFields.find("content-length");
+        if (itContLen != end(lstHeaderFields))
+            nSollLen = stoll(itContLen->second);
 
+        vector<pair<string, string>> vCgiParam;
+        const static array<pair<const char*, const wchar_t*>, 4> caHeaders = { { make_pair(":authority", L"HTTP_HOST") , make_pair(":scheme", L"REQUEST_SCHEME") , make_pair("content-type", L"CONTENT_TYPE"), make_pair("content-length", L"CONTENT_LENGTH") } };
+        for (auto& itHeader : lstHeaderFields)
+        {
+            if (itHeader.first != "content-length" || nSollLen > 0)
+            {
+                auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) { return prItem.first == itHeader.first ? true : false; });
+                if (itArray != end(caHeaders))
+                    vCgiParam.emplace_back(make_pair(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itArray->second), itHeader.second));
+                else if (itHeader.first[0] != ':')
+                {
+                    wstring strHeader(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itHeader.first));
+                    //strHeader.erase(0, strHeader.find_first_not_of(L':'));
+                    transform(begin(strHeader), end(strHeader), begin(strHeader), ::toupper);
+                    strHeader = regex_replace(strHeader, wregex(L"-"), wstring(L"_"));
+                    vCgiParam.emplace_back(make_pair("HTTP_" + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strHeader), itHeader.second));
+                }
+            }
+        }
+
+        vCgiParam.emplace_back(make_pair("SERVER_SOFTWARE", string(SERVERSIGNATUR)));
+        vCgiParam.emplace_back(make_pair("REDIRECT_STATUS", "200"));
+        vCgiParam.emplace_back(make_pair("REMOTE_ADDR", soMetaDa.strIpClient));
+        vCgiParam.emplace_back(make_pair("SERVER_PORT", to_string(soMetaDa.sPortInterFace)));
+        vCgiParam.emplace_back(make_pair("SERVER_ADDR", soMetaDa.strIpInterface));
+        vCgiParam.emplace_back(make_pair("REMOTE_PORT", to_string(soMetaDa.sPortClient)));
+        vCgiParam.emplace_back(make_pair("SERVER_PROTOCOL", string(httpVers == 2 ? "HTTP/2." : "HTTP/1.") + strHttpVersion));
+        vCgiParam.emplace_back(make_pair("DOCUMENT_ROOT", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(m_vHostParam[szHost].m_strRootPath)));
+        vCgiParam.emplace_back(make_pair("GATEWAY_INTERFACE", "CGI/1.1"));
+        vCgiParam.emplace_back(make_pair("SCRIPT_NAME", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath.find(m_vHostParam[szHost].m_strRootPath) == 0 ? strItemPath.substr(m_vHostParam[szHost].m_strRootPath.size()) : strItemPath)));
+        vCgiParam.emplace_back(make_pair("REQUEST_METHOD", itMethode->second));
+        vCgiParam.emplace_back(make_pair("REQUEST_URI", itPath->second));
+        if (strPathInfo.empty() == false)
+        {
+            vCgiParam.emplace_back(make_pair("PATH_INFO", url_encode(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strPathInfo))));
+            vCgiParam.emplace_back(make_pair("PATH_TRANSLATED", url_encode(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(m_vHostParam[szHost].m_strRootPath + strPathInfo))));
+        }
+        if (soMetaDa.bIsSsl == true)
+            vCgiParam.emplace_back(make_pair("HTTPS", "on"));
+        if (strRemoteUser.empty() == false)
+            vCgiParam.emplace_back(make_pair("REMOTE_USER", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strRemoteUser)));
+        if (strQuery.empty() == false)
+            vCgiParam.emplace_back(make_pair("QUERY_STRING", strQuery));
+        vCgiParam.emplace_back(make_pair("SCRIPT_FILENAME", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath)));
+
+        bool bEndOfHeader = false;
+        HeadList umPhpHeaders;
+        basic_string<char> strBuffer;
+        size_t nTotal = 0;
+        int nOffset = 0;
+        bool bChunkedTransfer = false;
+
+        function<void(char*, int)> fnSendOutput = [&](char* szBuffer, int nBufLen)
+        {
+            if (bEndOfHeader == false)
+            {
+                strBuffer.assign(szBuffer + nHttp2Offset, nBufLen);
+                for (;;)
+                {
+                    size_t nPosStart = strBuffer.find_first_of("\r\n");
+                    size_t nPosEnd = strBuffer.find_first_not_of("\r\n", nPosStart);
+                    if (nPosEnd == string::npos)
+                        nPosEnd = nBufLen;
+
+                    if (nPosStart == 0) // second crlf = end of header
+                    {
+                        // Build response header
+                        auto itCgiHeader = umPhpHeaders.ifind("status");
+                        if (itCgiHeader == end(umPhpHeaders))
+                            itCgiHeader = umPhpHeaders.ifind(":status");
+                        if (itCgiHeader != end(umPhpHeaders))
+                        {
+                            iStatus = stoi(itCgiHeader->second);
+                            umPhpHeaders.erase(itCgiHeader);
+                        }
+                        if (umPhpHeaders.ifind("Transfer-Encoding") == end(umPhpHeaders) && umPhpHeaders.ifind("Content-Length") == end(umPhpHeaders) && httpVers < 2 && strHttpVersion == "1")
+                        {
+                            umPhpHeaders.emplace_back(make_pair("Transfer-Encoding", "chunked"));
+                            bChunkedTransfer = true;
+                        }
+                        umPhpHeaders.insert(end(umPhpHeaders), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+                        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
+                        if (httpVers == 2)
+                            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
+                        if (fnIsStreamReset(nStreamId) == false)
+                            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                        soMetaDa.fResetTimer();
+
+                        bEndOfHeader = true;
+                        nBufLen -= static_cast<int>(nPosEnd);
+                        strBuffer.erase(0, nPosEnd);
+                        strBuffer.copy(szBuffer + nHttp2Offset, nBufLen);
+                        break;
+                    }
+                    else if (nPosStart != string::npos)
+                    {
+                        size_t nPos2 = strBuffer.substr(1, nPosStart).find(":");
+                        if (nPos2++ != string::npos)
+                        {
+                            auto iter = umPhpHeaders.emplace(umPhpHeaders.end(), make_pair(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1))));
+                            if (iter != end(umPhpHeaders))
+                            {
+                                iter->second.erase(0, iter->second.find_first_not_of(" "));
+                            }
+                        }
+
+                        if (nPosEnd - nPosStart > 2 && strBuffer.compare(nPosStart, 2, "\r\n") == 0)
+                            nPosEnd -= 2;
+                        else if (nPosEnd - nPosStart > 1 && strBuffer.compare(nPosStart, 2, "\n\n") == 0)
+                            nPosEnd -= 1;
+
+                        nBufLen -= static_cast<int>(nPosEnd);
+                        strBuffer.erase(0, nPosEnd);
+                    }
+                    else
+                    {
+                        nOffset = nBufLen;
+                        strBuffer.copy(const_cast<char*>(szBuffer) + nHttp2Offset, nBufLen);
+                        nBufLen = 0;
+                        break;
+                    }
+                }
+
+                if (nBufLen == 0)
+                    return;
+            }
+
+            if (httpVers == 2)
+            {
+                nOffset = min(nBufLen, 10);
+                nBufLen -= nOffset;
+            }
+
+            size_t nBytesTransfered = 0;
+            while (nBytesTransfered < static_cast<size_t>(nBufLen) && (*patStop).load() == false)
+            {
+                int64_t nStreamWndSize = INT32_MAX;
+                if (fnGetStreamWindowSize(nStreamWndSize) == false)
+                    break;  // Stream Item was removed, properly the stream was reseted
+
+                size_t nSendBufLen;
+                if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nBufLen - nBytesTransfered) == false)
+                    continue;
+
+                if (httpVers == 2)
+                    BuildHttp2Frame(szBuffer + nBytesTransfered, nSendBufLen, 0x0, 0x0, nStreamId);
+                else if (bChunkedTransfer == true)
+                {
+                    stringstream ss;
+                    ss << hex << ::uppercase << nSendBufLen << "\r\n";
+                    soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
+                }
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(szBuffer + nBytesTransfered, nSendBufLen + nHttp2Offset);
+                if (bChunkedTransfer == true)
+                    soMetaDa.fSocketWrite("\r\n", 2);
+                soMetaDa.fResetTimer();
+
+                nBytesTransfered += nSendBufLen;
+
+                if (fnUpdateStreamParam(nSendBufLen) == -1)
+                    break;  // Stream Item was removed, properly the stream was reseted
+            }
+            fnResetReservierteWindowSize();
+
+            nTotal += nBytesTransfered;
+            copy(szBuffer + nHttp2Offset + nBytesTransfered, szBuffer + nHttp2Offset + nBytesTransfered + nOffset, szBuffer + nHttp2Offset);
+        };
+
+        function<void(char*)> fnAfterCgi = [&](char* szBuffer)
+        {
+            if (bEndOfHeader == true && httpVers == 2)
+            {
+                BuildHttp2Frame(szBuffer, nOffset, 0x0, 0x1, nStreamId);
+                soMetaDa.fSocketWrite(szBuffer, nHttp2Offset + nOffset);
+                soMetaDa.fResetTimer();
+            }
+            else if (bEndOfHeader == true && bChunkedTransfer == true)
+                soMetaDa.fSocketWrite("0\r\n\r\n", 5);
+            else if (bEndOfHeader == false)
+            {   // Noch kein Header gesendet
+                HeadList tmpHeader;
+                tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                soMetaDa.fResetTimer();
+                if (httpVers < 2)
+                    bCloseConnection = true;
+            }
+
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                << (httpVers == 2 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
+                << "\" " << iStatus << " " << nTotal << " \""
+                << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                << CLogFile::LOGTYPES::END;
+        };
+
+        function<void()> fnSendError = [&]()
+        {
+            HeadList tmpHeader;
+            tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
+            if (httpVers == 2)
+                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            soMetaDa.fResetTimer();
+            if (httpVers < 2)
+                bCloseConnection = true;
+
+            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Server error handling: ", itPath->second);
+        };
+
+        // Fast-CGI Interface
+        if ((itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && itFileTyp->second.size() >= 2 && itFileTyp->second[0].compare(L"fcgi") == 0)
+        || (pveAlaisMatch != nullptr && pveAlaisMatch->size() >= 2 && pveAlaisMatch->at(0).compare(L"fcgi") == 0))
+        {
+            string strIpAdd(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) ? itFileTyp->second[1] : pveAlaisMatch->at(1)));
+            size_t nPos = strIpAdd.find_first_of(":");
+            if (nPos != string::npos)
+            {
+                static map<string, FastCgiClient> m_mapFcgiConnections;
+                static mutex s_mxFcgi;
+                s_mxFcgi.lock();
+                auto itFcgi = m_mapFcgiConnections.find(strIpAdd);
+                if (itFcgi == m_mapFcgiConnections.end())
+                {
+                    m_mapFcgiConnections.emplace(strIpAdd, move(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && itFileTyp->second.size() >= 3 ? FastCgiClient(itFileTyp->second[2]) : FastCgiClient()));
+                    itFcgi = m_mapFcgiConnections.find(strIpAdd);
+                }                
+
+                if (itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == false)
+                    itFcgi->second.Connect(strIpAdd.substr(0, nPos), stoi(strIpAdd.substr(nPos + 1)));
+                s_mxFcgi.unlock();
+
+                if (itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true)
+                {
+                    soMetaDa.fSetNewTimeout(60000 * 10);   // 10 Min = 60.000 Millisekunden * 10
+
+                    bool l_bReqEnde = false;
+                    condition_variable l_cvReqEnd;
+                    unique_ptr<char> pBuf(new char[65536 + nHttp2Offset + 10]);
+                    uint32_t nReqId;
+                    do
+                    {
+                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [fnSendOutput, &pBuf, &nHttp2Offset, &nOffset](const unsigned char* pData, unsigned short nDataLen)
+                        {
+                            if (nDataLen != 0)
+                            {
+                                int nRead = min(65536 + 10 - nOffset, static_cast<int>(nDataLen));
+                                copy(pData, pData + nRead, reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset));
+                                fnSendOutput(pBuf.get(), nRead + nOffset);  //OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pData, nDataLen).c_str()));
+                            }
+                        });
+                        if (nReqId == 0 && itFcgi->second.IsConnected() == true)
+                            this_thread::sleep_for(chrono::milliseconds(1));
+                    } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true && (*patStop).load() == false);
+
+                    if (nReqId != 0)    // We have a request send to the app server
+                    {
+                        pmtxReqdata->lock();
+                        //if (vecData->size() > 0 || nSollLen > 0)
+                        {   // We have a content length, we wait until the first packet is in the que
+                            while (vecData->size() == 0 && (*patStop).load() == false)
+                            {
+                                pmtxReqdata->unlock();
+                                this_thread::sleep_for(chrono::milliseconds(10));
+                                pmtxReqdata->lock();
+                            }
+                            // get the first packet
+                            auto data = move(vecData->front());
+                            vecData->pop_front();
+                            while (data != nullptr && (*patStop).load() == false)
+                            {   // loop until we have nullptr packet
+                                pmtxReqdata->unlock();
+                                uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                                itFcgi->second.SendRequestData(nReqId, reinterpret_cast<char*>(data.get() + 4), nDataLen);
+                                nPostLen += nDataLen;
+                                pmtxReqdata->lock();
+                                //OutputDebugString(wstring(L"CGI Datentransfer: " + to_wstring(nDataLen) + L" Bytes\r\n").c_str());
+                                while (vecData->size() == 0 && (*patStop).load() == false)
+                                {   // wait until we have a packet again
+                                    pmtxReqdata->unlock();
+                                    this_thread::sleep_for(chrono::milliseconds(10));
+                                    pmtxReqdata->lock();
+                                }
+                                if (vecData->size() > 0)
+                                {
+                                    data = move(vecData->front());
+                                    vecData->pop_front();
+                                }
+                            }
+                            itFcgi->second.SendRequestData(nReqId, "", 0);
+                        }
+                        pmtxReqdata->unlock();
+
+                        bool bReqDone, bAbort = false;
+                        do
+                        {
+                            mutex mxReqEnde;
+                            unique_lock<mutex> lock(mxReqEnde);
+                            bReqDone = l_cvReqEnd.wait_for(lock, chrono::milliseconds(10), [&]() { return l_bReqEnde; });
+                            if ((*patStop).load() == true && bAbort == false)   // Klient connection was interruptet, we Abort the app server request once
+                            {
+                                itFcgi->second.AbortRequest(nReqId);
+                                fnSendError();
+                                bAbort = true;
+                            }
+                        } while (bReqDone == false);
+
+                        if (bAbort == false)
+                            fnAfterCgi(pBuf.get());
+                    }
+                    else if ((*patStop).load() == false)
+                        fnSendError();
+                    soMetaDa.fSetNewTimeout(30000);   // back to 30 Seconds
+                }
+                else
+                    fnSendError();
+            }
+        }
+
+        // Normal CGI Interface
+        else if (bExecAsScript == true || (itFileTyp->second.empty() == false && itFileTyp->second.back().empty() == false))
+        {
             SpawnProcess run;
 
             for (const auto& strEnvVar : vStrEnvVariable)
                 run.AddEnvironment(strEnvVar + (strEnvVar.find(L"=") == string::npos ? L"=1" : L""));
-
-            const static array<pair<const char*, const wchar_t*>, 4> caHeaders = { { make_pair(":authority", L"HTTP_HOST") , make_pair(":scheme", L"REQUEST_SCHEME") , make_pair("content-type", L"CONTENT_TYPE"), make_pair("content-length", L"CONTENT_LENGTH") } };
-            for (auto& itHeader : lstHeaderFields)
-            {
-                if (itHeader.first != "content-length" || nSollLen > 0)
-                {
-                    auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) { return prItem.first == itHeader.first ? true : false; });
-                    if (itArray != end(caHeaders))
-                        run.AddEnvironment(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itArray->second) + "=" + itHeader.second);
-                    else if (itHeader.first[0] != ':')
-                    {
-                        wstring strHeader(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itHeader.first));
-                        //strHeader.erase(0, strHeader.find_first_not_of(L':'));
-                        transform(begin(strHeader), end(strHeader), begin(strHeader), ::toupper);
-                        strHeader = regex_replace(strHeader, wregex(L"-"), wstring(L"_"));
-                        run.AddEnvironment("HTTP_" + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strHeader) + "=" + itHeader.second);
-                    }
-                }
-            }
-
-            run.AddEnvironment("SERVER_SOFTWARE=" + string(SERVERSIGNATUR));
-            run.AddEnvironment("REDIRECT_STATUS=200");
-            run.AddEnvironment("REMOTE_ADDR=" + soMetaDa.strIpClient);
-            run.AddEnvironment("SERVER_PORT=" + to_string(soMetaDa.sPortInterFace));
-            run.AddEnvironment("SERVER_ADDR=" + soMetaDa.strIpInterface);
-            run.AddEnvironment("REMOTE_PORT=" + to_string(soMetaDa.sPortClient));
-            run.AddEnvironment("SERVER_PROTOCOL=" + string(httpVers == 2 ? "HTTP/2." : "HTTP/1.") + strHttpVersion);
-            run.AddEnvironment(L"DOCUMENT_ROOT=" + m_vHostParam[szHost].m_strRootPath);
-            run.AddEnvironment("GATEWAY_INTERFACE=CGI/1.1");
-            run.AddEnvironment(L"SCRIPT_NAME=" + (strItemPath.find(m_vHostParam[szHost].m_strRootPath) == 0 ? strItemPath.substr(m_vHostParam[szHost].m_strRootPath.size()) : strItemPath));
-            run.AddEnvironment("REQUEST_METHOD=" + itMethode->second);
-            run.AddEnvironment("REQUEST_URI=" + itPath->second);
-            if (strPathInfo.empty() == false)
-            {
-                run.AddEnvironment("PATH_INFO=" + url_encode(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strPathInfo)));
-                run.AddEnvironment("PATH_TRANSLATED=" + url_encode(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(m_vHostParam[szHost].m_strRootPath + strPathInfo)));
-            }
-            if (soMetaDa.bIsSsl == true)
-                run.AddEnvironment("HTTPS=on");
-            if (strRemoteUser.empty() == false)
-                run.AddEnvironment(L"REMOTE_USER=" + strRemoteUser);
-            if (strQuery.empty() == false)
-                run.AddEnvironment("QUERY_STRING=" + strQuery);
-            run.AddEnvironment(L"SCRIPT_FILENAME=" + strItemPath);
+            for (const auto& itCgiParam : vCgiParam)
+                run.AddEnvironment(itCgiParam.first, itCgiParam.second);
 
             if (run.Spawn((bExecAsScript == true ? strItemPath : regex_replace(itFileTyp->second.back(), wregex(L"\\$1"), /*L"\" \"" +*/ strItemPath)), strItemPath.substr(0, strItemPath.find_last_of(L"\\/"))) == 0)
             {
                 pmtxReqdata->lock();
-                if (vecData->size() > 0 || nSollLen > 0)
+                //if (vecData->size() > 0 || nSollLen > 0)
                 {   // We have a content length, we wait until the first packet is in the que
                     while (vecData->size() == 0 && (*patStop).load() == false)
                     {
@@ -1653,33 +1913,11 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 }
                 pmtxReqdata->unlock();
 //OutputDebugString(wstring(L"CGI Datentransfer Soll: " + to_wstring(nSollLen) + L", Ist: " + to_wstring(nPostLen) + L" Bytes\r\n").c_str());
-                /*if (nPostLen > 0)
-                {
-                    unique_ptr<unsigned char> pBuf(new unsigned char[65536]);
-                    uint64_t nWritePipe = 0;
-                    do
-                    {
-                        streamoff iRead = pTmpFile.get()->Read(pBuf.get(), 65536);
-                        if (iRead > 0)
-                            run.WriteToSpawn(pBuf.get(), static_cast<int>(iRead)), nWritePipe += iRead;
-                        else
-                            break;
-                        soMetaDa.fResetTimer();
-                    } while (nWritePipe < nPostLen && (*patStop).load() == false);
-                }*/
-
                 run.CloseWritePipe();
 
                 soMetaDa.fSetNewTimeout(60000 * 10);   // 10 Min = 60.000 Millisekunden * 10
 
-                bool bEndOfHeader = false;
-                HeadList umPhpHeaders;
                 unique_ptr<char> pBuf(new char[65536 + nHttp2Offset]);
-                basic_string<char> strBuffer;
-                size_t nTotal = 0;
-                int nOffset = 0;
-                bool bChunkedTransfer = false;
-
                 bool bStillRunning = true;
                 while (bStillRunning == true && (*patStop).load() == false)
                 {
@@ -1693,119 +1931,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         nRead += nOffset;
                         nOffset = 0;
 
-                        if (bEndOfHeader == false)
-                        {
-                            strBuffer.assign(pBuf.get() + nHttp2Offset, nRead);
-                            for (;;)
-                            {
-                                size_t nPosStart = strBuffer.find_first_of("\r\n");
-                                size_t nPosEnd = strBuffer.find_first_not_of("\r\n", nPosStart);
-                                if (nPosEnd == string::npos)
-                                    nPosEnd = nRead;
-
-                                if (nPosStart == 0) // second crlf = end of header
-                                {
-                                    // Build response header
-                                    auto itCgiHeader = umPhpHeaders.ifind("status");
-                                    if (itCgiHeader == end(umPhpHeaders))
-                                        itCgiHeader = umPhpHeaders.ifind(":status");
-                                    if (itCgiHeader != end(umPhpHeaders))
-                                    {
-                                        iStatus = stoi(itCgiHeader->second);
-                                        umPhpHeaders.erase(itCgiHeader);
-                                    }
-                                    if (umPhpHeaders.ifind("Transfer-Encoding") == end(umPhpHeaders) && umPhpHeaders.ifind("Content-Length") == end(umPhpHeaders) && httpVers < 2 && strHttpVersion == "1")
-                                    {
-                                        umPhpHeaders.emplace_back(make_pair("Transfer-Encoding", "chunked"));
-                                        bChunkedTransfer = true;
-                                    }
-                                    umPhpHeaders.insert(end(umPhpHeaders), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
-                                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
-                                    if (httpVers == 2)
-                                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
-                                    if (fnIsStreamReset(nStreamId) == false)
-                                        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                                    soMetaDa.fResetTimer();
-
-                                    bEndOfHeader = true;
-                                    nRead -= static_cast<int>(nPosEnd);
-                                    strBuffer.erase(0, nPosEnd);
-                                    strBuffer.copy(pBuf.get() + nHttp2Offset, nRead);
-                                    break;
-                                }
-                                else if (nPosStart != string::npos)
-                                {
-                                    size_t nPos2 = strBuffer.substr(1, nPosStart).find(":");
-                                    if (nPos2++ != string::npos)
-                                    {
-                                        auto iter = umPhpHeaders.emplace(umPhpHeaders.end(), make_pair(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1))));
-                                        if (iter != end(umPhpHeaders))
-                                        {
-                                            iter->second.erase(0, iter->second.find_first_not_of(" "));
-                                        }
-                                    }
-
-                                    if (nPosEnd - nPosStart > 2 && strBuffer.compare(nPosStart, 2, "\r\n") == 0)
-                                        nPosEnd -= 2;
-                                    else if (nPosEnd - nPosStart > 1 && strBuffer.compare(nPosStart, 2, "\n\n") == 0)
-                                        nPosEnd -= 1;
-
-                                    nRead -= static_cast<int>(nPosEnd);
-                                    strBuffer.erase(0, nPosEnd);
-                                }
-                                else
-                                {
-                                    nOffset = nRead;
-                                    strBuffer.copy(pBuf.get() + nHttp2Offset, nRead);
-                                    nRead = 0;
-                                    break;
-                                }
-                            }
-
-                            if (nRead == 0)
-                                continue;
-                        }
-
-                        if (httpVers == 2)
-                        {
-                            nOffset = min(nRead, 10);
-                            nRead -= nOffset;
-                        }
-
-                        size_t nBytesTransfered = 0;
-                        while (nBytesTransfered < static_cast<size_t>(nRead) && (*patStop).load() == false)
-                        {
-                            int64_t nStreamWndSize = INT32_MAX;
-                            if (fnGetStreamWindowSize(nStreamWndSize) == false)
-                                break;  // Stream Item was removed, properly the stream was reseted
-
-                            size_t nSendBufLen;
-                            if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nRead - nBytesTransfered) == false)
-                                continue;
-
-                            if (httpVers == 2)
-                                BuildHttp2Frame(pBuf.get() + nBytesTransfered, nSendBufLen, 0x0, 0x0, nStreamId);
-                            else if (bChunkedTransfer == true)
-                            {
-                                stringstream ss;
-                                ss << hex << ::uppercase << nSendBufLen << "\r\n";
-                                soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
-                            }
-                            if (fnIsStreamReset(nStreamId) == false)
-                                soMetaDa.fSocketWrite(pBuf.get() + nBytesTransfered, nSendBufLen + nHttp2Offset);
-                            if (bChunkedTransfer == true)
-                                soMetaDa.fSocketWrite("\r\n", 2);
-                            soMetaDa.fResetTimer();
-
-                            nBytesTransfered += nSendBufLen;
-
-                            if (fnUpdateStreamParam(nSendBufLen) == -1)
-                                break;  // Stream Item was removed, properly the stream was reseted
-                        }
-                        fnResetReservierteWindowSize();
-
-                        nTotal += nBytesTransfered;
-                        copy(pBuf.get() + nHttp2Offset + nBytesTransfered, pBuf.get() + nHttp2Offset + nBytesTransfered + nOffset, pBuf.get() + nHttp2Offset);
+                        fnSendOutput(pBuf.get(), nRead);
                     }
                     if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get()), static_cast<int>(65536)), nRead > 0)
                     {
@@ -1827,63 +1953,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     return;
                 }
 
-                if (bEndOfHeader == true && httpVers == 2)
-                {
-                    BuildHttp2Frame(pBuf.get(), nOffset, 0x0, 0x1, nStreamId);
-                    soMetaDa.fSocketWrite(pBuf.get(), nHttp2Offset + nOffset);
-                    soMetaDa.fResetTimer();
-                }
-                else if (bEndOfHeader == true && bChunkedTransfer == true)
-                    soMetaDa.fSocketWrite("0\r\n\r\n", 5);
-                else if (bEndOfHeader == false)
-                {   // Noch kein Header gesendet
-                    HeadList tmpHeader;
-                    tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
-                    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
-                    if (httpVers == 2)
-                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                    soMetaDa.fResetTimer();
-                    if (httpVers < 2)
-                        bCloseConnection = true;
-                }
-
-                CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
-                    << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                    << (httpVers == 2 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
-                    << "\" " << iStatus << " " << nTotal << " \""
-                    << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
-                    << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
-                    << CLogFile::LOGTYPES::END;
+                fnAfterCgi(pBuf.get());
             }
             else
             {
-                HeadList tmpHeader;
-                tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
-                if (httpVers == 2)
-                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                soMetaDa.fResetTimer();
-                if (httpVers < 2)
-                    bCloseConnection = true;
-
-                CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Server error handling: ", itPath->second);
+                fnSendError();
             }
         }
         else
         {
-            HeadList tmpHeader;
-            tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-            soMetaDa.fResetTimer();
-            if (httpVers < 2)
-                bCloseConnection = true;
-
-            CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Server error handling: ", itPath->second);
+            fnSendError();
         }
 
         if (bCloseConnection == true)

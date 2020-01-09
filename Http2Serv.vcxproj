@@ -183,6 +183,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ConfFile.cpp" />
+    <ClCompile Include="FastCgi\FastCgi.cpp" />
     <ClCompile Include="HPack.cpp" />
     <ClCompile Include="Http2Serv.cpp" />
     <ClCompile Include="HttpServ.cpp" />
@@ -194,6 +195,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ConfFile.h" />
+    <ClInclude Include="FastCgi\FastCgi.h" />
     <ClInclude Include="GZip.h" />
     <ClInclude Include="H2Proto.h" />
     <ClInclude Include="HPack.h" />
