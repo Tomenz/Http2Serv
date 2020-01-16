@@ -28,7 +28,7 @@
 #include "CommonLib/md5.h"
 #include "CommonLib/UrlCode.h"
 #include "SpawnProcess.h"
-#include "FastCgi\FastCgi.h"
+#include "FastCgi/FastCgi.h"
 
 using namespace std;
 using namespace std::placeholders;
@@ -594,7 +594,7 @@ void CHttpServ::OnSocketError(BaseSocket* const pBaseSocket)
     if (m_vHostParam[szHost].m_strErrLog.empty() == false)
     {
         TcpSocket* pTcpSocket = dynamic_cast<TcpSocket*>(pBaseSocket);
-        CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", (pTcpSocket != nullptr ? pTcpSocket->GetClientAddr() : "0.0.0.0"), "] network error no.: ", pBaseSocket->GetErrorNo());
+        CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", (pTcpSocket != nullptr ? pTcpSocket->GetClientAddr() : "0.0.0.0"), "] network error no.: ", pBaseSocket->GetErrorNo(), " @ ", pBaseSocket->GetErrorLoc());
     }
 
     pBaseSocket->Close();

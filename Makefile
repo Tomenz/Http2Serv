@@ -14,35 +14,47 @@ CFLAGS = -Wall -O3 -std=c++14 -D ZLIB_CONST -pthread -ffunction-sections -fdata-
 #CFLAGS = -w -std=c++14 -pthread -lstdc++fs # -lstdc++fs -ffunction-sections -fdata-sections -fomit-frame-pointer -DPOSIX
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++ # -lstdc++fs
 TARGET = Http2Serv
-DIRS = zlib SocketLib brotli CommonLib
-OBJLIBS = libzlib.a libsocketlib.a libbrotlilib.a libcommonlib.a
+#DIRS = zlib SocketLib brotli CommonLib
+DIRS = SocketLib CommonLib
+ZLIBDIR = zlib
+BRLIBDIR = brotli
+OBJLIBS = libz.a libsocketlib.a libbrotli.a libcommonlib.a
 
 BUILDDIRS = $(DIRS:%=build-%)
 CLEANDIRS = $(DIRS:%=clean-%)
 
 #INC_PATH = -I ../matrixssl-3-7-2b-open/ -I .
 #LIB_PATH = -L ../matrixssl-3-7-2b-open/core -L ../matrixssl-3-7-2b-open/crypto -L ../matrixssl-3-7-2b-open/matrixssl -L ./zlib
-INC_PATH = -I ./brotli/include
-LIB_PATH = -L ./zlib -L ./socketlib -L ./brotli -L ./CommonLib
+INC_PATH = -I ./brotli/c/include -I .
+LIB_PATH = -L ./zlib -L ./SocketLib -L ./brotli -L ./CommonLib
 
-OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o TempFile.o SpawnProcess.o HPack.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
+OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o SpawnProcess.o HPack.o FastCgi.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
-LIB = -l zlib -l socketlib -l brotlilib -l crypto -l ssl -l commonlib
+LIB = -l z -l socketlib -l brotli -l crypto -l ssl -l commonlib
 
 all: $(TARGET)
 
 mDnsServ: $(BUILDDIRS) mDnsServ.o DnsProtokol.o
 	$(CC) -o mDnsServ mDnsServ.o DnsProtokol.o $(LIB_PATH) $(LIB) $(LDFLAGS)
 
-$(TARGET): $(BUILDDIRS) $(OBJ)
+$(TARGET): $(BUILDDIRS) $(BRLIBDIR) $(ZLIBDIR) $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(LIB_PATH) $(LIB) $(LDFLAGS)
 
 %.o: %.cpp HttpServ.h HPack.h H2Proto.h Timer.h
 	$(CC) $(CFLAGS) $(INC_PATH) -c $<
 
+FastCgi.o:
+	$(CC) $(CFLAGS) $(INC_PATH) -c FastCgi/FastCgi.cpp
+
 $(DIRS): $(BUILDDIRS)
 $(BUILDDIRS):
 	$(MAKE) -C $(@:build-%=%)
+
+$(BRLIBDIR):
+	$(MAKE) -C $(BRLIBDIR) lib
+
+$(ZLIBDIR):
+	$(MAKE) -C $(ZLIBDIR) libz.a
 
 clean: $(CLEANDIRS)
 	rm -f $(TARGET) $(OBJ) *~
@@ -50,9 +62,13 @@ clean: $(CLEANDIRS)
 
 $(CLEANDIRS):
 	$(MAKE) -C $(@:clean-%=%) clean
+	$(MAKE) -C $(BRLIBDIR) clean
+	$(MAKE) -C $(ZLIBDIR) clean
 
 .PHONY: subdirs $(DIRS)
 .PHONY: subdirs $(BUILDDIRS)
+.PHONY: subdirs $(BRLIBDIR)
+.PHONY: subdirs $(ZLIBDIR)
 .PHONY: subdirs $(CLEANDIRS)
 .PHONY: clean
 
