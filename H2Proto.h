@@ -134,7 +134,7 @@ public:
             MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
-    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex* pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* patStop)
+    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop)
     {
         size_t nReturn = 0;
 
@@ -192,7 +192,7 @@ public:
                 nLen -= 9;
                 szBuf += 9;
 
-                pmtxStream->lock();
+                pmtxStream.lock();
                 if (h2f.streamId > 0 && (h2f.streamId % 2) == 0)    // Stream ID must by a odd number
                     throw H2ProtoException(H2ProtoException::WRONG_STREAM_ID);
 
@@ -274,7 +274,7 @@ public:
                             CallAction.push_back(h2f.streamId);
                         }
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 1: // HEADERS frame
                     MyTrace("HEADERS frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -391,7 +391,7 @@ public:
                             }
                         }
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 2: // PRIORITY  frame
                     MyTrace("PRIORITY frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -414,7 +414,7 @@ public:
                         if (h2f.streamId == lStremId)
                             throw H2ProtoException(H2ProtoException::SAME_STREAMID, h2f.streamId);
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 3: // RST_STREAM frame
                     MyTrace("RST_STREAM frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -438,7 +438,7 @@ public:
                             streamData->second.mutReqData.get()->unlock();
                         }
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 4: // SETTINGS frame
                     MyTrace("SETTINGS frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -447,7 +447,7 @@ public:
                         {
                             if (h2f.size != 0)
                                 throw H2ProtoException(H2ProtoException::FRAME_SIZE_ERROR);
-                            pmtxStream->unlock();
+                            pmtxStream.unlock();
                             break;
                         }
 
@@ -504,7 +504,7 @@ public:
                         }
                         soMetaDa.fSocketWrite("\x0\x0\x0\x4\x1\x0\x0\x0\x0", 9);    // ACK SETTINGS
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 5: // PUSH_PROMISE frame
                     MyTrace("PUSH_PROMISE frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -517,7 +517,7 @@ public:
                         Http2Goaway(soMetaDa.fSocketWrite, 0, 0, 1);    // 1 = PROTOCOL_ERROR
                         nReturn = SIZE_MAX;
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 6: // PING frame
                     MyTrace("PING frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -533,7 +533,7 @@ public:
                         soMetaDa.fSocketWrite(szBuf, 9 + h2f.size);
                         szBuf += 9;
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 7: // GOAWAY frame
                     MyTrace("GOAWAY frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -554,7 +554,7 @@ public:
                         // After a GOAWAY we terminate the connection
                         Http2Goaway(soMetaDa.fSocketWrite, 0, umStreamCache.rbegin()->first, 0);  // GOAWAY
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 8: // WINDOW_UPDATE frame
                     MyTrace("WINDOW_UPDATE frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -582,7 +582,7 @@ public:
                             throw H2ProtoException(H2ProtoException::INVALID_WINDOW_SIZE, h2f.streamId);
                         }
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 case 9: // CONTINUATION frame
                     MyTrace("CONTINUATION frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
@@ -639,14 +639,14 @@ public:
                             }
                         }
                     }
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                     break;
                 default:
                     MyTrace("Undefined frame with ", h2f.size, " Bytes. StreamID = 0x", hex, h2f.streamId, " and Flag = 0x", h2f.flag);
                     auto itStream0 = umStreamCache.find(0);
                     if (itStream0 != end(umStreamCache) && (STREAMSTATE(itStream0) & HEADER_RECEIVED) == HEADER_RECEIVED)
                         throw H2ProtoException(H2ProtoException::UNDEF_AFTER_HEADER);
-                    pmtxStream->unlock();
+                    pmtxStream.unlock();
                 }
 
                 szBuf += min(static_cast<size_t>(h2f.size), nLen);
@@ -659,16 +659,16 @@ public:
 
             for (auto& item : CallAction)
             {
-                pmtxStream->lock();
-                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop, umStreamCache[item].mutReqData.get(), &umStreamCache[item].vecReqData);
-                pmtxStream->unlock();
+                pmtxStream.lock();
+                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop, ref(*umStreamCache[item].mutReqData.get()), ref(umStreamCache[item].vecReqData));
+                pmtxStream.unlock();
             }
 
         }
 
         catch (H2ProtoException& ex)
         {
-            pmtxStream->unlock();
+            pmtxStream.unlock();
             nReturn = SIZE_MAX; // closes the connection
 
             switch (ex.GetCode())
@@ -743,5 +743,5 @@ public:
     }
 
 private:
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop, mutex* const pmtxReqdata, deque<unique_ptr<char[]>>* vecData) = 0;
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData) = 0;
 };

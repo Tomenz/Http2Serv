@@ -329,7 +329,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                 MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) };
 
                 size_t nRet;
-                if (nRet = Http2StreamProto(soMetaDa, &pConDetails->strBuffer[0], nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->atStop.get()), nRet != SIZE_MAX)
+                if (nRet = Http2StreamProto(soMetaDa, &pConDetails->strBuffer[0], nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, ref(*pConDetails->mutStreams.get()), pConDetails->StreamResWndSizes, ref(*pConDetails->atStop.get())), nRet != SIZE_MAX)
                 {
                     pConDetails->strBuffer.erase(0,  pConDetails->strBuffer.size() - nLen);
                     m_mtxConnections.unlock();
@@ -340,9 +340,9 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                 // we wait, until all action thread's are finished, otherwise we remove the connection while the action thread is still using it = crash
                 *pConDetails->atStop.get() = true;
                 m_ActThrMutex.lock();
-                for (unordered_multimap<thread::id, atomic<bool>*>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
+                for (unordered_multimap<thread::id, atomic<bool>&>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
                 {
-                    if (iter->second == pConDetails->atStop.get())
+                    if (iter->second == *pConDetails->atStop.get())
                     {
                         m_ActThrMutex.unlock();
                         this_thread::sleep_for(chrono::milliseconds(1));
@@ -515,7 +515,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     nStreamId = 1;
 
                     size_t nRet;
-                    if (nRet = Http2StreamProto(soMetaDa, &strHttp2Settings[0], nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, pConDetails->atStop.get()), nRet == SIZE_MAX)
+                    if (nRet = Http2StreamProto(soMetaDa, &strHttp2Settings[0], nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, ref(*pConDetails->mutStreams.get()), pConDetails->StreamResWndSizes, ref(*pConDetails->atStop.get())), nRet == SIZE_MAX)
                     {
                         *pConDetails->atStop.get() = true;
                         // After a GOAWAY we terminate the connection
@@ -534,12 +534,12 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) };
 
                 pConDetails->mutStreams->lock();
-                size_t nNextId = pConDetails->H2Streams.size();
+                uint32_t nNextId = static_cast<uint32_t>(pConDetails->H2Streams.size());
                 pConDetails->H2Streams.emplace(nNextId, STREAMITEM({ 0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam) }));
                 pConDetails->mutStreams->unlock();
                 //m_mtxConnections.unlock();
                 //DoAction(soMetaDa, nStreamId, pConDetails->H2Streams, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
-                thread(&CHttpServ::DoAction, this, soMetaDa, 1, nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), pConDetails->mutStreams.get(), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get(), pConDetails->mutReqData.get(), &pConDetails->vecReqData).detach();
+                thread(&CHttpServ::DoAction, this, soMetaDa, 1, nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), ref(*pConDetails->mutStreams.get()), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(*pConDetails->atStop.get()), ref(*pConDetails->mutReqData.get()), ref(pConDetails->vecReqData)).detach();
 
                 if (nStreamId != 0)
                     pConDetails->bIsH2Con = true;
@@ -624,9 +624,9 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
             m_ActThrMutex.lock();
             for (auto iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
             {
-                if (iter->second == item->second.atStop.get())
+                if (iter->second == *item->second.atStop.get())
                 {
-                    *iter->second = true;   // Stop the DoAction thread
+                    iter->second = true;   // Stop the DoAction thread
                     m_ActThrMutex.unlock();
                     this_thread::sleep_for(chrono::milliseconds(1));
                     m_ActThrMutex.lock();
@@ -936,36 +936,31 @@ void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t h
     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
 }
 
-void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>* const patStop, mutex* const pmtxReqdata, deque<unique_ptr<char[]>>* vecData)
+void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData)
 {
     const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
-    if (patStop != nullptr)
-    {
-        lock_guard<mutex> lock(m_ActThrMutex);
-        m_umActionThreads.emplace(this_thread::get_id(), patStop);
-    }
+    m_ActThrMutex.lock();
+    m_umActionThreads.emplace(this_thread::get_id(), patStop);
+    m_ActThrMutex.unlock();
 
     auto fuExitDoAction = [&]()
     {
         if (httpVers == 2)
         {
-            lock_guard<mutex> lock(*pmtxStream);
+            lock_guard<mutex> lock(pmtxStream);
             auto StreamItem = StreamList.find(nStreamId);
             if (StreamItem != end(StreamList))
                 STREAMSTATE(StreamItem) |= RESET_STREAM;    // StreamList.erase(StreamItem);
         }
-        if (patStop != nullptr)
-        {
-            lock_guard<mutex> lock(m_ActThrMutex);
-            m_umActionThreads.erase(this_thread::get_id());
-        }
+        lock_guard<mutex> lock(m_ActThrMutex);
+        m_umActionThreads.erase(this_thread::get_id());
     };
 
     auto fnIsStreamReset = [&](uint32_t nId) -> bool
     {
         if (httpVers < 2) return false;
-        lock_guard<mutex> lock(*pmtxStream);
+        lock_guard<mutex> lock(pmtxStream);
         auto StreamItem = StreamList.find(nId);
         if (StreamItem != end(StreamList))
             return ((STREAMSTATE(StreamItem) & RESET_STREAM) == RESET_STREAM ? true : false);
@@ -987,7 +982,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if (httpVers == 2)
         {
             // Liste der reservierten Window Sizes für das nächste senden bereinigen
-            lock_guard<mutex> lock(*pmtxStream);
+            lock_guard<mutex> lock(pmtxStream);
             auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
             {
@@ -1014,7 +1009,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             int64_t iTotaleWndSize = UINT16_MAX;
 
-            lock_guard<mutex> lock(*pmtxStream);
+            lock_guard<mutex> lock(pmtxStream);
             // Liste der reservierten Window Sizes für das nächste senden bereinigen
             auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
@@ -1048,7 +1043,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     {
         if (httpVers == 2)
         {
-            lock_guard<mutex> lock(*pmtxStream);
+            lock_guard<mutex> lock(pmtxStream);
 
             auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
@@ -1075,7 +1070,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     {
         if (httpVers == 2)
         {
-            lock_guard<mutex> lock(*pmtxStream);
+            lock_guard<mutex> lock(pmtxStream);
             // Liste der reservierten Window Sizes für das nächste senden bereinigen
             auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
@@ -1094,15 +1089,15 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     int iHeaderFlag = 0;
     string strHttpVersion("0");
 
-    pmtxStream->lock();
+    pmtxStream.lock();
     if (StreamList.size() == 0 || StreamList.find(nStreamId) == end(StreamList))
     {
-        pmtxStream->unlock();
+        pmtxStream.unlock();
         fuExitDoAction();
         return;
     }
     HeadList& lstHeaderFields = GETHEADERLIST(StreamList.find(nStreamId));
-    pmtxStream->unlock();
+    pmtxStream.unlock();
 
     string szHost;
     auto host = lstHeaderFields.find("host");
@@ -1675,7 +1670,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             }
 
             size_t nBytesTransfered = 0;
-            while (nBytesTransfered < static_cast<size_t>(nBufLen) && (*patStop).load() == false)
+            while (nBytesTransfered < static_cast<size_t>(nBufLen) && patStop.load() == false)
             {
                 int64_t nStreamWndSize = INT32_MAX;
                 if (fnGetStreamWindowSize(nStreamWndSize) == false)
@@ -1800,45 +1795,46 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         });
                         if (nReqId == 0 && itFcgi->second.IsConnected() == true)
                             this_thread::sleep_for(chrono::milliseconds(1));
-                    } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true && (*patStop).load() == false);
+                    } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true && patStop.load() == false);
 
                     if (nReqId != 0)    // We have a request send to the app server
                     {
-                        pmtxReqdata->lock();
-                        //if (vecData->size() > 0 || nSollLen > 0)
-                        {   // We have a content length, we wait until the first packet is in the que
-                            while (vecData->size() == 0 && (*patStop).load() == false)
-                            {
-                                pmtxReqdata->unlock();
-                                this_thread::sleep_for(chrono::milliseconds(10));
-                                pmtxReqdata->lock();
-                            }
+                        pmtxReqdata.lock();
+                        // we wait until the first packet is in the que, at least a null packet, as end of data marker must come
+                        while (vecData.size() == 0 && patStop.load() == false)
+                        {
+                            pmtxReqdata.unlock();
+                            this_thread::sleep_for(chrono::milliseconds(10));
+                            pmtxReqdata.lock();
+                        }
+                        if (patStop.load() == false)
+                        {
                             // get the first packet
-                            auto data = move(vecData->front());
-                            vecData->pop_front();
-                            while (data != nullptr && (*patStop).load() == false)
-                            {   // loop until we have nullptr packet
-                                pmtxReqdata->unlock();
+                            auto data = move(vecData.front());
+                            vecData.pop_front();
+                            while (data != nullptr && patStop.load() == false)  // loop until we have nullptr packet
+                            {
+                                pmtxReqdata.unlock();
                                 uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                                 itFcgi->second.SendRequestData(nReqId, reinterpret_cast<char*>(data.get() + 4), nDataLen);
                                 nPostLen += nDataLen;
-                                pmtxReqdata->lock();
-                                //OutputDebugString(wstring(L"CGI Datentransfer: " + to_wstring(nDataLen) + L" Bytes\r\n").c_str());
-                                while (vecData->size() == 0 && (*patStop).load() == false)
+
+                                pmtxReqdata.lock();
+                                while (vecData.size() == 0 && patStop.load() == false)
                                 {   // wait until we have a packet again
-                                    pmtxReqdata->unlock();
+                                    pmtxReqdata.unlock();
                                     this_thread::sleep_for(chrono::milliseconds(10));
-                                    pmtxReqdata->lock();
+                                    pmtxReqdata.lock();
                                 }
-                                if (vecData->size() > 0)
+                                if (vecData.size() > 0)
                                 {
-                                    data = move(vecData->front());
-                                    vecData->pop_front();
+                                    data = move(vecData.front());
+                                    vecData.pop_front();
                                 }
                             }
-                            itFcgi->second.SendRequestData(nReqId, "", 0);
                         }
-                        pmtxReqdata->unlock();
+                        itFcgi->second.SendRequestData(nReqId, "", 0);
+                        pmtxReqdata.unlock();
 
                         bool bReqDone, bAbort = false;
                         do
@@ -1846,18 +1842,20 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             mutex mxReqEnde;
                             unique_lock<mutex> lock(mxReqEnde);
                             bReqDone = l_cvReqEnd.wait_for(lock, chrono::milliseconds(10), [&]() { return l_bReqEnde; });
-                            if ((*patStop).load() == true && bAbort == false)   // Klient connection was interruptet, we Abort the app server request once
+                            if (patStop.load() == true && bAbort == false)   // Klient connection was interrupted, we Abort the app server request once
                             {
                                 itFcgi->second.AbortRequest(nReqId);
                                 fnSendError();
                                 bAbort = true;
+OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
+                                break;
                             }
                         } while (bReqDone == false);
 
                         if (bAbort == false)
                             fnAfterCgi(pBuf.get());
                     }
-                    else if ((*patStop).load() == false)
+                    else if (patStop.load() == false)
                         fnSendError();
                     soMetaDa.fSetNewTimeout(30000);   // back to 30 Seconds
                 }
@@ -1878,54 +1876,55 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             if (run.Spawn((bExecAsScript == true ? strItemPath : regex_replace(itFileTyp->second.back(), wregex(L"\\$1"), /*L"\" \"" +*/ strItemPath)), strItemPath.substr(0, strItemPath.find_last_of(L"\\/"))) == 0)
             {
-                pmtxReqdata->lock();
-                //if (vecData->size() > 0 || nSollLen > 0)
-                {   // We have a content length, we wait until the first packet is in the que
-                    while (vecData->size() == 0 && (*patStop).load() == false)
-                    {
-                        pmtxReqdata->unlock();
-                        this_thread::sleep_for(chrono::milliseconds(10));
-                        pmtxReqdata->lock();
-                    }
+                pmtxReqdata.lock();
+                // we wait until the first packet is in the que, at least a null packet, as end of data marker must come
+                while (vecData.size() == 0 && patStop.load() == false)
+                {
+                    pmtxReqdata.unlock();
+                    this_thread::sleep_for(chrono::milliseconds(10));
+                    pmtxReqdata.lock();
+                }
+                if (patStop.load() == false)
+                {
                     // get the first packet
-                    auto data = move(vecData->front());
-                    vecData->pop_front();
-                    while (data != nullptr && (*patStop).load() == false)
-                    {   // loop until we have nullptr packet
-                        pmtxReqdata->unlock();
+                    auto data = move(vecData.front());
+                    vecData.pop_front();
+                    while (data != nullptr && patStop.load() == false)  // loop until we have nullptr packet
+                    {
+                        pmtxReqdata.unlock();
                         uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                         run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
                         nPostLen += nDataLen;
-                        pmtxReqdata->lock();
-//OutputDebugString(wstring(L"CGI Datentransfer: " + to_wstring(nDataLen) + L" Bytes\r\n").c_str());
-                        while (vecData->size() == 0 && (*patStop).load() == false)
+
+                        pmtxReqdata.lock();
+                        //OutputDebugString(wstring(L"CGI Datentransfer: " + to_wstring(nDataLen) + L" Bytes\r\n").c_str());
+                        while (vecData.size() == 0 && patStop.load() == false)
                         {   // wait until we have a packet again
-                            pmtxReqdata->unlock();
+                            pmtxReqdata.unlock();
                             this_thread::sleep_for(chrono::milliseconds(10));
-                            pmtxReqdata->lock();
+                            pmtxReqdata.lock();
                         }
-                        if (vecData->size() > 0)
+                        if (vecData.size() > 0)
                         {
-                            data = move(vecData->front());
-                            vecData->pop_front();
+                            data = move(vecData.front());
+                            vecData.pop_front();
                         }
                     }
                 }
-                pmtxReqdata->unlock();
-//OutputDebugString(wstring(L"CGI Datentransfer Soll: " + to_wstring(nSollLen) + L", Ist: " + to_wstring(nPostLen) + L" Bytes\r\n").c_str());
+                pmtxReqdata.unlock();
                 run.CloseWritePipe();
 
                 soMetaDa.fSetNewTimeout(60000 * 10);   // 10 Min = 60.000 Millisekunden * 10
 
                 unique_ptr<char> pBuf(new char[65536 + nHttp2Offset]);
                 bool bStillRunning = true;
-                while (bStillRunning == true && (*patStop).load() == false)
+                while (bStillRunning == true && patStop.load() == false)
                 {
                     bStillRunning = run.StillSpawning();
 
                     bool bHasRead = false;
                     int nRead;
-                    while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0 && (*patStop).load() == false)
+                    while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0 && patStop.load() == false)
                     {
                         bHasRead = true;
                         nRead += nOffset;
@@ -1943,7 +1942,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                 soMetaDa.fSetNewTimeout(30000);   // back to 30 Seconds
 
-                if ((*patStop).load() == true)  // Socket closed during cgi
+                if (patStop.load() == true)  // Socket closed during cgi
                 {
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Socket closed during cgi: ", itPath->second);
                     run.KillProcess();
@@ -2245,7 +2244,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         iRet = gzipEncoder.Enflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, nFlush);
 
                         size_t nOffset = 0;
-                        while ((iRet == Z_OK || iRet == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
+                        while ((iRet == Z_OK || iRet == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                         {
                             int64_t nStreamWndSize = INT32_MAX;
                             if (fnGetStreamWindowSize(nStreamWndSize) == false)
@@ -2282,11 +2281,11 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                         fnResetReservierteWindowSize();
 
-                    } while (iRet == Z_OK && nBytesConverted == 0 && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false);
+                    } while (iRet == Z_OK && nBytesConverted == 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
 
-                } while (iRet == Z_OK && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false);
+                } while (iRet == Z_OK && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
 
-                if (httpVers < 2 && (*patStop).load() == false)
+                if (httpVers < 2 && patStop.load() == false)
                     soMetaDa.fSocketWrite("0\r\n\r\n", 5);
             }
         }
@@ -2321,7 +2320,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             uint8_t* output = dstBuf.get() + nHttp2Offset;
 
             uint64_t nBytesTransfered = 0;
-            while ((*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
+            while (patStop.load() == false && fnIsStreamReset(nStreamId) == false)
             {
                 if (nBytIn == 0)
                 {
@@ -2335,7 +2334,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     break;
 
                 size_t nOffset = 0;
-                while (nBytOut != nSizeSendBuf - nHttp2Offset && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
+                while (nBytOut != nSizeSendBuf - nHttp2Offset && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                 {
                     int64_t nStreamWndSize = INT32_MAX;
                     if (fnGetStreamWindowSize(nStreamWndSize) == false)
@@ -2373,7 +2372,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 output = dstBuf.get() + nHttp2Offset;
             }
 
-            if (httpVers < 2 && (*patStop).load() == false)
+            if (httpVers < 2 && patStop.load() == false)
                 soMetaDa.fSocketWrite("0\r\n\r\n", 5);
 
             BrotliEncoderDestroyInstance(s);
@@ -2391,7 +2390,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             auto apBuf = make_unique<char[]>(nSizeSendBuf + nHttp2Offset + 2);
 
             uint64_t nBytesTransfered = 0;
-            while (nBytesTransfered < nFSize && (*patStop).load() == false && fnIsStreamReset(nStreamId) == false)
+            while (nBytesTransfered < nFSize && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
             {
                 int64_t nStreamWndSize = INT32_MAX;
                 if (fnGetStreamWindowSize(nStreamWndSize) == false)
@@ -2437,7 +2436,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     fuExitDoAction();
 }
 
-void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop, mutex* const pmtxReqdata, deque<unique_ptr<char[]>>* vecData)
+void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData)
 {
     auto StreamPara = StreamList.find(streamId);
     if (StreamPara != end(StreamList))
@@ -2447,7 +2446,7 @@ void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
             throw H2ProtoException(H2ProtoException::WRONG_HEADER);
     }
 
-    thread(&CHttpServ::DoAction, this, soMetaDa, 2, streamId, ref(StreamList), ref(tuStreamSettings), pmtxStream, ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), patStop, pmtxReqdata, vecData).detach();
+    thread(&CHttpServ::DoAction, this, soMetaDa, 2, streamId, ref(StreamList), ref(tuStreamSettings), ref(pmtxStream), ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(patStop), ref(pmtxReqdata), ref(vecData)).detach();
 }
 
 const array<CHttpServ::MIMEENTRY, 111>  CHttpServ::MimeListe = { {
