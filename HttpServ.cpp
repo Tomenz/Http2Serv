@@ -89,8 +89,14 @@ using namespace tr1;
 
 const char* CHttpServ::SERVERSIGNATUR = "Http2Serv/1.0.0";
 
+atomic_size_t s_nInstCount(0);
+map<string, FastCgiClient> s_mapFcgiConnections;
+mutex s_mxFcgi;
+
 CHttpServ::CHttpServ(const wstring& strRootPath/* = wstring(L".")*/, const string& strBindIp/* = string("127.0.0.1")*/, short sPort/* = 80*/, bool bSSL/* = false*/) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort), m_cLocal(locale("C"))
 {
+    ++s_nInstCount;
+
     HOSTPARAM hp;
     hp.m_strRootPath = strRootPath;
     hp.m_bSSL = bSSL;
@@ -99,6 +105,8 @@ CHttpServ::CHttpServ(const wstring& strRootPath/* = wstring(L".")*/, const strin
 
 CHttpServ& CHttpServ::operator=(CHttpServ&& other)
 {
+    ++s_nInstCount;
+
     swap(m_pSocket, other.m_pSocket);
     other.m_pSocket = nullptr;
     swap(m_vConnections, other.m_vConnections);
@@ -117,6 +125,10 @@ CHttpServ::~CHttpServ()
 
     while (IsStopped() == false)
         this_thread::sleep_for(chrono::milliseconds(10));
+
+    lock_guard<mutex> lock(s_mxFcgi);
+    if (--s_nInstCount == 0 && s_mapFcgiConnections.size() > 0)
+        s_mapFcgiConnections.clear();
 }
 
 bool CHttpServ::Start()
@@ -1760,15 +1772,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             size_t nPos = strIpAdd.find_first_of(":");
             if (nPos != string::npos)
             {
-                static map<string, FastCgiClient> m_mapFcgiConnections;
-                static mutex s_mxFcgi;
                 s_mxFcgi.lock();
-                auto itFcgi = m_mapFcgiConnections.find(strIpAdd);
-                if (itFcgi == m_mapFcgiConnections.end())
+                auto itFcgi = s_mapFcgiConnections.find(strIpAdd);
+                if (itFcgi == s_mapFcgiConnections.end())
                 {
-                    m_mapFcgiConnections.emplace(strIpAdd, move(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && itFileTyp->second.size() >= 3 ? FastCgiClient(itFileTyp->second[2]) : FastCgiClient()));
-                    itFcgi = m_mapFcgiConnections.find(strIpAdd);
-                }                
+                    s_mapFcgiConnections.emplace(strIpAdd, move(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && itFileTyp->second.size() >= 3 ? FastCgiClient(itFileTyp->second[2]) : FastCgiClient()));
+                    itFcgi = s_mapFcgiConnections.find(strIpAdd);
+                }
 
                 if (itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == false)
                     itFcgi->second.Connect(strIpAdd.substr(0, nPos), stoi(strIpAdd.substr(nPos + 1)));

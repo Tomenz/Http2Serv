@@ -227,7 +227,7 @@ int SpawnProcess::KillProcess() noexcept
     return TerminateProcess(m_hProcess, 0) != 0 ? 0 : GetLastError();
 #else
     int iRet = kill(m_hProcess, SIGTERM);
-    sleep(2);   // The process has 2 sec. to shut down untill we kill him hard
+    sleep(2);   // The process has 2 sec. to shut down until we kill him hard
     return iRet | kill(m_hProcess, SIGKILL);
 #endif
 }
