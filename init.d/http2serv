@@ -9,7 +9,7 @@
 ### END INIT INFO
 
 NAME=Http2Serv
-DAEMON=/home/pi/c++/SocksTest/$NAME
+DAEMON=/home/pi/c++/SockTest/$NAME
 RUNAS=root
 
 PIDDIR=/var/run/$NAME
@@ -54,6 +54,13 @@ remove() {
   update-rc.d -f http2serv remove
 }
 
+reload() {
+  echo -n 'Reload configuratione…' >&2
+  pkill -HUP $NAME
+  sleep 1
+  echo ' …configuration reloaded' >&2
+}
+
 case "$1" in
   start)
     start
@@ -74,8 +81,11 @@ case "$1" in
   remove)
     remove
     ;;
+  reload)
+    reload
+    ;;
   *)
-    echo "Usage: $0 {start|stop|status|restart|install|remove}"
+    echo "Usage: $0 {start|stop|status|restart|reload|install|remove}"
 esac
 
 return 1
