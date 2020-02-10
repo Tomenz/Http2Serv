@@ -28,23 +28,17 @@ CLEANDIRS = $(DIRS:%=clean-%)
 INC_PATH = -I ./brotli/c/include -I .
 LIB_PATH = -L ./zlib -L ./SocketLib -L ./brotli -L ./CommonLib -L ./FastCgi
 
-OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o SpawnProcess.o HPack.o FastCgi.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
+OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o SpawnProcess.o HPack.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 #LIB = -l ssl_s -l crypt_s -l core_s -l zlib -l crypto -l ssl
 LIB = -l z -l socketlib -l brotli -l crypto -l ssl -l commonlib -l fastcgi
 
 all: $(TARGET)
-
-#mDnsServ: $(BUILDDIRS) mDnsServ.o DnsProtokol.o
-#	$(CC) -o mDnsServ mDnsServ.o DnsProtokol.o $(LIB_PATH) $(LIB) $(LDFLAGS)
 
 $(TARGET): $(BUILDDIRS) $(BRLIBDIR) $(ZLIBDIR) $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(LIB_PATH) $(LIB) $(LDFLAGS)
 
 %.o: %.cpp HttpServ.h HPack.h H2Proto.h Timer.h
 	$(CC) $(CFLAGS) $(INC_PATH) -c $<
-
-#FastCgi.o:
-#	$(CC) $(CFLAGS) $(INC_PATH) -c FastCgi/FastCgi.cpp
 
 $(DIRS): $(BUILDDIRS)
 $(BUILDDIRS):
@@ -58,7 +52,6 @@ $(ZLIBDIR):
 
 clean: $(CLEANDIRS)
 	rm -f $(TARGET) $(OBJ) *~
-	rm -f mDnsServ mDnsServ.o DnsProtokol.o *~
 
 $(CLEANDIRS):
 	$(MAKE) -C $(@:clean-%=%) clean
