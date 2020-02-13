@@ -88,7 +88,7 @@ public:
 
 public:
 
-    CHttpServ(const wstring& strRootPath = wstring(L"."), const string& strBindIp = string("127.0.0.1"), short sPort = 80, bool bSSL = false);
+    CHttpServ(const wstring& strRootPath = wstring(L"."), const string& strBindIp = string("127.0.0.1"), uint16_t sPort = 80, bool bSSL = false);
     CHttpServ(const CHttpServ&) = delete;
     CHttpServ(CHttpServ&& other) { *this = move(other); }
     CHttpServ& operator=(const CHttpServ&) = delete;
@@ -102,7 +102,7 @@ public:
     HOSTPARAM& GetParameterBlockRef(const string& szHostName);
     void ClearAllParameterBlocks();
     const string& GetBindAdresse() noexcept;
-    short GetPort() noexcept;
+    uint16_t GetPort() noexcept;
 
 private:
     void OnNewConnection(const vector<TcpSocket*>& vNewConnections);
@@ -126,7 +126,7 @@ private:
     mutex                  m_mtxConnections;
 
     string                 m_strBindIp;
-    short                  m_sPort;
+    uint16_t               m_sPort;
     map<string, HOSTPARAM> m_vHostParam;
     locale                 m_cLocal;
     unordered_multimap<thread::id, atomic<bool>&> m_umActionThreads;

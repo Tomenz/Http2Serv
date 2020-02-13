@@ -256,17 +256,17 @@ bool SpawnProcess::StillSpawning() noexcept
     return false;
 }
 
-int SpawnProcess::ReadFromSpawn(unsigned char* const pBuffer, const unsigned int nBufSize) noexcept
+int SpawnProcess::ReadFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
 {
     return _read(m_fdStdOutPipe[READ_FD], pBuffer, nBufSize);
 }
 
-int SpawnProcess::ReadErrFromSpawn(unsigned char* const pBuffer, const unsigned int nBufSize) noexcept
+int SpawnProcess::ReadErrFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
 {
     return _read(m_fdStdErrPipe[READ_FD], pBuffer, nBufSize);
 }
 
-int SpawnProcess::WriteToSpawn(unsigned char* const pBuffer, const unsigned int nBufSize) noexcept
+int SpawnProcess::WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
 {
     return _write(m_fdStdInPipe[WRITE_FD], pBuffer, nBufSize);
 }

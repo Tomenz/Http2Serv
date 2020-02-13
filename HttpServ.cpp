@@ -93,7 +93,7 @@ atomic_size_t s_nInstCount(0);
 map<string, FastCgiClient> s_mapFcgiConnections;
 mutex s_mxFcgi;
 
-CHttpServ::CHttpServ(const wstring& strRootPath/* = wstring(L".")*/, const string& strBindIp/* = string("127.0.0.1")*/, short sPort/* = 80*/, bool bSSL/* = false*/) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort), m_cLocal(locale("C"))
+CHttpServ::CHttpServ(const wstring& strRootPath/* = wstring(L".")*/, const string& strBindIp/* = string("127.0.0.1")*/, uint16_t sPort/* = 80*/, bool bSSL/* = false*/) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort), m_cLocal(locale("C"))
 {
     ++s_nInstCount;
 
@@ -224,7 +224,7 @@ const string& CHttpServ::GetBindAdresse() noexcept
     return m_strBindIp;
 }
 
-short CHttpServ::GetPort() noexcept
+uint16_t CHttpServ::GetPort() noexcept
 {
     return m_sPort;
 }
@@ -1794,7 +1794,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     uint32_t nReqId;
                     do
                     {
-                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [fnSendOutput, &pBuf, &nHttp2Offset, &nOffset](const unsigned char* pData, unsigned short nDataLen)
+                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [fnSendOutput, &pBuf, &nHttp2Offset, &nOffset](const unsigned char* pData, uint16_t nDataLen)
                         {
                             if (nDataLen != 0)
                             {

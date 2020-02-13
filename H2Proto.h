@@ -456,8 +456,8 @@ public:
                         if ((h2f.size % 6) != 0)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_ERROR);
 
-                        unsigned short sIdent;
-                        unsigned long lValue;
+                        uint16_t sIdent;
+                        uint32_t lValue;
                         for (size_t n = 0; n < h2f.size; n += 6)
                         {
                             ::memcpy(&sIdent, &szBuf[n], 2);
