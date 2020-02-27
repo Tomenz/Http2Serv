@@ -103,7 +103,7 @@ CHttpServ::CHttpServ(const wstring& strRootPath/* = wstring(L".")*/, const strin
     m_vHostParam.emplace(string(), hp);
 }
 
-CHttpServ& CHttpServ::operator=(CHttpServ&& other)
+CHttpServ& CHttpServ::operator=(CHttpServ&& other) noexcept
 {
     ++s_nInstCount;
 
@@ -1592,6 +1592,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if (strQuery.empty() == false)
             vCgiParam.emplace_back(make_pair("QUERY_STRING", strQuery));
         vCgiParam.emplace_back(make_pair("SCRIPT_FILENAME", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath)));
+        for (const auto& strEnvVar : vStrEnvVariable)
+        {
+            string strTmp = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strEnvVar);
+            size_t nPos = strTmp.find("=");
+            vCgiParam.emplace_back(make_pair(strTmp.substr(0, nPos), nPos != string::npos ? strTmp.substr(nPos + 1) : "1"));
+        }
 
         bool bEndOfHeader = false;
         HeadList umPhpHeaders;
@@ -1879,8 +1885,6 @@ OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
         {
             SpawnProcess run;
 
-            for (const auto& strEnvVar : vStrEnvVariable)
-                run.AddEnvironment(strEnvVar + (strEnvVar.find(L"=") == string::npos ? L"=1" : L""));
             for (const auto& itCgiParam : vCgiParam)
                 run.AddEnvironment(itCgiParam.first, itCgiParam.second);
 

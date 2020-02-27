@@ -92,7 +92,7 @@ public:
     CHttpServ(const CHttpServ&) = delete;
     CHttpServ(CHttpServ&& other) { *this = move(other); }
     CHttpServ& operator=(const CHttpServ&) = delete;
-    CHttpServ& operator=(CHttpServ&& other);
+    CHttpServ& operator=(CHttpServ&& other) noexcept;
     virtual ~CHttpServ();
 
     bool Start();

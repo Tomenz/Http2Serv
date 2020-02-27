@@ -106,7 +106,7 @@ public:
 
         explicit H2ProtoException(HPACKEXCODE eCode) : m_eCode(eCode), m_nStreamId(0) {}
         explicit H2ProtoException(HPACKEXCODE eCode, uint32_t nStreamId) : m_eCode(eCode), m_nStreamId(nStreamId) {}
-        virtual ~H2ProtoException() throw() {}
+        virtual ~H2ProtoException() noexcept {}
         const char* what() const throw() {
             return m_strError.c_str();
         }
