@@ -161,8 +161,10 @@ void CLogFile::StartWriteThread(const string& szMessage)
             }
             else
             {
+                m_mtxBacklog.lock();
                 m_lstMessages.clear();
                 atomic_exchange(&m_atThrRunning, false);
+                m_mtxBacklog.unlock();
             }
         }).detach();
     }

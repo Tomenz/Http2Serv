@@ -90,7 +90,7 @@ public:
 
     CHttpServ(const wstring& strRootPath = wstring(L"."), const string& strBindIp = string("127.0.0.1"), uint16_t sPort = 80, bool bSSL = false);
     CHttpServ(const CHttpServ&) = delete;
-    CHttpServ(CHttpServ&& other) { *this = move(other); }
+    CHttpServ(CHttpServ&& other) noexcept { *this = move(other); }
     CHttpServ& operator=(const CHttpServ&) = delete;
     CHttpServ& operator=(CHttpServ&& other) noexcept;
     virtual ~CHttpServ();

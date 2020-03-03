@@ -354,7 +354,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                 m_ActThrMutex.lock();
                 for (unordered_multimap<thread::id, atomic<bool>&>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
                 {
-                    if (iter->second == *pConDetails->atStop.get())
+                    if (&iter->second == pConDetails->atStop.get())
                     {
                         m_ActThrMutex.unlock();
                         this_thread::sleep_for(chrono::milliseconds(1));
@@ -551,7 +551,11 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 pConDetails->mutStreams->unlock();
                 //m_mtxConnections.unlock();
                 //DoAction(soMetaDa, nStreamId, pConDetails->H2Streams, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
-                thread(&CHttpServ::DoAction, this, soMetaDa, 1, nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), ref(*pConDetails->mutStreams.get()), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(*pConDetails->atStop.get()), ref(*pConDetails->mutReqData.get()), ref(pConDetails->vecReqData)).detach();
+                m_ActThrMutex.lock();
+                thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 1, nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), ref(*pConDetails->mutStreams.get()), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(*pConDetails->atStop.get()), ref(*pConDetails->mutReqData.get()), ref(pConDetails->vecReqData));
+                m_umActionThreads.emplace(thTemp.get_id(), *pConDetails->atStop.get());
+                m_ActThrMutex.unlock();
+                thTemp.detach();
 
                 if (nStreamId != 0)
                     pConDetails->bIsH2Con = true;
@@ -636,12 +640,17 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
             m_ActThrMutex.lock();
             for (auto iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
             {
-                if (iter->second == *item->second.atStop.get())
+                if (&iter->second == item->second.atStop.get())
                 {
                     iter->second = true;   // Stop the DoAction thread
                     m_ActThrMutex.unlock();
+                    m_mtxConnections.unlock();
                     this_thread::sleep_for(chrono::milliseconds(1));
+                    m_mtxConnections.lock();
                     m_ActThrMutex.lock();
+                    item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
+                    if (item == end(m_vConnections))
+                        break;
                     iter = begin(m_umActionThreads);
                     continue;
                 }
@@ -952,11 +961,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 {
     const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
-    m_ActThrMutex.lock();
-    m_umActionThreads.emplace(this_thread::get_id(), patStop);
-    m_ActThrMutex.unlock();
-
-    auto fuExitDoAction = [&]()
+    function<void()> fuExitDoAction = [&]()
     {
         if (httpVers == 2)
         {
@@ -966,7 +971,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 STREAMSTATE(StreamItem) |= RESET_STREAM;    // StreamList.erase(StreamItem);
         }
         lock_guard<mutex> lock(m_ActThrMutex);
-        m_umActionThreads.erase(this_thread::get_id());
+        while (m_umActionThreads.find(this_thread::get_id()) != end(m_umActionThreads))
+        {
+            m_umActionThreads.erase(this_thread::get_id());
+            this_thread::sleep_for(chrono::milliseconds(1));
+        }
+
     };
 
     auto fnIsStreamReset = [&](uint32_t nId) -> bool
@@ -2460,7 +2470,11 @@ void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
             throw H2ProtoException(H2ProtoException::WRONG_HEADER);
     }
 
-    thread(&CHttpServ::DoAction, this, soMetaDa, 2, streamId, ref(StreamList), ref(tuStreamSettings), ref(pmtxStream), ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(patStop), ref(pmtxReqdata), ref(vecData)).detach();
+    m_ActThrMutex.lock();
+    thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 2, streamId, ref(StreamList), ref(tuStreamSettings), ref(pmtxStream), ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(patStop), ref(pmtxReqdata), ref(vecData));
+    m_umActionThreads.emplace(thTemp.get_id(), patStop);
+    m_ActThrMutex.unlock();
+    thTemp.detach();
 }
 
 const array<CHttpServ::MIMEENTRY, 111>  CHttpServ::MimeListe = { {
