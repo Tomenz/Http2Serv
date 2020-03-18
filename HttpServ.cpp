@@ -842,6 +842,7 @@ size_t CHttpServ::BuildResponsHeader(char* const szBuffer, size_t nBufLen, int i
 
 string CHttpServ::LoadErrorHtmlMessage(HeadList& HeaderList, int iRespCode, const wstring& strMsgDir)
 {
+    bool bSend = false;
     const auto& accept = HeaderList.find("accept");
     if (accept != end(HeaderList))
     {
@@ -851,18 +852,24 @@ string CHttpServ::LoadErrorHtmlMessage(HeadList& HeaderList, int iRespCode, cons
         {
             if (token[n] == "text/html")
             {
-                ifstream src(FN_STR(strMsgDir + to_wstring(iRespCode) + L".html"), ios::in | ios::binary);
-                if (src.is_open() == true)
-                {
-                    stringstream ssIn;
-                    copy(istreambuf_iterator<char>(src), istreambuf_iterator<char>(), ostreambuf_iterator<char>(ssIn));
-                    src.close();
-                    return ssIn.str();
-                }
+                bSend = true;
                 break;
             }
         }
     }
+
+    if (accept == end(HeaderList) || bSend == true) // No accept header -> accept all
+    {
+        ifstream src(FN_STR(strMsgDir + to_wstring(iRespCode) + L".html"), ios::in | ios::binary);
+        if (src.is_open() == true)
+        {
+            stringstream ssIn;
+            copy(istreambuf_iterator<char>(src), istreambuf_iterator<char>(), ostreambuf_iterator<char>(ssIn));
+            src.close();
+            return ssIn.str();
+        }
+    }
+
     return string();
 }
 
@@ -1337,7 +1344,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 string strHtmlRespons = LoadErrorHtmlMessage(lstHeaderFields, 401, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
                 vHeader.insert(end(vHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER/* | ADDCONNECTIONCLOSE*/, 401, vHeader, strHtmlRespons.size());
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONENTLENGTH/* | ADDCONNECTIONCLOSE*/, 401, vHeader, strHtmlRespons.size());
                 if (httpVers == 2)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
                 soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1873,7 +1880,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                                 itFcgi->second.AbortRequest(nReqId);
                                 fnSendError();
                                 bAbort = true;
-OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
+//OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
                                 break;
                             }
                         } while (bReqDone == false);
