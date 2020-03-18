@@ -658,7 +658,8 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
             }
             m_ActThrMutex.unlock();
 
-            m_vConnections.erase(item->first);
+            if (item != end(m_vConnections))
+                m_vConnections.erase(item->first);
         }
     }
     m_mtxConnections.unlock();
@@ -1507,7 +1508,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 301, redHeader, 0);
             if (httpVers == 2)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (fnIsStreamReset(nStreamId) == false)
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -2068,7 +2070,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
         if (httpVers == 2)
             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        if (fnIsStreamReset(nStreamId) == false)
+            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
         soMetaDa.fResetTimer();
 
         CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -2099,7 +2102,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
             if (httpVers == 2)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (fnIsStreamReset(nStreamId) == false)
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -2146,7 +2150,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER | ADDCONENTLENGTH, 200, optHeader, 0);
         if (httpVers == 2)
             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        if (fnIsStreamReset(nStreamId) == false)
+            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
         soMetaDa.fResetTimer();
         if (bCloseConnection == true)
             soMetaDa.fSocketClose();

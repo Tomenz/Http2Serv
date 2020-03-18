@@ -34,6 +34,7 @@ SpawnProcess::SpawnProcess() noexcept
     m_fdStdInPipe[1] = -1;
     m_fdStdErrPipe[0] = -1;
     m_fdStdErrPipe[1] = -1;
+    m_hProcess = INVALID_HANDLE_VALUE;
 
     char** aszEnv = _environ;
     while (*aszEnv)
@@ -52,6 +53,11 @@ SpawnProcess::~SpawnProcess() noexcept
         _close(m_fdStdInPipe[WRITE_FD]);
     if (m_fdStdErrPipe[READ_FD] != -1)
         _close(m_fdStdErrPipe[READ_FD]);
+
+#if defined(_WIN32) || defined(_WIN64)
+    if (m_hProcess != INVALID_HANDLE_VALUE)
+        CloseHandle(m_hProcess);
+#endif
 }
 
 #if defined(_WIN32) || defined(_WIN64)
