@@ -34,7 +34,9 @@ SpawnProcess::SpawnProcess() noexcept
     m_fdStdInPipe[1] = -1;
     m_fdStdErrPipe[0] = -1;
     m_fdStdErrPipe[1] = -1;
+#if defined(_WIN32) || defined(_WIN64)
     m_hProcess = INVALID_HANDLE_VALUE;
+#endif
 
     char** aszEnv = _environ;
     while (*aszEnv)
@@ -195,7 +197,7 @@ int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = 
         chdir(&wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strWorkingDir)[0]);
     }
 
-    posix_spawn(&m_hProcess, wargv.get()[0], NULL, NULL, wargv.get(), &m_envp[0]);
+    int iResult = posix_spawn(&m_hProcess, wargv.get()[0], NULL, NULL, wargv.get(), &m_envp[0]);
 
     if (strCurDir.size() != FILENAME_MAX)
         chdir(&strCurDir[0]);
@@ -213,7 +215,7 @@ int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = 
     _close(fdStdIn);
     _close(fdStdErr);
 
-    if (m_hProcess == -1)
+    if (iResult != 0 || m_hProcess == -1)
     {
         _close(m_fdStdOutPipe[READ_FD]);
         m_fdStdOutPipe[READ_FD] = -1;

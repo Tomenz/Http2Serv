@@ -18,7 +18,6 @@ TARGET = Http2Serv
 DIRS = SocketLib CommonLib FastCgi
 ZLIBDIR = zlib
 BRLIBDIR = brotli
-OBJLIBS = libz.a libsocketlib.a libbrotli.a libcommonlib.a libfastcgi.a
 
 BUILDDIRS = $(DIRS:%=build-%)
 CLEANDIRS = $(DIRS:%=clean-%)
