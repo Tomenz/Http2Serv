@@ -152,7 +152,7 @@ int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = 
     wargv.get()[token.size()] = nullptr;
 
     for (auto& str : m_vstrEnvironment)
-        m_envp.push_back(&str[0]);  //m_envp.push_back("SCRIPT_FILENAME=C:/Users/hauck/Documents/My Web Sites/WebSite1/index.php");
+        m_envp.push_back(&str[0]);
     m_envp.push_back(nullptr);
 
     if (pipe2(m_fdStdOutPipe, O_CLOEXEC) == -1)

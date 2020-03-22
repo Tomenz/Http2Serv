@@ -24,6 +24,9 @@
 #endif
 #endif
 
+#pragma comment(lib, "libcrypto.lib")
+#pragma comment(lib, "libssl.lib")
+
 using namespace std::placeholders;
 
 HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0)
@@ -235,7 +238,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
         if (m_bIsHttp2 == true)
         {
             size_t nRet, nReadSave = nRead;
-            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_mResWndSizes, nullptr), nRet != SIZE_MAX)
+            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool()), nRet != SIZE_MAX)
             {
                 // no GOAWAY frame
                 if (nRead > 0)
@@ -270,7 +273,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                         m_bIsHttp2 = true;
                         copy(pEndOfLine + 2, pEndOfLine + 2 + nRead + 1, spBuffer.get());
                         size_t nRet;
-                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, &m_mtxStreams, m_mResWndSizes, nullptr), nRet != SIZE_MAX)
+                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool()), nRet != SIZE_MAX)
                         {
                             if (nRet > 0)
                                 m_strBuffer.append(spBuffer.get(), nRet);
@@ -283,7 +286,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                     if ((m_nContentLength == SIZE_MAX || m_nContentLength == 0) && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
                     {
                         m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
-                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_mResWndSizes, nullptr);
+                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData);
                         return;
                     }
                 }
@@ -400,7 +403,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
             {
                 m_pTmpFileRec.get()->Flush();
                 m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
-                EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, &m_mtxStreams, m_mResWndSizes, nullptr);
+                EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData);
             }
         }
     }
@@ -429,12 +432,10 @@ void HttpFetch::OnTimeout(const Timer* const pTimer, void* /*pUser*/)
     m_pcClientCon->Close();
 }
 
-void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop)
+void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData)
 {
     m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)));
     shared_ptr<TempFile>& pTmpFile = m_pTmpFileRec;
-    if (streamId != 0)
-        pTmpFile = UPLOADFILE(StreamList.find(streamId));
 
     auto status = m_umRespHeader.find(":status");
     if (status != m_umRespHeader.end())
@@ -448,21 +449,30 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
             GZipUnpack gzipDecoder;
             if (gzipDecoder.Init() == Z_OK)
             {
-                unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
                 unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
 
-                pTmpFile->Rewind();
                 shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
                 pDestFile->Open();
 
                 int iRet;
                 do
                 {
-                    int nBytesRead = static_cast<int>(pTmpFile->Read(srcBuf.get(), 4096));
-                    if (nBytesRead == 0)
-                        break;
+                    pmtxReqdata.lock();
+                    while (vecData.size() == 0)
+                    {   // wait until we have a packet again
+                        pmtxReqdata.unlock();
+                        this_thread::sleep_for(chrono::milliseconds(10));
+                        pmtxReqdata.lock();
+                    }
 
-                    gzipDecoder.InitBuffer(srcBuf.get(), nBytesRead);
+                    // get the first packet
+                    auto data = move(vecData.front());
+                    vecData.pop_front();
+                    pmtxReqdata.unlock();
+                    if (data == nullptr)
+                        break;
+                    uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                    gzipDecoder.InitBuffer(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
 
                     uint32_t nBytesConverted;
                     do
@@ -491,7 +501,6 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
             unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
             unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
 
-            pTmpFile->Rewind();
             shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
             pDestFile->Open();
 
@@ -505,9 +514,28 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
             {
                 if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT)
                 {
-                    //if (nBytesRead == 0)
-                    //    break;
-                    nBytesRead = static_cast<size_t>(pTmpFile->Read(srcBuf.get(), 4096));
+                    pmtxReqdata.lock();
+                    while (vecData.size() == 0)
+                    {   // wait until we have a packet again
+                        pmtxReqdata.unlock();
+                        this_thread::sleep_for(chrono::milliseconds(10));
+                        pmtxReqdata.lock();
+                    }
+
+                    // get the first packet
+                    auto data = move(vecData.front());
+                    vecData.pop_front();
+                    pmtxReqdata.unlock();
+                    if (data == nullptr)
+                        break;
+                    uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                    nBytesRead = min(nDataLen, 4096);
+                    copy(data.get() + 4, data.get() + 4 + nBytesRead, srcBuf.get());
+                    if (nBytesRead < nDataLen)
+                    {
+                        *(reinterpret_cast<uint32_t*>(data.get() + nBytesRead)) = nDataLen - nBytesRead;
+                        vecData.push_front(unique_ptr<char[]>(data.get() + nBytesRead));
+                    }
                     input = srcBuf.get();
                 }
                 else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
