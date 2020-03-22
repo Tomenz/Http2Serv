@@ -3,6 +3,7 @@
 #include "SocketLib/SocketLib.h"
 #include "Timer.h"
 #include "H2Proto.h"
+#include "TempFile.h"
 
 class HttpFetch : public Http2Protocol
 {
@@ -26,7 +27,7 @@ private:
     void SocketError(BaseSocket* pBaseSocket);
     void SocketCloseing(BaseSocket* pBaseSocket);
     void OnTimeout(const Timer* const pTimer, void*);
-    void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex* const pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>* const patStop) override;
+    void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData) override;
 
 private:
     TcpSocket*           m_pcClientCon;
@@ -56,6 +57,9 @@ private:
     int                  m_nChuncked;
     size_t               m_nNextChunk;
     size_t               m_nChunkFooter;
+
+    mutex               m_mxVecData;
+    deque<unique_ptr<char[]>> m_vecData;
 
     function<void(HttpFetch*, void*)> m_fnNotify;
     void*                             m_vpUserData;
