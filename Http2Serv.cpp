@@ -17,6 +17,8 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
+extern void OutputDebugString(const wchar_t* pOut);
+extern void OutputDebugStringA(const char* pOut);
 #endif
 
 #include "ConfFile.h"

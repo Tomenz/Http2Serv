@@ -2,8 +2,11 @@
 # ACHTUNG unbedingt TABS benutzen beim einrücken
 
 CC = g++
-#CFLAGS = -ggdb -w -m32 -D _DEBUG -D ZLIB_CONST -pthread
+ifdef $(DEBUG)
+CFLAGS = -ggdb -pthread
+else
 CFLAGS = -Wall -O3 -std=c++14 -pthread -ffunction-sections -fdata-sections
+endif
 TARGET = libcommonlib.a
 
 

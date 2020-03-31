@@ -85,6 +85,8 @@ using namespace tr1;
 #define _S_IFREG S_IFREG
 #define FN_CA(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
 #define FN_STR(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
+extern void OutputDebugString(const wchar_t* pOut);
+extern void OutputDebugStringA(const char* pOut);
 #endif
 
 const char* CHttpServ::SERVERSIGNATUR = "Http2Serv/1.0.0";
