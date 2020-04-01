@@ -10,9 +10,9 @@
 CC = g++
 #CC = clang++
 ifeq ($(DEBUG), yes)
-CFLAGS = -ggdb -D ZLIB_CONST -pthread
+CFLAGS = -ggdb -Wno-psabi -D ZLIB_CONST -pthread
 else
-CFLAGS = -Wall -O3 -D ZLIB_CONST -pthread -ffunction-sections -fdata-sections
+CFLAGS = -Wall -Wno-psabi -O3 -D ZLIB_CONST -pthread -ffunction-sections -fdata-sections
 endif
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++
 TARGET = Http2Serv
