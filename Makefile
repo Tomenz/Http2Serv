@@ -9,10 +9,10 @@
 
 CC = g++
 #CC = clang++
-ifdef $(DEBUG)
-CFLAGS = -ggdb -std=c++14 -D ZLIB_CONST -pthread
+ifeq ($(DEBUG), yes)
+CFLAGS = -ggdb -D ZLIB_CONST -pthread
 else
-CFLAGS = -Wall -O3 -std=c++14 -D ZLIB_CONST -pthread -ffunction-sections -fdata-sections
+CFLAGS = -Wall -O3 -D ZLIB_CONST -pthread -ffunction-sections -fdata-sections
 endif
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++
 TARGET = Http2Serv
@@ -28,6 +28,8 @@ LIB_PATH = -L ./zlib -L ./SocketLib -L ./brotli -L ./CommonLib -L ./FastCgi
 
 OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o SpawnProcess.o HPack.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 LIB = -l z -l socketlib -l brotli -l crypto -l ssl -l commonlib -l fastcgi
+
+export $(DEBUG)
 
 all: $(TARGET)
 
