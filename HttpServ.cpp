@@ -730,7 +730,7 @@ size_t CHttpServ::BuildH2ResponsHeader(char* const szBuffer, size_t nBufLen, int
     {
         string strHeaderFiled(item.first);
         transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), ::tolower);
-        if (strHeaderFiled =="pragma" || strHeaderFiled == "cache-control")
+        if (strHeaderFiled == "cache-control")
             iFlag &= ~ADDNOCACHE;
         if (strHeaderFiled == "connection" || strHeaderFiled == "transfer-encoding")
             continue;
@@ -743,11 +743,6 @@ size_t CHttpServ::BuildH2ResponsHeader(char* const szBuffer, size_t nBufLen, int
     if (iFlag & ADDNOCACHE)
     {
         nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "cache-control", "no-cache, no-store, must-revalidate, pre-check = 0, post-check = 0");
-        if (nReturn == SIZE_MAX)
-            return 0;
-        nHeaderSize += nReturn;
-
-        nReturn = HPackEncode(szBuffer + nHeaderSize, nBufLen - nHeaderSize, "pragma", "no-cache");
         if (nReturn == SIZE_MAX)
             return 0;
         nHeaderSize += nReturn;
@@ -817,7 +812,10 @@ size_t CHttpServ::BuildResponsHeader(char* const szBuffer, size_t nBufLen, int i
     }
 
     if (iFlag & ADDNOCACHE)
-        strRespons += "Pragma: no-cache\r\nCache-Control: no-cache\r\nExpires: Mon, 03 Apr 1961 05:00:00 GMT\r\n";
+    {
+        strRespons += (iFlag & HTTPVERSION11) == HTTPVERSION11 ? "" : "Pragma: no-cache\r\n";
+        strRespons += "Cache-Control: no-cache\r\nExpires: Mon, 03 Apr 1961 05:00:00 GMT\r\n";
+    }
 
     if (iFlag & ADDCONNECTIONCLOSE)
         strRespons += "Connection: close\r\n";
