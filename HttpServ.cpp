@@ -26,6 +26,7 @@
 #include "GZip.h"
 #include <brotli/encode.h>
 #include "CommonLib/md5.h"
+#include "CommonLib/sha256.h"
 #include "CommonLib/UrlCode.h"
 #include "SpawnProcess.h"
 #include "FastCgi/FastCgi.h"
@@ -1329,18 +1330,28 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             auto fnSendAuthRespons = [&]() -> void
             {
                 HeadList vHeader;
-                if (get<1>(strAuth.second).find(L"BASIC") != string::npos)
-                    vHeader.push_back(make_pair("WWW-Authenticate", "Basic realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\""));
                 if (get<1>(strAuth.second).find(L"DIGEST") != string::npos)
                 {
                     auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
-                    string strNonce = md5(to_string(in_time_t) + ":" + soMetaDa.strIpClient + "http2server");
+                    auto duration = chrono::system_clock::now().time_since_epoch();
+                    auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+                    string strNonce = md5(to_string(in_time_t) + "." + to_string(millis) + ":" + soMetaDa.strIpClient + string(begin(strItemPath), end(strItemPath)));
                     strNonce = Base64::Encode(strNonce.c_str(), strNonce.size());
                     if (httpVers < 2)
-                        vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=MD5,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                    {   // most browser to not suport rfc 7616
+                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=SHA-256,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=MD5,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                    }
                     else
-                        vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=MD5,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                    {   // most browser to not suport rfc 7616
+                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=SHA-256,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=MD5,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                    }
                 }
+                if (get<1>(strAuth.second).find(L"BASIC") != string::npos)
+                    vHeader.push_back(make_pair("WWW-Authenticate", "Basic realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\""));
 
                 string strHtmlRespons = LoadErrorHtmlMessage(lstHeaderFields, 401, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
                 vHeader.insert(end(vHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
