@@ -37,6 +37,7 @@ class CHttpServ : public Http2Protocol
         shared_ptr<atomic_bool> atStop;
         shared_ptr<mutex> mutReqData;
         deque<unique_ptr<char[]>> vecReqData;
+        deque<AUTHITEM> lstAuthInfo;
     } CONNECTIONDETAILS;
 
     typedef unordered_map<TcpSocket*, CONNECTIONDETAILS> CONNECTIONLIST;
@@ -117,8 +118,8 @@ private:
     void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList = HeadList());
     void SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, function<size_t(char*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList = HeadList());
 
-    void DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData);
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData) override;
+    void DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo);
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo) override;
 
 private:
     TcpServer*             m_pSocket;

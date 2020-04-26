@@ -52,6 +52,14 @@ typedef map<unsigned long, uint64_t>   RESERVEDWINDOWSIZE;
 
 typedef struct
 {
+    wstring strUser;
+    wstring strRealm;
+    string strNonce;
+    wstring strUrl;
+} AUTHITEM;
+
+typedef struct
+{
     string strIpClient;
     uint16_t sPortClient;
     string strIpInterface;
@@ -134,7 +142,7 @@ public:
             MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
 
-    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop)
+    size_t Http2StreamProto(const MetaSocketData soMetaDa, char* szBuf, size_t& nLen, deque<HEADERENTRY>& qDynTable, STREAMSETTINGS& tuStreamSettings, STREAMLIST& umStreamCache, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, deque<AUTHITEM>& lstAuthInfo)
     {
         size_t nReturn = 0;
 
@@ -660,7 +668,7 @@ public:
             for (auto& item : CallAction)
             {
                 pmtxStream.lock();
-                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop, ref(*umStreamCache[item].mutReqData.get()), ref(umStreamCache[item].vecReqData));
+                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop, ref(*umStreamCache[item].mutReqData.get()), ref(umStreamCache[item].vecReqData), ref(lstAuthInfo));
                 pmtxStream.unlock();
             }
 
@@ -743,5 +751,5 @@ public:
     }
 
 private:
-    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData) = 0;
+    virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo) = 0;
 };

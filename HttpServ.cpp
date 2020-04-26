@@ -344,7 +344,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                 MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) };
 
                 size_t nRet;
-                if (nRet = Http2StreamProto(soMetaDa, &pConDetails->strBuffer[0], nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, ref(*pConDetails->mutStreams.get()), pConDetails->StreamResWndSizes, ref(*pConDetails->atStop.get())), nRet != SIZE_MAX)
+                if (nRet = Http2StreamProto(soMetaDa, &pConDetails->strBuffer[0], nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, ref(*pConDetails->mutStreams.get()), pConDetails->StreamResWndSizes, ref(*pConDetails->atStop.get()), ref(pConDetails->lstAuthInfo)), nRet != SIZE_MAX)
                 {
                     pConDetails->strBuffer.erase(0,  pConDetails->strBuffer.size() - nLen);
                     m_mtxConnections.unlock();
@@ -530,7 +530,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     nStreamId = 1;
 
                     size_t nRet;
-                    if (nRet = Http2StreamProto(soMetaDa, &strHttp2Settings[0], nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, ref(*pConDetails->mutStreams.get()), pConDetails->StreamResWndSizes, ref(*pConDetails->atStop.get())), nRet == SIZE_MAX)
+                    if (nRet = Http2StreamProto(soMetaDa, &strHttp2Settings[0], nHeaderLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, ref(*pConDetails->mutStreams.get()), pConDetails->StreamResWndSizes, ref(*pConDetails->atStop.get()), ref(pConDetails->lstAuthInfo)), nRet == SIZE_MAX)
                     {
                         *pConDetails->atStop.get() = true;
                         // After a GOAWAY we terminate the connection
@@ -555,7 +555,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 //m_mtxConnections.unlock();
                 //DoAction(soMetaDa, nStreamId, pConDetails->H2Streams, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
                 m_ActThrMutex.lock();
-                thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 1, nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), ref(*pConDetails->mutStreams.get()), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(*pConDetails->atStop.get()), ref(*pConDetails->mutReqData.get()), ref(pConDetails->vecReqData));
+                thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 1, nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), ref(*pConDetails->mutStreams.get()), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(*pConDetails->atStop.get()), ref(*pConDetails->mutReqData.get()), ref(pConDetails->vecReqData), ref(pConDetails->lstAuthInfo));
                 m_umActionThreads.emplace(thTemp.get_id(), *pConDetails->atStop.get());
                 m_ActThrMutex.unlock();
                 thTemp.detach();
@@ -966,7 +966,7 @@ void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t h
     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
 }
 
-void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData)
+void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(char*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo)
 {
     const static unordered_map<string, int> arMethoden = { {"GET", 0}, {"HEAD", 1}, {"POST", 2}, {"OPTIONS", 3} };
 
@@ -1393,7 +1393,19 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             auto itAuth = lstHeaderFields.find("authorization");
             if (itAuth == end(lstHeaderFields))
+            {
+                for (auto& itAuth : lstAuthInfo)
+                {
+                    if (itAuth.strUrl == mr.str())
+                    {
+                        strRemoteUser = itAuth.strUser;
+                        break;
+                    }
+                }
+                if (strRemoteUser.empty() == false)
+                    break;
                 return fnSendAuthRespons();
+            }
 
             string::size_type nPos = itAuth->second.find(' ');
             if (nPos == string::npos)
@@ -1441,6 +1453,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 if (strRe != maDigest["response"])
                     return fnSendAuthRespons();
                 strRemoteUser = strUserName;
+                lstAuthInfo.push_back({ strUserName , get<0>(strAuth.second) , maDigest["nonce"], mr.str() });
                 break;
             }
             else
@@ -2492,7 +2505,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     fuExitDoAction();
 }
 
-void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData)
+void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo)
 {
     auto StreamPara = StreamList.find(streamId);
     if (StreamPara != end(StreamList))
@@ -2503,7 +2516,7 @@ void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
     }
 
     m_ActThrMutex.lock();
-    thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 2, streamId, ref(StreamList), ref(tuStreamSettings), ref(pmtxStream), ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(patStop), ref(pmtxReqdata), ref(vecData));
+    thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 2, streamId, ref(StreamList), ref(tuStreamSettings), ref(pmtxStream), ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(patStop), ref(pmtxReqdata), ref(vecData), ref(lstAuthInfo));
     m_umActionThreads.emplace(thTemp.get_id(), patStop);
     m_ActThrMutex.unlock();
     thTemp.detach();
