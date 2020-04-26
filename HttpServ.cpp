@@ -1131,11 +1131,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     pmtxStream.unlock();
 
     string szHost;
+    string strHostRedirect;
     auto host = lstHeaderFields.find("host");
     if (host == end(lstHeaderFields))
         host = lstHeaderFields.find(":authority");
     if (host != end(lstHeaderFields))
     {
+        strHostRedirect = host->second;
         string strTmp = host->second + (host->second.find(":") == string::npos ? (":" + to_string(GetPort())) : "");
         if (m_vHostParam.find(strTmp) != end(m_vHostParam))
             szHost = strTmp;
@@ -1253,7 +1255,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if (regex_match(strItemPath, rx) == true)
         {
             wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
-            strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring(begin(szHost), end(szHost)));
+            if (strHostRedirect == "")
+                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().from_bytes(soMetaDa.strIpInterface));
+            else
+                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring(begin(strHostRedirect), end(strHostRedirect)));
 
             HeadList redHeader({ make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation)) });
             redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
@@ -1325,7 +1330,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     // Check for Authentication
     for (auto& strAuth : m_vHostParam[szHost].m_mAuthenticate)
     {
-        if (regex_search(strItemPath, wregex(strAuth.first)) == true)
+        match_results<wstring::const_iterator> mr;
+        if (regex_search(strItemPath, mr, wregex(strAuth.first), regex_constants::format_first_only) == true && strItemPath.substr(0, mr.str().size()) == mr.str())
         {
             auto fnSendAuthRespons = [&]() -> void
             {
@@ -1335,7 +1341,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
                     auto duration = chrono::system_clock::now().time_since_epoch();
                     auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-                    string strNonce = md5(to_string(in_time_t) + "." + to_string(millis) + ":" + soMetaDa.strIpClient + string(begin(strItemPath), end(strItemPath)));
+                    string strNonce = md5(to_string(in_time_t) + "." + to_string(millis) + ":" + soMetaDa.strIpClient + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath));
                     strNonce = Base64::Encode(strNonce.c_str(), strNonce.size());
                     if (httpVers < 2)
                     {   // most browser to not suport rfc 7616
@@ -1601,8 +1607,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         vCgiParam.emplace_back(make_pair("SERVER_SOFTWARE", string(SERVERSIGNATUR)));
         vCgiParam.emplace_back(make_pair("REDIRECT_STATUS", "200"));
         vCgiParam.emplace_back(make_pair("REMOTE_ADDR", soMetaDa.strIpClient));
+        vCgiParam.emplace_back(make_pair("REMOTE_HOST", soMetaDa.strIpClient));
         vCgiParam.emplace_back(make_pair("SERVER_PORT", to_string(soMetaDa.sPortInterFace)));
         vCgiParam.emplace_back(make_pair("SERVER_ADDR", soMetaDa.strIpInterface));
+        vCgiParam.emplace_back(make_pair("SERVER_NAME", strHostRedirect.empty() == false ? strHostRedirect : soMetaDa.strIpInterface));
         vCgiParam.emplace_back(make_pair("REMOTE_PORT", to_string(soMetaDa.sPortClient)));
         vCgiParam.emplace_back(make_pair("SERVER_PROTOCOL", string(httpVers == 2 ? "HTTP/2." : "HTTP/1.") + strHttpVersion));
         vCgiParam.emplace_back(make_pair("DOCUMENT_ROOT", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(m_vHostParam[szHost].m_strRootPath)));
@@ -1628,6 +1636,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             size_t nPos = strTmp.find("=");
             vCgiParam.emplace_back(make_pair(strTmp.substr(0, nPos), nPos != string::npos ? strTmp.substr(nPos + 1) : "1"));
         }
+        //AUTH_TYPE, 
 
         bool bEndOfHeader = false;
         HeadList umPhpHeaders;

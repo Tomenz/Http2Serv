@@ -201,11 +201,15 @@
     <ClInclude Include="HPack.h" />
     <ClInclude Include="HttpServ.h" />
     <ClInclude Include="LogFile.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="SpawnProcess.h" />
     <ClInclude Include="SvrLib\BaseSvr.h" />
     <ClInclude Include="SvrLib\SvrCtrl.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="Trace.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

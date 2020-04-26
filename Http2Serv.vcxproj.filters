@@ -37,6 +37,7 @@
     <ClInclude Include="FastCgi\FastCgi.h">
       <Filter>FastCgi</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Headerdateien">
@@ -83,5 +84,8 @@
     <ClCompile Include="FastCgi\FastCgi.cpp">
       <Filter>FastCgi</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
 </Project>
