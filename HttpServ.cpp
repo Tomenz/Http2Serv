@@ -1234,6 +1234,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             strItemPath += static_cast<wchar_t>(itPath->second.at(n));
     }
 
+    wstring strOrgRequest(strItemPath);
+    string strOrgQuery(strQuery);
+
     // Check for RewriteRule
     for (auto& strRule : m_vHostParam[szHost].m_mstrRewriteRule)
     {
@@ -1628,7 +1631,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         vCgiParam.emplace_back(make_pair("SERVER_PROTOCOL", string(httpVers == 2 ? "HTTP/2." : "HTTP/1.") + strHttpVersion));
         vCgiParam.emplace_back(make_pair("DOCUMENT_ROOT", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(m_vHostParam[szHost].m_strRootPath)));
         vCgiParam.emplace_back(make_pair("GATEWAY_INTERFACE", "CGI/1.1"));
-        vCgiParam.emplace_back(make_pair("SCRIPT_NAME", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath.find(m_vHostParam[szHost].m_strRootPath) == 0 ? strItemPath.substr(m_vHostParam[szHost].m_strRootPath.size()) : strItemPath)));
+        vCgiParam.emplace_back(make_pair("SCRIPT_NAME", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strOrgRequest.substr(0, strOrgRequest.size() - strPathInfo.size()))));
         vCgiParam.emplace_back(make_pair("REQUEST_METHOD", itMethode->second));
         vCgiParam.emplace_back(make_pair("REQUEST_URI", itPath->second));
         if (strPathInfo.empty() == false)
