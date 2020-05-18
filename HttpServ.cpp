@@ -175,8 +175,8 @@ bool CHttpServ::Start()
     else
         m_pSocket = new TcpServer();
 
-    m_pSocket->BindNewConnection(function<void(const vector<TcpSocket*>&)>(bind(&CHttpServ::OnNewConnection, this, _1)));
-    m_pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
+    m_pSocket->BindNewConnection(static_cast<function<void(const vector<TcpSocket*>&)>>(bind(&CHttpServ::OnNewConnection, this, _1)));
+    m_pSocket->BindErrorFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketError, this, _1)));
     return m_pSocket->Start(m_strBindIp.c_str(), m_sPort);
 }
 
@@ -239,9 +239,9 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     {
         if (pSocket != nullptr)
         {
-            pSocket->BindFuncBytesReceived(bind(&CHttpServ::OnDataRecieved, this, _1));
-            pSocket->BindErrorFunction(bind(&CHttpServ::OnSocketError, this, _1));
-            pSocket->BindCloseFunction(bind(&CHttpServ::OnSocketCloseing, this, _1));
+            pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket* const)>>(bind(&CHttpServ::OnDataRecieved, this, _1)));
+            pSocket->BindErrorFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketError, this, _1)));
+            pSocket->BindCloseFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketCloseing, this, _1)));
             vCache.push_back(pSocket);
         }
     }
@@ -302,7 +302,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                     if (nBytesToWrite > 0)
                     {
                         pConDetails->mutReqData->lock();
-                        pConDetails->vecReqData.push_back(make_unique<char[]>(nBytesToWrite + 4));
+                        pConDetails->vecReqData.emplace_back(make_unique<char[]>(nBytesToWrite + 4));
                         copy(&pConDetails->strBuffer[0], &pConDetails->strBuffer[nBytesToWrite], pConDetails->vecReqData.back().get() + 4);
                         *reinterpret_cast<uint32_t*>(pConDetails->vecReqData.back().get()) = static_cast<uint32_t>(nBytesToWrite);
 //OutputDebugString(wstring(L"X. Datenempfang: " + to_wstring(nBytesToWrite) + L" Bytes\r\n").c_str());
@@ -313,7 +313,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
                     if (pConDetails->nContentRecv == pConDetails->nContentsSoll)    // Last byte of Data, we signal this with a empty vector entry
                     {
                         pConDetails->mutReqData->lock();
-                        pConDetails->vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                        pConDetails->vecReqData.emplace_back(unique_ptr<char[]>(nullptr));
 //OutputDebugString(wstring(L"Datenempfang beendet\r\n").c_str());
                         pConDetails->nContentRecv = pConDetails->nContentsSoll = 0;
                         pConDetails->mutReqData->unlock();
@@ -462,7 +462,7 @@ auto dwStart = chrono::high_resolution_clock::now();
 
                 // set end of data signal preliminary
                 pConDetails->mutReqData->lock();
-                pConDetails->vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                pConDetails->vecReqData.emplace_back(unique_ptr<char[]>(nullptr));
                 pConDetails->mutReqData->unlock();
 
                 // is data (body) on the request, only HTTP/1.1
@@ -1763,7 +1763,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 }
                 if (fnIsStreamReset(nStreamId) == false)
                     soMetaDa.fSocketWrite(szBuffer + nBytesTransfered, nSendBufLen + nHttp2Offset);
-                if (bChunkedTransfer == true)
+                if (bChunkedTransfer == true && fnIsStreamReset(nStreamId) == false)
                     soMetaDa.fSocketWrite("\r\n", 2);
                 soMetaDa.fResetTimer();
 
@@ -1783,7 +1783,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             if (bEndOfHeader == true && httpVers == 2)
             {
                 BuildHttp2Frame(szBuffer, nOffset, 0x0, 0x1, nStreamId);
-                soMetaDa.fSocketWrite(szBuffer, nHttp2Offset + nOffset);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(szBuffer, nHttp2Offset + nOffset);
                 soMetaDa.fResetTimer();
             }
             else if (bEndOfHeader == true && bChunkedTransfer == true)
@@ -1795,7 +1796,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
                 if (httpVers == 2)
                     BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
                 soMetaDa.fResetTimer();
                 if (httpVers < 2)
                     bCloseConnection = true;
@@ -1817,7 +1819,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
             if (httpVers == 2)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (fnIsStreamReset(nStreamId) == false)
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             soMetaDa.fResetTimer();
             if (httpVers < 2)
                 bCloseConnection = true;
@@ -1853,6 +1856,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     condition_variable l_cvReqEnd;
                     unique_ptr<char> pBuf(new char[65536 + nHttp2Offset + 10]);
                     uint32_t nReqId;
+                    bool bReConnect = false;
                     do
                     {
                         nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [fnSendOutput, &pBuf, &nHttp2Offset, &nOffset](const unsigned char* pData, uint16_t nDataLen)
@@ -1865,36 +1869,41 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             }
                         });
                         if (nReqId == 0 && itFcgi->second.IsConnected() == true)
-                            this_thread::sleep_for(chrono::milliseconds(1));
+                                this_thread::sleep_for(chrono::milliseconds(1));
                     } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true && patStop.load() == false);
 
                     if (nReqId != 0)    // We have a request send to the app server
                     {
+                        bool bStreamReset = false;
                         pmtxReqdata.lock();
                         // we wait until the first packet is in the que, at least a null packet, as end of data marker must come
-                        while (vecData.size() == 0 && patStop.load() == false)
+                        while (vecData.size() == 0 && patStop.load() == false && bStreamReset == false)
                         {
                             pmtxReqdata.unlock();
                             this_thread::sleep_for(chrono::milliseconds(10));
+                            bStreamReset = fnIsStreamReset(nStreamId);
                             pmtxReqdata.lock();
                         }
-                        if (patStop.load() == false)
+                        pmtxReqdata.unlock();
+                        if (patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                         {
                             // get the first packet
+                            pmtxReqdata.lock();
                             auto data = move(vecData.front());
                             vecData.pop_front();
-                            while (data != nullptr && patStop.load() == false)  // loop until we have nullptr packet
+                            pmtxReqdata.unlock();
+                            while (data != nullptr && patStop.load() == false && fnIsStreamReset(nStreamId) == false)  // loop until we have nullptr packet
                             {
-                                pmtxReqdata.unlock();
                                 uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                                 itFcgi->second.SendRequestData(nReqId, reinterpret_cast<char*>(data.get() + 4), nDataLen);
                                 nPostLen += nDataLen;
 
                                 pmtxReqdata.lock();
-                                while (vecData.size() == 0 && patStop.load() == false)
+                                while (vecData.size() == 0 && patStop.load() == false && bStreamReset == false)
                                 {   // wait until we have a packet again
                                     pmtxReqdata.unlock();
                                     this_thread::sleep_for(chrono::milliseconds(10));
+                                    bStreamReset = fnIsStreamReset(nStreamId);
                                     pmtxReqdata.lock();
                                 }
                                 if (vecData.size() > 0)
@@ -1902,10 +1911,11 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                                     data = move(vecData.front());
                                     vecData.pop_front();
                                 }
+                                pmtxReqdata.unlock();
                             }
                         }
-                        itFcgi->second.SendRequestData(nReqId, "", 0);
-                        pmtxReqdata.unlock();
+                        if (patStop.load() == false)
+                            itFcgi->second.SendRequestData(nReqId, "", 0);
 
                         bool bReqDone, bAbort = false;
                         do
@@ -1913,13 +1923,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             mutex mxReqEnde;
                             unique_lock<mutex> lock(mxReqEnde);
                             bReqDone = l_cvReqEnd.wait_for(lock, chrono::milliseconds(10), [&]() { return l_bReqEnde; });
-                            if (patStop.load() == true && bAbort == false)   // Klient connection was interrupted, we Abort the app server request once
+                            if ((patStop.load() == true || fnIsStreamReset(nStreamId) == true) && bAbort == false)   // Klient connection was interrupted, we Abort the app server request once
                             {
                                 itFcgi->second.AbortRequest(nReqId);
                                 fnSendError();
                                 bAbort = true;
 //OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
-                                break;
+                                //break;
                             }
                         } while (bReqDone == false);
 
@@ -1945,32 +1955,47 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             if (run.Spawn((bExecAsScript == true ? strItemPath : regex_replace(itFileTyp->second.back(), wregex(L"\\$1"), /*L"\" \"" +*/ strItemPath)), strItemPath.substr(0, strItemPath.find_last_of(L"\\/"))) == 0)
             {
+                soMetaDa.fSetNewTimeout(60000 * 10);   // 10 Min = 60.000 Millisekunden * 10
+                bool bStillRunning = true;
+
+                bool bStreamReset = false;
                 pmtxReqdata.lock();
                 // we wait until the first packet is in the que, at least a null packet, as end of data marker must come
-                while (vecData.size() == 0 && patStop.load() == false)
+                while (vecData.size() == 0 && patStop.load() == false && bStreamReset == false)
                 {
                     pmtxReqdata.unlock();
                     this_thread::sleep_for(chrono::milliseconds(10));
+                    bStreamReset = fnIsStreamReset(nStreamId);
                     pmtxReqdata.lock();
                 }
-                if (patStop.load() == false)
+                pmtxReqdata.unlock();
+                if (patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                 {
+                    pmtxReqdata.lock();
                     // get the first packet
                     auto data = move(vecData.front());
                     vecData.pop_front();
-                    while (data != nullptr && patStop.load() == false)  // loop until we have nullptr packet
+                    pmtxReqdata.unlock();
+                    while (data != nullptr && patStop.load() == false && fnIsStreamReset(nStreamId) == false)  // loop until we have nullptr packet
                     {
-                        pmtxReqdata.unlock();
                         uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
-                        run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
+                        if (run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen) != nDataLen)
+                        {
+                            run.KillProcess();
+                            while (run.StillSpawning() == true && patStop.load() == false)
+                                this_thread::sleep_for(chrono::milliseconds(1));
+                            bStillRunning = false;
+                            break;
+                        }
                         nPostLen += nDataLen;
 
                         pmtxReqdata.lock();
                         //OutputDebugString(wstring(L"CGI Datentransfer: " + to_wstring(nDataLen) + L" Bytes\r\n").c_str());
-                        while (vecData.size() == 0 && patStop.load() == false)
+                        while (vecData.size() == 0 && patStop.load() == false && bStreamReset == false)
                         {   // wait until we have a packet again
                             pmtxReqdata.unlock();
                             this_thread::sleep_for(chrono::milliseconds(10));
+                            bStreamReset = fnIsStreamReset(nStreamId);
                             pmtxReqdata.lock();
                         }
                         if (vecData.size() > 0)
@@ -1978,16 +2003,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             data = move(vecData.front());
                             vecData.pop_front();
                         }
+                        pmtxReqdata.unlock();
                     }
                 }
-                pmtxReqdata.unlock();
                 run.CloseWritePipe();
 
-                soMetaDa.fSetNewTimeout(60000 * 10);   // 10 Min = 60.000 Millisekunden * 10
-
                 unique_ptr<char> pBuf(new char[65536 + nHttp2Offset]);
-                bool bStillRunning = true;
-                while (bStillRunning == true && patStop.load() == false)
+                while (bStillRunning == true && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                 {
                     bStillRunning = run.StillSpawning();
 
@@ -2011,7 +2033,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                 soMetaDa.fSetNewTimeout(30000);   // back to 30 Seconds
 
-                if (patStop.load() == true)  // Socket closed during cgi
+                if (patStop.load() == true || fnIsStreamReset(nStreamId) == true)  // Socket closed during cgi
                 {
                     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] Socket closed during cgi: ", itPath->second);
                     run.KillProcess();

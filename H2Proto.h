@@ -245,7 +245,7 @@ public:
                         size_t nBytesToWrite = min(static_cast<size_t>(h2f.size) - PadLen, nLen);
 
                         streamData->second.mutReqData.get()->lock();
-                        streamData->second.vecReqData.push_back(make_unique<char[]>(nBytesToWrite + 4));
+                        streamData->second.vecReqData.emplace_back(make_unique<char[]>(nBytesToWrite + 4));
                         copy(szBuf, szBuf + nBytesToWrite, streamData->second.vecReqData.back().get() + 4);
                         *reinterpret_cast<uint32_t*>(streamData->second.vecReqData.back().get()) = static_cast<uint32_t>(nBytesToWrite);
 //OutputDebugString(wstring(L"X. Datenempfang: " + to_wstring(nBytesToWrite) + L" Bytes\r\n").c_str());
@@ -269,7 +269,7 @@ public:
                             STREAMSTATE(streamData) |= STREAM_END;
 
                             streamData->second.mutReqData.get()->lock();
-                            streamData->second.vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                            streamData->second.vecReqData.emplace_back(unique_ptr<char[]>(nullptr));
                             streamData->second.mutReqData.get()->unlock();
 
                             if (CONTENTLENGTH(streamData) > 0 && CONTENTLENGTH(streamData) != CONTENTRESCIV(streamData))
@@ -369,7 +369,7 @@ public:
                                     throw H2ProtoException(H2ProtoException::WRONG_HEADER);
 
                                 streamData->second.mutReqData.get()->lock();
-                                streamData->second.vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                                streamData->second.vecReqData.emplace_back(unique_ptr<char[]>(nullptr));
                                 streamData->second.mutReqData.get()->unlock();
 
                                 STREAMSTATE(streamData) |= ACTION_CALLED;
@@ -635,7 +635,7 @@ public:
                                 STREAMSTATE(streamData) |= STREAM_END;
 
                                 streamData->second.mutReqData.get()->lock();
-                                streamData->second.vecReqData.push_back(unique_ptr<char[]>(nullptr));
+                                streamData->second.vecReqData.emplace_back(unique_ptr<char[]>(nullptr));
                                 streamData->second.mutReqData.get()->unlock();
 
                                 STREAMSTATE(streamData) |= ACTION_CALLED;
@@ -668,7 +668,8 @@ public:
             for (auto& item : CallAction)
             {
                 pmtxStream.lock();
-                EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop, ref(*umStreamCache[item].mutReqData.get()), ref(umStreamCache[item].vecReqData), ref(lstAuthInfo));
+                if ((umStreamCache[item].nState & RESET_STREAM) != RESET_STREAM)
+                    EndOfStreamAction(soMetaDa, item, umStreamCache, tuStreamSettings, pmtxStream, maResWndSizes, patStop, ref(*umStreamCache[item].mutReqData.get()), ref(umStreamCache[item].vecReqData), ref(lstAuthInfo));
                 pmtxStream.unlock();
             }
 
