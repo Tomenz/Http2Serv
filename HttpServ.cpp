@@ -1868,9 +1868,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                                 fnSendOutput(pBuf.get(), nRead + nOffset);  //OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pData, nDataLen).c_str()));
                             }
                         });
-                        if (nReqId == 0 && itFcgi->second.IsConnected() == true)
+                        if (nReqId == 0)
+                        {
+                            s_mxFcgi.lock();
+                            if (itFcgi->second.IsConnected() == true)
                                 this_thread::sleep_for(chrono::milliseconds(1));
-                    } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true && patStop.load() == false);
+                            else if (bReConnect == false)
+                                bReConnect = true, itFcgi->second.Connect(strIpAdd.substr(0, nPos), stoi(strIpAdd.substr(nPos + 1)));
+                            s_mxFcgi.unlock();
+                        }
+                    } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && patStop.load() == false);
 
                     if (nReqId != 0)    // We have a request send to the app server
                     {
@@ -1926,10 +1933,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             if ((patStop.load() == true || fnIsStreamReset(nStreamId) == true) && bAbort == false)   // Klient connection was interrupted, we Abort the app server request once
                             {
                                 itFcgi->second.AbortRequest(nReqId);
-                                fnSendError();
                                 bAbort = true;
 //OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
-                                //break;
                             }
                         } while (bReqDone == false);
 
