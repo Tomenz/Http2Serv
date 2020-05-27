@@ -1,5 +1,6 @@
 
 #include <regex>
+#include <unordered_map>
 
 #include "HttpFetch.h"
 #include "GZip.h"
@@ -94,10 +95,10 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
     else
         m_pcClientCon = new TcpSocket();
 
-    m_pcClientCon->BindFuncConEstablished(bind(&HttpFetch::Connected, this, _1));
-    m_pcClientCon->BindFuncBytesReceived(bind(&HttpFetch::DatenEmpfangen, this, _1));
-    m_pcClientCon->BindErrorFunction(bind(&HttpFetch::SocketError, this, _1));
-    m_pcClientCon->BindCloseFunction(bind(&HttpFetch::SocketCloseing, this, _1));
+    m_pcClientCon->BindFuncConEstablished(static_cast<function<void(TcpSocket*)>>(bind(&HttpFetch::Connected, this, _1)));
+    m_pcClientCon->BindFuncBytesReceived(static_cast<function<void(TcpSocket*)>>(bind(&HttpFetch::DatenEmpfangen, this, _1)));
+    m_pcClientCon->BindErrorFunction(static_cast<function<void(BaseSocket*)>>(bind(&HttpFetch::SocketError, this, _1)));
+    m_pcClientCon->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&HttpFetch::SocketCloseing, this, _1)));
 
     return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
 }
@@ -238,7 +239,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
         if (m_bIsHttp2 == true)
         {
             size_t nRet, nReadSave = nRead;
-            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool()), nRet != SIZE_MAX)
+            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool(), deque<AUTHITEM>()), nRet != SIZE_MAX)
             {
                 // no GOAWAY frame
                 if (nRead > 0)
@@ -273,7 +274,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                         m_bIsHttp2 = true;
                         copy(pEndOfLine + 2, pEndOfLine + 2 + nRead + 1, spBuffer.get());
                         size_t nRet;
-                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool()), nRet != SIZE_MAX)
+                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool(), deque<AUTHITEM>()), nRet != SIZE_MAX)
                         {
                             if (nRet > 0)
                                 m_strBuffer.append(spBuffer.get(), nRet);
@@ -286,7 +287,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                     if ((m_nContentLength == SIZE_MAX || m_nContentLength == 0) && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
                     {
                         m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
-                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData);
+                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData, deque<AUTHITEM>());
                         return;
                     }
                 }
@@ -403,7 +404,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
             {
                 m_pTmpFileRec.get()->Flush();
                 m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
-                EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData);
+                EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData, deque<AUTHITEM>());
             }
         }
     }
@@ -432,7 +433,7 @@ void HttpFetch::OnTimeout(const Timer* const pTimer, void* /*pUser*/)
     m_pcClientCon->Close();
 }
 
-void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData)
+void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo)
 {
     m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)));
     shared_ptr<TempFile>& pTmpFile = m_pTmpFileRec;
