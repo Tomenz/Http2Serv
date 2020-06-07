@@ -7,6 +7,7 @@
 #include "CommonLib/Base64.h"
 #include <brotli/decode.h>
 
+#if defined(_WIN32) || defined(_WIN64)
 #ifdef _DEBUG
 #ifdef _WIN64
 #pragma comment(lib, "x64/Debug/socketlib64d")
@@ -27,10 +28,16 @@
 
 #pragma comment(lib, "libcrypto.lib")
 #pragma comment(lib, "libssl.lib")
+#else
+extern void OutputDebugString(const wchar_t* pOut);
+extern void OutputDebugStringA(const char* pOut);
+#endif
 
 using namespace std::placeholders;
 
-HttpFetch::HttpFetch(function<void(HttpFetch*, void*)> fnNotify, void* vpUserData) : m_fnNotify(fnNotify), m_vpUserData(vpUserData), m_pcClientCon(nullptr), m_bIsHttp2(false), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0)
+vector<string> vecProtokolls = { {"h2"}, {"http/1.1"} };
+
+HttpFetch::HttpFetch(function<void(HttpFetch*, void*, uint32_t)> fnNotify, void* vpUserData) : m_pcClientCon(nullptr), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bIsHttp2(false), m_bOutpHeader(false), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nContentReceived(0), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0), m_fnNotify(fnNotify)
 {
 }
 
@@ -46,14 +53,14 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
     m_strServer = strAdresse;
     m_strMethode = strMethode;
 
-    transform(begin(m_strServer), begin(m_strServer) + 5, begin(m_strServer), tolower);
-    transform(begin(m_strMethode), end(m_strMethode), begin(m_strMethode), toupper);
+    transform(begin(m_strServer), begin(m_strServer) + 5, begin(m_strServer), ::tolower);
+    transform(begin(m_strMethode), end(m_strMethode), begin(m_strMethode), ::toupper);
 
-    if (m_pTmpFileSend.get() != 0)
+/*    if (m_pTmpFileSend.get() != 0)
     {
         m_pTmpFileSend.get()->Flush();
         m_pTmpFileSend->Rewind();
-    }
+    }*/
 
     if (m_strServer.compare(0, 4, "http") != 0)
         return false;
@@ -89,7 +96,7 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
     {
         SslTcpSocket* pSocket = new SslTcpSocket();
         pSocket->SetTrustedRootCertificates("./certs/ca-certificates.crt");
-        pSocket->SetAlpnProtokollNames(vector<string>({ { "h2" }, { "http/1.1" } }));
+        pSocket->SetAlpnProtokollNames(vecProtokolls);
         m_pcClientCon = pSocket;
     }
     else
@@ -103,8 +110,19 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
     return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
 }
 
-bool HttpFetch::AddContent(void* pBuffer, uint64_t nBufSize)
+bool HttpFetch::AddContent(char* pBuffer, uint64_t nBufSize)
 {
+    m_mxVecData.lock();
+    if (pBuffer == nullptr && nBufSize == 0)
+        m_vecData.emplace_back(unique_ptr<char[]>(nullptr));
+    else if (nBufSize > 0)
+    {
+        m_vecData.emplace_back(make_unique<char[]>(nBufSize + 4));
+        copy(pBuffer, pBuffer + nBufSize, m_vecData.back().get() + 4);
+        *reinterpret_cast<uint32_t*>(m_vecData.back().get()) = static_cast<uint32_t>(nBufSize);
+    }
+    m_mxVecData.unlock();
+/*
     if (m_pTmpFileSend.get() == 0)
     {
         m_pTmpFileSend = make_shared<TempFile>();
@@ -112,7 +130,7 @@ bool HttpFetch::AddContent(void* pBuffer, uint64_t nBufSize)
     }
 
     m_pTmpFileSend.get()->Write(pBuffer, nBufSize);
-
+*/
     return true;
 }
 
@@ -135,6 +153,8 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
 
     if (Protocoll == "h2")
     {
+        m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), HeadList(), 0, 0, get<1>(m_tuStreamSettings), make_shared<mutex>(), {} })));
+
         m_bIsHttp2 = true;
         pTcpSocket->Write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24);
         pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x0\x64\x0\x4\x0\x10\x0\x0", 21);// SETTINGS frame (4) with ParaID(3) and 100 Value and ParaID(4) and 1048576 Value
@@ -158,14 +178,60 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
 
         for (auto& itPair : m_umAddHeader)
         {
-            transform(begin(itPair.first), end(itPair.first), begin(itPair.first), tolower);
+            transform(begin(itPair.first), end(itPair.first), begin(itPair.first), ::tolower);
             nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, itPair.first.c_str(), itPair.second.c_str());
             if (nReturn == SIZE_MAX)
                 break;
             nHeaderLen += nReturn;
         }
 
-        if (m_pTmpFileSend.get() != 0)
+uint32_t nSend = 0;
+        m_mxVecData.lock();
+        // we wait until the first packet is in the que, at least a null packet, as end of data marker must come
+        while (m_vecData.size() == 0)
+        {
+            m_mxVecData.unlock();
+            this_thread::sleep_for(chrono::milliseconds(10));
+            m_mxVecData.lock();
+        }
+        // get the first packet
+        auto data = move(m_vecData.front());
+        m_vecData.pop_front();
+        m_mxVecData.unlock();
+
+        m_umStreamCache.insert(make_pair(1, STREAMITEM({ 0, deque<DATAITEM>(), HeadList(), 0, 0, get<1>(m_tuStreamSettings), make_shared<mutex>(), {} })));
+        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, data != nullptr ? 0x4 : 0x5, 1);
+        pTcpSocket->Write(caBuffer, nHeaderLen + 9);
+
+        while (data != nullptr)  // loop until we have nullptr packet
+        {
+            uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+
+            auto apBuf = make_unique<unsigned char[]>(nDataLen + 9);
+            copy(reinterpret_cast<unsigned char*>(data.get() + 4), reinterpret_cast<unsigned char*>(data.get() + 4 + nDataLen), apBuf.get() + 9);
+
+nSend += nDataLen;
+            m_mxVecData.lock();
+            while (m_vecData.size() == 0)
+            {   // wait until we have a packet again
+                m_mxVecData.unlock();
+                this_thread::sleep_for(chrono::milliseconds(10));
+                m_mxVecData.lock();
+            }
+            if (m_vecData.size() > 0)
+            {
+                data = move(m_vecData.front());
+                m_vecData.pop_front();
+            }
+            m_mxVecData.unlock();
+
+            BuildHttp2Frame(reinterpret_cast<char*>(apBuf.get()), static_cast<size_t>(nDataLen), 0x0, data != nullptr ? 0x0 : 0x1, 1);
+            pTcpSocket->Write(apBuf.get(), static_cast<size_t>(nDataLen) + 9);
+        }
+
+OutputDebugString(wstring(L"Daten gesendet:" + to_wstring(nSend) + L"\r\n").c_str());
+
+        /*if (m_pTmpFileSend.get() != 0)
         {
             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, 1);
             pTcpSocket->Write(caBuffer, nHeaderLen + 9);
@@ -185,7 +251,7 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
         {
             BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, 1);
             pTcpSocket->Write(caBuffer, nHeaderLen + 9);
-        }
+        }*/
     }
     else
     {
@@ -195,6 +261,40 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
         strRequest += "\r\n";
         pTcpSocket->Write(strRequest.c_str(), strRequest.size());
 
+uint32_t nSend = 0;
+        m_mxVecData.lock();
+        // we wait until the first packet is in the que, at least a null packet, as end of data marker must come
+        while (m_vecData.size() == 0)
+        {
+            m_mxVecData.unlock();
+            this_thread::sleep_for(chrono::milliseconds(10));
+            m_mxVecData.lock();
+        }
+        // get the first packet
+        auto data = move(m_vecData.front());
+        m_vecData.pop_front();
+        m_mxVecData.unlock();
+        while (data != nullptr)  // loop until we have nullptr packet
+        {
+            uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+            pTcpSocket->Write(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
+nSend += nDataLen;
+            m_mxVecData.lock();
+            while (m_vecData.size() == 0)
+            {   // wait until we have a packet again
+                m_mxVecData.unlock();
+                this_thread::sleep_for(chrono::milliseconds(10));
+                m_mxVecData.lock();
+            }
+            if (m_vecData.size() > 0)
+            {
+                data = move(m_vecData.front());
+                m_vecData.pop_front();
+            }
+            m_mxVecData.unlock();
+        }
+OutputDebugString(wstring(L"Daten gesendet:" + to_wstring(nSend) + L"\r\n").c_str());
+/*
         if (m_pTmpFileSend.get() != 0)
         {
             auto apBuf = make_unique<unsigned char[]>(0x4000 + 2);
@@ -205,7 +305,7 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
                 nBytesRead = m_pTmpFileSend.get()->Read(apBuf.get(), 0x4000);
             }
             m_pTmpFileSend.get()->Close();
-        }
+        }*/
     }
 
     m_Timer = make_unique<Timer>(30000, bind(&HttpFetch::OnTimeout, this, _1, _2));
@@ -214,6 +314,9 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
 
 void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
 {
+    static atomic_bool atTmp;
+    static deque<AUTHITEM> dqAuth;
+
     uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
 
     if (nAvalible == 0)
@@ -239,7 +342,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
         if (m_bIsHttp2 == true)
         {
             size_t nRet, nReadSave = nRead;
-            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool(), deque<AUTHITEM>()), nRet != SIZE_MAX)
+            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atTmp, dqAuth), nRet != SIZE_MAX)
             {
                 // no GOAWAY frame
                 if (nRead > 0)
@@ -274,7 +377,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                         m_bIsHttp2 = true;
                         copy(pEndOfLine + 2, pEndOfLine + 2 + nRead + 1, spBuffer.get());
                         size_t nRet;
-                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atomic_bool(), deque<AUTHITEM>()), nRet != SIZE_MAX)
+                        if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atTmp, dqAuth), nRet != SIZE_MAX)
                         {
                             if (nRet > 0)
                                 m_strBuffer.append(spBuffer.get(), nRet);
@@ -284,10 +387,17 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                         return;
                     }
 
+                    //if ((m_nContentLength == SIZE_MAX || m_nContentLength == 0) && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
+                    //{
+                        m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
+                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atTmp, m_mxVecData, m_vecData, dqAuth);
+                    //    return;
+                    //}
                     if ((m_nContentLength == SIZE_MAX || m_nContentLength == 0) && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
                     {
-                        m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
-                        EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData, deque<AUTHITEM>());
+                        m_mxVecData.lock();
+                        m_vecData.emplace_back(unique_ptr<char[]>(nullptr));
+                        m_mxVecData.unlock();
                         return;
                     }
                 }
@@ -350,11 +460,11 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
 
             // Ab hier werden der Content in eine Temp Datei geschrieben
 
-            if (m_pTmpFileRec.get() == 0)
-            {
-                m_pTmpFileRec = make_shared<TempFile>();
-                m_pTmpFileRec.get()->Open();
-            }
+            //if (m_pTmpFileRec.get() == 0)
+            //{
+            //    m_pTmpFileRec = make_shared<TempFile>();
+            //    m_pTmpFileRec.get()->Open();
+            //}
 
             nextchunck:
             bool bLastChunk = false;
@@ -376,7 +486,16 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
             }
 
             size_t nAnzahlDatenBytes = m_nNextChunk != 0 || m_nChunkFooter != 0 ? min(nRead, m_nNextChunk) : nRead;
-            m_pTmpFileRec.get()->Write(spBuffer.get() + nWriteOffset, nAnzahlDatenBytes);
+            //m_pTmpFileRec.get()->Write(spBuffer.get() + nWriteOffset, nAnzahlDatenBytes);
+            if (nAnzahlDatenBytes > 0)
+            {
+                m_mxVecData.lock();
+                m_vecData.emplace_back(make_unique<char[]>(nAnzahlDatenBytes + 4));
+                copy(&spBuffer.get()[nWriteOffset], &spBuffer.get()[nAnzahlDatenBytes + nWriteOffset], &m_vecData.back().get()[4]);
+                *reinterpret_cast<uint32_t*>(m_vecData.back().get()) = static_cast<uint32_t>(nAnzahlDatenBytes);
+                m_mxVecData.unlock();
+                m_nContentReceived += nAnzahlDatenBytes;
+            }
 
             if (m_nNextChunk != 0 || m_nChunkFooter != 0)
             {
@@ -399,12 +518,15 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                 }
             }
 
-            if ((m_nContentLength != SIZE_MAX && m_nContentLength == m_pTmpFileRec->GetFileLength())
+            if ((m_nContentLength != SIZE_MAX && m_nContentLength == m_nContentReceived)
                 || (m_nChuncked == 0 && m_nNextChunk == 0))
             {
-                m_pTmpFileRec.get()->Flush();
-                m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
-                EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData, deque<AUTHITEM>());
+                //m_pTmpFileRec.get()->Flush();
+                //m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
+                //EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atomic_bool(), m_mxVecData, m_vecData, deque<AUTHITEM>());
+                m_mxVecData.lock();
+                m_vecData.emplace_back(unique_ptr<char[]>(nullptr));
+                m_mxVecData.unlock();
             }
         }
     }
@@ -422,7 +544,7 @@ void HttpFetch::SocketCloseing(BaseSocket* const pBaseSocket)
     OutputDebugString(L"Http2Fetch::SocketCloseing\r\n");
 
     if (m_fnNotify != nullptr)
-        m_fnNotify(this, m_vpUserData);
+        m_fnNotify(this, nullptr, 0);   // Signal end of data
     if (m_Timer != nullptr)
         m_Timer.get()->Stop();
 }
@@ -436,141 +558,169 @@ void HttpFetch::OnTimeout(const Timer* const pTimer, void* /*pUser*/)
 void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo)
 {
     m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)));
-    shared_ptr<TempFile>& pTmpFile = m_pTmpFileRec;
 
-    auto status = m_umRespHeader.find(":status");
-    if (status != m_umRespHeader.end())
-        m_uiStatus = stoul(status->second);
-
-    auto encoding = m_umRespHeader.find("content-encoding");
-    if (encoding != m_umRespHeader.end())
+    thread([&](function<size_t(const void*, size_t)> fSocketWrite, const uint32_t streamId)
     {
-        if (encoding->second.find("gzip") != string::npos || encoding->second.find("deflate") != string::npos)
+        //shared_ptr<TempFile>& pTmpFile = m_pTmpFileRec;
+
+        m_fnNotify(this, const_cast<char*>(""), 0);  // Signal to send Header
+
+        auto status = m_umRespHeader.find(":status");
+        if (status != m_umRespHeader.end())
+            m_uiStatus = stoul(status->second);
+
+        auto encoding = m_umRespHeader.find("content-encoding");
+        if (encoding != m_umRespHeader.end())
         {
-            GZipUnpack gzipDecoder;
-            if (gzipDecoder.Init() == Z_OK)
+            if (encoding->second.find("gzip") != string::npos || encoding->second.find("deflate") != string::npos)
             {
-                unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
-
-                shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
-                pDestFile->Open();
-
-                int iRet;
-                do
+                GZipUnpack gzipDecoder;
+                if (gzipDecoder.Init() == Z_OK)
                 {
-                    pmtxReqdata.lock();
-                    while (vecData.size() == 0)
-                    {   // wait until we have a packet again
-                        pmtxReqdata.unlock();
-                        this_thread::sleep_for(chrono::milliseconds(10));
-                        pmtxReqdata.lock();
-                    }
+                    unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
 
-                    // get the first packet
-                    auto data = move(vecData.front());
-                    vecData.pop_front();
-                    pmtxReqdata.unlock();
-                    if (data == nullptr)
-                        break;
-                    uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
-                    gzipDecoder.InitBuffer(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
+                    //shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
+                    //pDestFile->Open();
 
-                    uint32_t nBytesConverted;
+                    int iRet;
                     do
                     {
-                        nBytesConverted = 4096;
-                        iRet = gzipDecoder.Deflate(dstBuf.get(), &nBytesConverted);
-                        if ((iRet == Z_OK || iRet == Z_STREAM_END) && nBytesConverted != 0)
-                            pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), nBytesConverted);
-                    } while (iRet == Z_OK && nBytesConverted == 4096);
-                } while (iRet == Z_OK);
-
-                pDestFile->Close();
-                swap(pDestFile, pTmpFile);
-            }
-        }
-        else if (encoding->second.find("br") != string::npos)
-        {
-            BrotliDecoderState* s = BrotliDecoderCreateInstance(NULL, NULL, NULL);
-
-            //if (dictionary_path != NULL) {
-            //    size_t dictionary_size = 0;
-            //    dictionary = ReadDictionary(dictionary_path, &dictionary_size);
-            //    BrotliDecoderSetCustomDictionary(s, dictionary_size, dictionary);
-            //}
-
-            unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
-            unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
-
-            shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
-            pDestFile->Open();
-
-            BrotliDecoderResult result = BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT;
-            const uint8_t* input = srcBuf.get();
-            uint8_t* next_out = dstBuf.get();
-            size_t nBytesRead = 1;
-            size_t nBytesOut = 4096;
-
-            while (1)
-            {
-                if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT)
-                {
-                    pmtxReqdata.lock();
-                    while (vecData.size() == 0)
-                    {   // wait until we have a packet again
-                        pmtxReqdata.unlock();
-                        this_thread::sleep_for(chrono::milliseconds(10));
                         pmtxReqdata.lock();
-                    }
+                        while (vecData.size() == 0)
+                        {   // wait until we have a packet again
+                            pmtxReqdata.unlock();
+                            this_thread::sleep_for(chrono::milliseconds(10));
+                            pmtxReqdata.lock();
+                        }
 
-                    // get the first packet
-                    auto data = move(vecData.front());
-                    vecData.pop_front();
-                    pmtxReqdata.unlock();
-                    if (data == nullptr)
-                        break;
-                    uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
-                    nBytesRead = min(nDataLen, 4096);
-                    copy(data.get() + 4, data.get() + 4 + nBytesRead, srcBuf.get());
-                    if (nBytesRead < nDataLen)
-                    {
-                        *(reinterpret_cast<uint32_t*>(data.get() + nBytesRead)) = nDataLen - nBytesRead;
-                        vecData.push_front(unique_ptr<char[]>(data.get() + nBytesRead));
-                    }
-                    input = srcBuf.get();
-                }
-                else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
-                {
-                    pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), 4096);
-                    nBytesOut = 4096;
-                    next_out = dstBuf.get();
-                }
-                else
-                    break; /* Error or success. */
+                        // get the first packet
+                        auto data = move(vecData.front());
+                        vecData.pop_front();
+                        pmtxReqdata.unlock();
+                        if (data == nullptr)
+                            break;
+                        uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                        gzipDecoder.InitBuffer(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
 
-                result = BrotliDecoderDecompressStream(s, &nBytesRead, &input, &nBytesOut, &next_out, 0);
+                        uint32_t nBytesConverted;
+                        do
+                        {
+                            nBytesConverted = 4096;
+                            iRet = gzipDecoder.Deflate(dstBuf.get(), &nBytesConverted);
+                            if ((iRet == Z_OK || iRet == Z_STREAM_END) && nBytesConverted != 0)
+                                m_fnNotify(this, reinterpret_cast<unsigned char*>(dstBuf.get()), nBytesConverted); //pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), nBytesConverted);
+                        } while (iRet == Z_OK && nBytesConverted == 4096);
+                    } while (iRet == Z_OK);
+
+                    //pDestFile->Close();
+                    //swap(pDestFile, pTmpFile);
+                }
             }
-            if (next_out != dstBuf.get())
-                pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), (next_out - dstBuf.get()));
+            else if (encoding->second.find("br") != string::npos)
+            {
+                BrotliDecoderState* s = BrotliDecoderCreateInstance(NULL, NULL, NULL);
 
-            BrotliDecoderDestroyInstance(s);
+                //if (dictionary_path != NULL) {
+                //    size_t dictionary_size = 0;
+                //    dictionary = ReadDictionary(dictionary_path, &dictionary_size);
+                //    BrotliDecoderSetCustomDictionary(s, dictionary_size, dictionary);
+                //}
 
-            pDestFile->Close();
-            swap(pDestFile, pTmpFile);
+                unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
+                unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
 
-            if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
-                OutputDebugString(L"failed to write output\n");
-            else if (result != BROTLI_DECODER_RESULT_SUCCESS)
-                OutputDebugString(L"corrupt input\n"); /* Error or needs more input. */
+                //shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
+                //pDestFile->Open();
 
+                BrotliDecoderResult result = BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT;
+                const uint8_t* input = srcBuf.get();
+                uint8_t* next_out = dstBuf.get();
+                size_t nBytesRead = 1;
+                size_t nBytesOut = 4096;
+
+                while (1)
+                {
+                    if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT)
+                    {
+                        pmtxReqdata.lock();
+                        while (vecData.size() == 0)
+                        {   // wait until we have a packet again
+                            pmtxReqdata.unlock();
+                            this_thread::sleep_for(chrono::milliseconds(10));
+                            pmtxReqdata.lock();
+                        }
+
+                        // get the first packet
+                        auto data = move(vecData.front());
+                        vecData.pop_front();
+                        pmtxReqdata.unlock();
+                        if (data == nullptr)
+                            break;
+                        uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                        nBytesRead = min(nDataLen, static_cast<uint32_t>(4096));
+                        copy(data.get() + 4, data.get() + 4 + nBytesRead, srcBuf.get());
+                        if (nBytesRead < nDataLen)
+                        {
+                            *(reinterpret_cast<uint32_t*>(data.get() + nBytesRead)) = nDataLen - static_cast<uint32_t>(nBytesRead);
+                            vecData.push_front(unique_ptr<char[]>(data.get() + nBytesRead));
+                        }
+                        input = srcBuf.get();
+                    }
+                    else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
+                    {
+                        m_fnNotify(this, reinterpret_cast<unsigned char*>(dstBuf.get()), 4096); //pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), 4096);
+                        nBytesOut = 4096;
+                        next_out = dstBuf.get();
+                    }
+                    else
+                        break; /* Error or success. */
+
+                    result = BrotliDecoderDecompressStream(s, &nBytesRead, &input, &nBytesOut, &next_out, 0);
+                }
+                if (next_out != dstBuf.get())
+                    m_fnNotify(this, reinterpret_cast<unsigned char*>(dstBuf.get()), static_cast<uint32_t>(next_out - dstBuf.get())); //pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), (next_out - dstBuf.get()));
+
+                BrotliDecoderDestroyInstance(s);
+
+                //pDestFile->Close();
+                //swap(pDestFile, pTmpFile);
+
+                if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT)
+                    OutputDebugString(L"failed to write output\n");
+                else if (result != BROTLI_DECODER_RESULT_SUCCESS)
+                    OutputDebugString(L"corrupt input\n"); /* Error or needs more input. */
+
+            }
         }
-    }
+        else
+        {
+            while(1)
+            {
+                pmtxReqdata.lock();
+                while (vecData.size() == 0)
+                {   // wait until we have a packet again
+                    pmtxReqdata.unlock();
+                    this_thread::sleep_for(chrono::milliseconds(10));
+                    pmtxReqdata.lock();
+                }
 
-    if (m_bIsHttp2 == true)
-        Http2Goaway(soMetaDa.fSocketWrite, 0, StreamList.rbegin()->first, 0);  // GOAWAY
-    m_pcClientCon->Close();
+                // get the first packet
+                auto data = move(vecData.front());
+                vecData.pop_front();
+                pmtxReqdata.unlock();
+                if (data == nullptr)
+                    break;
+                uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                m_fnNotify(this, reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
+            }
+        }
+
+        if (m_bIsHttp2 == true)
+            Http2Goaway(fSocketWrite, 0, streamId/*StreamList.rbegin()->first*/, 0);  // GOAWAY
+        m_pcClientCon->Close();
+    }, soMetaDa.fSocketWrite, streamId).detach();
 }
-
+/*
 bool HttpFetch::GetContent(uint8_t Buffer[], uint64_t nBufSize)
 {
     if (m_pTmpFileRec == nullptr)
@@ -587,3 +737,9 @@ HttpFetch::operator TempFile&()
 {
     return (*m_pTmpFileRec.get());
 }
+
+void HttpFetch::ExchangeTmpFile(shared_ptr<TempFile>& rhs)
+{
+    rhs.swap(m_pTmpFileRec);
+}
+*/

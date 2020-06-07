@@ -185,7 +185,6 @@
     <ClCompile Include="HPack.cpp" />
     <ClCompile Include="Http2Fetch.cpp" />
     <ClCompile Include="HttpFetch.cpp" />
-    <ClCompile Include="TempFile.cpp" />
     <ClCompile Include="Trace.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -194,7 +193,6 @@
     <ClInclude Include="H2Proto.h" />
     <ClInclude Include="HPack.h" />
     <ClInclude Include="HttpFetch.h" />
-    <ClInclude Include="TempFile.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="Trace.h" />
   </ItemGroup>

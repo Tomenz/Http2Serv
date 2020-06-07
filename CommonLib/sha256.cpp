@@ -1,4 +1,5 @@
 
+#include <string.h>
 #include <sstream>
 #include <iomanip>
 #include "sha256.h"

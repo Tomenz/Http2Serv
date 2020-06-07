@@ -807,7 +807,10 @@ size_t CHttpServ::BuildResponsHeader(char* const szBuffer, size_t nBufLen, int i
 
     for (const auto& item : umHeaderList)
     {
-        if (item.first == "Pragma" || item.first == "Cache-Control")
+        string strHeaderFiled(item.first);
+        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), ::tolower);
+
+        if (strHeaderFiled == "pragma" || strHeaderFiled == "cache-control")
             iFlag &= ~ADDNOCACHE;
         strRespons += item.first + ": " + item.second + "\r\n";
     }
@@ -821,7 +824,7 @@ size_t CHttpServ::BuildResponsHeader(char* const szBuffer, size_t nBufLen, int i
     if (iFlag & ADDCONNECTIONCLOSE)
         strRespons += "Connection: close\r\n";
     else
-        strRespons += "Connection: keep-alive\r\n";
+        strRespons += "Connection: Keep-Alive\r\n";
 
     if (iFlag & GZIPENCODING)
         strRespons += "Content-Encoding: gzip\r\n";
@@ -1266,7 +1269,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             HeadList redHeader({ make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation)) });
             redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 301, redHeader, 0);
+            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 307, redHeader, 0);
             if (httpVers == 2)
                 BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
             soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
@@ -1277,7 +1280,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
                 << itMethode->second << " " << lstHeaderFields.find(":path")->second
                 << (httpVers == 2 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
-                << "\" 301 -" << " \""
+                << "\" 307 -" << " \""
                 << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
                 << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
                 << CLogFile::LOGTYPES::END;
@@ -1488,6 +1491,66 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             pveAlaisMatch = &get<0>(strAlias.second);
             bExecAsScript = get<1>(strAlias.second);
             break;
+        }
+    }
+
+    // ReverseProxy
+    if (m_vHostParam[szHost].m_mstrReverseProxy.size() > 0)
+    {
+        wstring strReferer(strItemPath);
+        auto itReferer = lstHeaderFields.find("referer");
+        if (itReferer != end(lstHeaderFields))
+        {
+            size_t nPos = itReferer->second.find(strHostRedirect);
+            strReferer = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itReferer->second);
+            //size_t nPos = strReferer.find(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strHostRedirect));
+            strReferer.erase(0, nPos + strHostRedirect.size());
+        }
+
+        for (auto& strProxyAlias : m_vHostParam[szHost].m_mstrReverseProxy)
+        {
+            wregex reProxy(strProxyAlias.first);
+
+            wstring strStriptRef = regex_replace(strReferer, reProxy, L"$1", regex_constants::format_first_only);
+            size_t nPos = strReferer.find(strStriptRef);
+            if (nPos != string::npos) nPos--;
+            wstring strTmp = strReferer.substr(0, nPos);
+            if (strTmp.empty() == false && strTmp.back() == L'/') strTmp.erase(strTmp.size() - 1);
+
+            wstring strNewPath = regex_replace(strItemPath, reProxy, L".//Http2Fetch.exe/$1", regex_constants::format_first_only);
+            if (strNewPath != strItemPath)
+            {
+                vStrEnvVariable.push_back(L"PROXYURL=" + strProxyAlias.second);
+                if (strTmp.empty() == false)
+                    vStrEnvVariable.push_back(L"PROXYMARK=" + strTmp);
+                strItemPath = strNewPath;
+                bNewRootSet = true;
+                bExecAsScript = true;
+                break;
+            }
+            else if (regex_search(strReferer, reProxy) == true && regex_search(strItemPath, reProxy) == false)
+            {
+                HeadList redHeader({ make_pair("Location", wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strTmp) + lstHeaderFields.find(":path")->second) });
+                redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+
+                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 307, redHeader, 0);
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                soMetaDa.fResetTimer();
+
+                CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                    << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                    << (httpVers == 2 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
+                    << "\" 307 -" << " \""
+                    << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                    << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                    << CLogFile::LOGTYPES::END;
+
+                fuExitDoAction();
+                return;
+            }
         }
     }
 
@@ -1984,7 +2047,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     while (data != nullptr && patStop.load() == false && fnIsStreamReset(nStreamId) == false)  // loop until we have nullptr packet
                     {
                         uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
-                        if (run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen) != nDataLen)
+                        if (run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen) != static_cast<int>(nDataLen))
                         {
                             run.KillProcess();
                             while (run.StillSpawning() == true && patStop.load() == false)
@@ -2683,6 +2746,8 @@ const map<uint32_t, string> CHttpServ::RespText = {
     { 303, "See Other" },
     { 304, "Not Modified" },
     { 305, "Use Proxy" },
+    { 307, "Temporary Redirect" },
+    { 308, "Permanent Redirect" },
     { 400, "Bad Request" },
     { 401, "Unauthorized" },
     { 402, "Payment Required" },

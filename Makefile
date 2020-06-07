@@ -16,6 +16,7 @@ CFLAGS = -Wall -Wno-psabi -O3 -D ZLIB_CONST -pthread -ffunction-sections -fdata-
 endif
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++
 TARGET = Http2Serv
+Fetch = Http2Fetch
 DIRS = SocketLib CommonLib FastCgi
 ZLIBDIR = zlib
 BRLIBDIR = brotli
@@ -35,6 +36,9 @@ all: $(TARGET)
 
 $(TARGET): $(BUILDDIRS) $(BRLIBDIR) $(ZLIBDIR) $(OBJ)
 	$(CC) -o $(TARGET) $(OBJ) $(LIB_PATH) $(LIB) $(LDFLAGS)
+
+Fetch: $(BUILDDIRS) $(BRLIBDIR) $(ZLIBDIR) Http2Fetch.o HttpFetch.o HPack.o
+	$(CC) -o $(Fetch) Http2Fetch.o HttpFetch.o HPack.o $(LIB_PATH) $(LIB) $(LDFLAGS)
 
 %.o: %.cpp HttpServ.h HPack.h H2Proto.h Timer.h
 	$(CC) $(CFLAGS) $(INC_PATH) -c $<
