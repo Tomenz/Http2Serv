@@ -469,15 +469,25 @@ auto dwStart = chrono::high_resolution_clock::now();
                 auto contentLength = pConDetails->HeaderList.find("content-length");
                 if (contentLength != end(pConDetails->HeaderList))
                 {
-                    if (stoll(contentLength->second) < 0)
-                    {   // other expect is not yet supported
+                    try
+                    {
+                        if (stoll(contentLength->second) < 0)
+                        {   // other expect is not yet supported
+                            SendErrorRespons(pTcpSocket, pConDetails->pTimer, 400, 0, pConDetails->HeaderList);
+                            pTcpSocket->Close();
+                            m_mtxConnections.unlock();
+                            return;
+                        }
+
+                        pConDetails->nContentsSoll = stoull(contentLength->second);
+                    }
+                    catch (const std::exception& /*ex*/)
+                    {
                         SendErrorRespons(pTcpSocket, pConDetails->pTimer, 400, 0, pConDetails->HeaderList);
                         pTcpSocket->Close();
                         m_mtxConnections.unlock();
                         return;
                     }
-
-                    pConDetails->nContentsSoll = stoull(contentLength->second);
 
                     if (pConDetails->nContentsSoll > 0)
                     {
@@ -1661,7 +1671,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         uint64_t nSollLen = 0, nPostLen = 0;
         auto itContLen = lstHeaderFields.find("content-length");
         if (itContLen != end(lstHeaderFields))
-            nSollLen = stoll(itContLen->second);
+        {
+            try { nSollLen = stoull(itContLen->second); }
+            catch (const std::exception& /*ex*/) {}
+        }
 
         vector<pair<string, string>> vCgiParam;
         const static array<pair<const char*, const wchar_t*>, 4> caHeaders = { { make_pair(":authority", L"HTTP_HOST") , make_pair(":scheme", L"REQUEST_SCHEME") , make_pair("content-type", L"CONTENT_TYPE"), make_pair("content-length", L"CONTENT_LENGTH") } };
@@ -1744,7 +1757,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             itCgiHeader = umPhpHeaders.ifind(":status");
                         if (itCgiHeader != end(umPhpHeaders))
                         {
-                            iStatus = stoi(itCgiHeader->second);
+                            try { iStatus = stoi(itCgiHeader->second); }
+                            catch (const std::exception& /*ex*/) { }
+
                             umPhpHeaders.erase(itCgiHeader);
                         }
                         if (umPhpHeaders.ifind("Transfer-Encoding") == end(umPhpHeaders) && umPhpHeaders.ifind("Content-Length") == end(umPhpHeaders) && httpVers < 2 && strHttpVersion == "1")
@@ -1896,8 +1911,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         || (pveAlaisMatch != nullptr && pveAlaisMatch->size() >= 2 && pveAlaisMatch->at(0).compare(L"fcgi") == 0))
         {
             string strIpAdd(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) ? itFileTyp->second[1] : pveAlaisMatch->at(1)));
+            uint16_t nPort = 0;
             size_t nPos = strIpAdd.find_first_of(":");
+
             if (nPos != string::npos)
+            {
+                try { nPort = stoi(strIpAdd.substr(nPos + 1)); }
+                catch (const std::exception& /*ex*/) { }
+            }
+
+            if (nPos != string::npos && nPort > 0)
             {
                 s_mxFcgi.lock();
                 auto itFcgi = s_mapFcgiConnections.find(strIpAdd);
@@ -1908,7 +1931,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 }
 
                 if (itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == false)
-                    itFcgi->second.Connect(strIpAdd.substr(0, nPos), stoi(strIpAdd.substr(nPos + 1)));
+                    itFcgi->second.Connect(strIpAdd.substr(0, nPos), nPort);
                 s_mxFcgi.unlock();
 
                 if (itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true)
@@ -1937,7 +1960,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             if (itFcgi->second.IsConnected() == true)
                                 this_thread::sleep_for(chrono::milliseconds(1));
                             else if (bReConnect == false)
-                                bReConnect = true, itFcgi->second.Connect(strIpAdd.substr(0, nPos), stoi(strIpAdd.substr(nPos + 1)));
+                                bReConnect = true, itFcgi->second.Connect(strIpAdd.substr(0, nPos), nPort);
                             s_mxFcgi.unlock();
                         }
                     } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && patStop.load() == false);
@@ -2140,7 +2163,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         string strSearch(range->second);
         while (regex_search(strSearch, match, rx) == true && match.size() == 3)
         {
-            vecRanges.push_back(make_pair(match[1].length() == 0 ? 0 : stoull(match[1].str()), match[2].length() == 0 ? stFileInfo.st_size : stoull(match[2].str())));
+            try
+            {
+                vecRanges.push_back(make_pair(match[1].length() == 0 ? 0 : stoull(match[1].str()), match[2].length() == 0 ? stFileInfo.st_size : stoull(match[2].str())));
+            }
+            catch (const std::exception& /*ex*/) 
+            {
+                vecRanges.clear();
+                break;
+            }
+
             strSearch = strSearch.substr(match[0].str().size());
         }
         sort(begin(vecRanges), end(vecRanges), [](auto& elm1, auto& elm2) { return elm1.first == elm2.first ? (elm1.second < elm2.second ? true : false) : (elm1.first < elm2.first ? true : false); });

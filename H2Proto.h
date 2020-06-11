@@ -250,18 +250,6 @@ public:
                         *reinterpret_cast<uint32_t*>(streamData->second.vecReqData.back().get()) = static_cast<uint32_t>(nBytesToWrite);
 //OutputDebugString(wstring(L"X. Datenempfang: " + to_wstring(nBytesToWrite) + L" Bytes\r\n").c_str());
                         streamData->second.mutReqData.get()->unlock();
-                        /*
-                        if (UPLOADFILE(streamData).get() == 0)    //if (DATALIST(streamData->second).empty() == true)    // First DATA frame
-                        {
-                            auto contentLength = GETHEADERLIST(streamData).find("content-length");
-                            if (contentLength != end(GETHEADERLIST(streamData)))
-                                CONTENTLENGTH(streamData) = stoull(contentLength->second);
-
-                            UPLOADFILE(streamData) = make_shared<TempFile>();
-                            UPLOADFILE(streamData).get()->Open();
-                        }
-
-                        UPLOADFILE(streamData).get()->Write(szBuf, min(static_cast<size_t>(h2f.size) - PadLen, nLen));*/
                         CONTENTRESCIV(streamData) += nBytesToWrite; // min(static_cast<size_t>(h2f.size) - PadLen, nLen);
 
                         if ((h2f.flag & END_OF_STREAM) == END_OF_STREAM)    // END_STREAM

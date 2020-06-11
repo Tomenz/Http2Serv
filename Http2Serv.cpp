@@ -145,13 +145,17 @@ public:
                 vPort.push_back(L"80");
             for (const auto& strPort : vPort)
             {   // Default Werte setzen
+                uint16_t nPort;
+                try { nPort = stoi(strPort);}
+                catch (const std::exception& /*ex*/) { }
+
                 if (mIpPortCombi.find(strIp) == end(mIpPortCombi))
                     mIpPortCombi.emplace(strIp, vector<wstring>({ strPort }));
                 else
                     mIpPortCombi.find(strIp)->second.push_back(strPort);
-                if (find_if(begin(m_vServers), end(m_vServers), [strPort, strListen](auto& HttpServer) { return HttpServer.GetPort() == stoi(strPort) && HttpServer.GetBindAdresse() == Utf8Converter.to_bytes(strListen) ? true : false; }) != end(m_vServers))
+                if (find_if(begin(m_vServers), end(m_vServers), [nPort, strListen](auto& HttpServer) { return HttpServer.GetPort() == nPort && HttpServer.GetBindAdresse() == Utf8Converter.to_bytes(strListen) ? true : false; }) != end(m_vServers))
                     continue;
-                vNewServers.emplace_back(m_strModulePath + L".", strIp, stoi(strPort), false);
+                vNewServers.emplace_back(m_strModulePath + L".", strIp, nPort, false);
             }
         }
 
