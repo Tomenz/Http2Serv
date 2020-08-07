@@ -325,7 +325,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
         return;
     }
 
-    shared_ptr<char> spBuffer(new char[m_strBuffer.size() + nAvalible + 1]);
+    shared_ptr<char[]> spBuffer(new char[m_strBuffer.size() + nAvalible + 1]);
     copy(begin(m_strBuffer), begin(m_strBuffer) + m_strBuffer.size(), spBuffer.get());
 
     size_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvalible);
@@ -577,7 +577,7 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
                 GZipUnpack gzipDecoder;
                 if (gzipDecoder.Init() == Z_OK)
                 {
-                    unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
+                    unique_ptr<unsigned char[]> dstBuf(new unsigned char[4096]);
 
                     //shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
                     //pDestFile->Open();
@@ -626,8 +626,8 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
                 //    BrotliDecoderSetCustomDictionary(s, dictionary_size, dictionary);
                 //}
 
-                unique_ptr<unsigned char> srcBuf(new unsigned char[4096]);
-                unique_ptr<unsigned char> dstBuf(new unsigned char[4096]);
+                unique_ptr<unsigned char[]> srcBuf(new unsigned char[4096]);
+                unique_ptr<unsigned char[]> dstBuf(new unsigned char[4096]);
 
                 //shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
                 //pDestFile->Open();

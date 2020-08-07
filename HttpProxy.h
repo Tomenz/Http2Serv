@@ -153,7 +153,7 @@ private:
             return;
         }
 
-        shared_ptr<char> spBuffer(new char[nAvalible]);
+        shared_ptr<char[]> spBuffer(new char[nAvalible]);
 
         uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 
@@ -393,7 +393,7 @@ private:
                 return;
             }
 
-            shared_ptr<char> spBuffer(new char[nAvalible]);
+            shared_ptr<char[]> spBuffer(new char[nAvalible]);
             uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 
             if (nRead > 0)
@@ -531,7 +531,7 @@ private:
             return;
         }
 
-        shared_ptr<char> spBuffer(new char[nAvalible]);
+        shared_ptr<char[]> spBuffer(new char[nAvalible]);
 
         uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 

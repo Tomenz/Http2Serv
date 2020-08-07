@@ -22,7 +22,7 @@
 #endif
 #include "HPack.h"
 
-typedef tuple<shared_ptr<char>, size_t> DATAITEM;
+typedef tuple<shared_ptr<char[]>, size_t> DATAITEM;
 #define BUFFER(x) get<0>(x)
 #define BUFLEN(x) get<1>(x)
 
@@ -373,7 +373,7 @@ public:
                             auto insert = umStreamCache.insert(make_pair(h2f.streamId, STREAMITEM({ HEADER_RECEIVED, deque<DATAITEM>(), HeadList(), 0, 0, INITWINDOWSIZE(tuStreamSettings), make_shared<mutex>(), {} })));
                             if (insert.second == true)
                             {
-                                auto data = shared_ptr<char>(new char[h2f.size - PadLen]);
+                                auto data = shared_ptr<char[]>(new char[h2f.size - PadLen]);
                                 copy(&szBuf[0], &szBuf[h2f.size - PadLen], data.get());
                                 DATALIST(insert.first).emplace_back(data, (h2f.size - PadLen));
 
@@ -592,7 +592,7 @@ public:
                         if ((STREAMSTATE(streamData) & ACTION_CALLED) == ACTION_CALLED)
                             throw H2ProtoException(H2ProtoException::STREAM_HALF_CLOSED, h2f.streamId);
 
-                        auto data = shared_ptr<char>(new char[h2f.size]);
+                        auto data = shared_ptr<char[]>(new char[h2f.size]);
                         copy(&szBuf[0], &szBuf[h2f.size], data.get());
                         DATALIST(streamData).emplace_back(data, h2f.size);
 

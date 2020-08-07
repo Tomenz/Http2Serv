@@ -267,7 +267,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
         return;
     }
 
-    shared_ptr<char> spBuffer(new char[nAvalible]);
+    shared_ptr<char[]> spBuffer(new char[nAvalible]);
 
     uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 
@@ -1940,7 +1940,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                     bool l_bReqEnde = false;
                     condition_variable l_cvReqEnd;
-                    unique_ptr<char> pBuf(new char[65536 + nHttp2Offset + 10]);
+                    unique_ptr<char[]> pBuf(new char[65536 + nHttp2Offset + 10]);
                     uint32_t nReqId;
                     bool bReConnect = false;
                     do
@@ -2099,7 +2099,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 }
                 run.CloseWritePipe();
 
-                unique_ptr<char> pBuf(new char[65536 + nHttp2Offset]);
+                unique_ptr<char[]> pBuf(new char[65536 + nHttp2Offset]);
                 while (bStillRunning == true && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                 {
                     bStillRunning = run.StillSpawning();
@@ -2416,8 +2416,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             GZipPack gzipEncoder;
             if (gzipEncoder.Init((iHeaderFlag & DEFLATEENCODING) ? true : false) == Z_OK)
             {
-                unique_ptr<unsigned char> srcBuf(new unsigned char[nSizeSendBuf]);
-                unique_ptr<unsigned char> dstBuf(new unsigned char[nSizeSendBuf]);
+                unique_ptr<unsigned char[]> srcBuf(new unsigned char[nSizeSendBuf]);
+                unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
 
                 uint64_t nBytesTransfered = 0;
                 int iRet;
@@ -2505,8 +2505,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 free(dictionary);
             }
 */
-            unique_ptr<unsigned char> srcBuf(new unsigned char[nSizeSendBuf]);
-            unique_ptr<unsigned char> dstBuf(new unsigned char[nSizeSendBuf]);
+            unique_ptr<unsigned char[]> srcBuf(new unsigned char[nSizeSendBuf]);
+            unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
 
             size_t nBytIn = 0;
             const uint8_t* input;
