@@ -467,7 +467,7 @@ auto dwStart = chrono::high_resolution_clock::now();
 
                 // is data (body) on the request, only HTTP/1.1
                 auto contentLength = pConDetails->HeaderList.find("content-length");
-                if (contentLength != end(pConDetails->HeaderList))
+                if (contentLength != end(pConDetails->HeaderList) && contentLength->second != "18446744073709551615")   // SSTL senden ULONGLONG_MAX as Content-length
                 {
                     try
                     {
@@ -1256,7 +1256,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
     }
 
-    // Falls der RewriteRile dem QueryString was dazumacht
+    // Falls der RewriteRile dem QueryString etwas hinzufügt
     size_t nPos = strItemPath.find_first_of(L'?');
     if (nPos != string::npos)
     {
