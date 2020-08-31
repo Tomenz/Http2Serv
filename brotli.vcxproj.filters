@@ -73,6 +73,21 @@
     <ClCompile Include="brotli\c\enc\dictionary_hash.c">
       <Filter>enc</Filter>
     </ClCompile>
+    <ClCompile Include="brotli\c\enc\fast_log.c">
+      <Filter>enc</Filter>
+    </ClCompile>
+    <ClCompile Include="brotli\c\common\context.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="brotli\c\common\platform.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="brotli\c\enc\command.c">
+      <Filter>enc</Filter>
+    </ClCompile>
+    <ClCompile Include="brotli\c\common\constants.c">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="brotli\c\dec\huffman.h">
@@ -205,6 +220,12 @@
       <Filter>enc</Filter>
     </ClInclude>
     <ClInclude Include="brotli\c\common\transform.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="brotli\c\common\platform.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="brotli\c\common\constants.h">
       <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>
