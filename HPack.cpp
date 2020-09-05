@@ -236,14 +236,14 @@ size_t HPack::HufmanEncode(char* szBuf, size_t nBufSize, const char* const szStr
     for (size_t n = 0; n < nStrLen; ++n)
     {
         // Get the Index of the character
-        auto itCode = HUFFCODES.begin() + szString[n];
+        auto itCode = HUFFCODES.begin() + static_cast<uint8_t>(szString[n]);
 
         // Check if enough room is in the output buffer to write the next x bits
-        if (((nTotalBits + itCode->second) + (8 - ((nTotalBits + itCode->second) % 8))) / 8 > nBufSize)
+        if (((nTotalBits + itCode->second) / 8) + (((nTotalBits + itCode->second) % 8) != 0 ? 1 : 0) > nBufSize)
             return SIZE_MAX;
 
         int iUsedBits = nTotalBits % 8;
-        int iGesBits = iUsedBits + itCode->second;  // Bereits geschrieben Bits des Momentanen Byts + die neuen Bits
+        int iGesBits = iUsedBits + itCode->second;  // Bereits geschrieben Bits des momentanen Bytes + die neuen Bits
         int iAnzByte = (iGesBits / 8) + ((iGesBits % 8) != 0 ? 1 : 0);  // Ganze Bytes + wenn rest noch eins
         uint64_t nBitField = static_cast<uint64_t>(itCode->first) << ((64 - itCode->second) - iUsedBits);
         for (int i = 0; i < iAnzByte; ++i)
@@ -345,18 +345,25 @@ size_t HPack::HPackEncode(char* const szBuf, size_t nLen, const char* const strH
     {
         nBytesWritten = EncodeInteger(szBuf, nLen, nIndex, 0x0f, 0x00);
         if (nBytesWritten == SIZE_MAX)
-            return nBytesWritten;
-        nBytesWritten += EncodeString(szBuf + nBytesWritten, nLen - nBytesWritten, strHeaderValue, ::strlen(strHeaderValue));
+            return SIZE_MAX;
+        size_t nTmp = EncodeString(szBuf + nBytesWritten, nLen - nBytesWritten, strHeaderValue, ::strlen(strHeaderValue));
+        if (nTmp == SIZE_MAX)
+            return SIZE_MAX;
+        nBytesWritten += nTmp;
     }
     else    // Header not in the static list
     {
         nBytesWritten = EncodeInteger(szBuf, nLen, 0, 0x0f, 0x00);
         if (nBytesWritten == SIZE_MAX)
-            return nBytesWritten;
-        nBytesWritten += EncodeString(szBuf + nBytesWritten, nLen - nBytesWritten, strHeaderId, ::strlen(strHeaderId));
-        if (nBytesWritten == SIZE_MAX)
-            return nBytesWritten;
-        nBytesWritten += EncodeString(szBuf + nBytesWritten, nLen - nBytesWritten, strHeaderValue, ::strlen(strHeaderValue));
+            return SIZE_MAX;
+        size_t nTmp = EncodeString(szBuf + nBytesWritten, nLen - nBytesWritten, strHeaderId, ::strlen(strHeaderId));
+        if (nTmp == SIZE_MAX)
+            return SIZE_MAX;
+        nBytesWritten += nTmp;
+        nTmp = EncodeString(szBuf + nBytesWritten, nLen - nBytesWritten, strHeaderValue, ::strlen(strHeaderValue));
+        if (nTmp == SIZE_MAX)
+            return SIZE_MAX;
+        nBytesWritten += nTmp;
     }
 
     return nBytesWritten;

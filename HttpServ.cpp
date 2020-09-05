@@ -953,17 +953,20 @@ void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t h
     unique_ptr<char[]> pBuffer = make_unique<char[]>(nBufSize);
     char* caBuffer = pBuffer.get();
     size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, /*iHeaderFlag | ADDNOCACHE |*/ iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
-    if (httpVers == 2)
-        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
-    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-    if (strHtmlRespons.size() > 0)
+    if (nHeaderLen < 1024)
     {
         if (httpVers == 2)
+            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
+        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        if (strHtmlRespons.size() > 0)
         {
-            BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
-            soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+            if (httpVers == 2)
+            {
+                BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+            }
+            soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
         }
-        soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
     }
     soMetaDa.fResetTimer();
 
@@ -1280,9 +1283,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 307, redHeader, 0);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (nHeaderLen < nBufSize)
+            {
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            }
             soMetaDa.fResetTimer();
             if (httpVers < 2)
                 soMetaDa.fSocketClose();
@@ -1379,18 +1385,21 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 vHeader.insert(end(vHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONENTLENGTH/* | ADDCONNECTIONCLOSE*/, 401, vHeader, strHtmlRespons.size());
-                if (httpVers == 2)
-                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                if (strHtmlRespons.size() > 0)
+                if (nHeaderLen < nBufSize)
                 {
                     if (httpVers == 2)
+                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                    if (strHtmlRespons.size() > 0)
                     {
-                        BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
-                        soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+                        if (httpVers == 2)
+                        {
+                            BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
+                            soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+                        }
+                        if (fnIsStreamReset(nStreamId) == false)
+                            soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
                     }
-                    if (fnIsStreamReset(nStreamId) == false)
-                        soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
                 }
                 soMetaDa.fResetTimer();
 
@@ -1544,10 +1553,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 307, redHeader, 0);
-                if (httpVers == 2)
-                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-                if (fnIsStreamReset(nStreamId) == false)
-                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                if (nHeaderLen < nBufSize)
+                {
+                    if (httpVers == 2)
+                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                    if (fnIsStreamReset(nStreamId) == false)
+                        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                }
                 soMetaDa.fResetTimer();
 
                 CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -1612,10 +1624,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 301, redHeader, 0);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            if (fnIsStreamReset(nStreamId) == false)
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (nHeaderLen < nBufSize)
+            {
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            }
             soMetaDa.fResetTimer();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -1769,10 +1784,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         }
                         umPhpHeaders.insert(end(umPhpHeaders), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
                         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
-                        if (httpVers == 2)
-                            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
-                        if (fnIsStreamReset(nStreamId) == false)
-                            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                        if (nHeaderLen < nBufSize)
+                        {
+                            if (httpVers == 2)
+                                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
+                            if (fnIsStreamReset(nStreamId) == false)
+                                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                        }
                         soMetaDa.fResetTimer();
 
                         bEndOfHeader = true;
@@ -1872,10 +1890,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 HeadList tmpHeader;
                 tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
                 size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
-                if (httpVers == 2)
-                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-                if (fnIsStreamReset(nStreamId) == false)
-                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                {
+                    if (httpVers == 2)
+                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                    if (fnIsStreamReset(nStreamId) == false)
+                        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                }
                 soMetaDa.fResetTimer();
                 if (httpVers < 2)
                     bCloseConnection = true;
@@ -1895,10 +1915,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             HeadList tmpHeader;
             tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            if (fnIsStreamReset(nStreamId) == false)
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (nHeaderLen < nBufSize)
+            {
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            }
             soMetaDa.fResetTimer();
             if (httpVers < 2)
                 bCloseConnection = true;
@@ -2226,10 +2249,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     if (ifnonematch != end(lstHeaderFields) && ifnonematch->second == strEtag)
     {
         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
-        if (httpVers == 2)
-            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-        if (fnIsStreamReset(nStreamId) == false)
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        if (nHeaderLen < nBufSize)
+        {
+            if (httpVers == 2)
+                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+            if (fnIsStreamReset(nStreamId) == false)
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        }
         soMetaDa.fResetTimer();
 
         CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -2258,10 +2284,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if (fabs(dTimeDif) < 0.001)
         {
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-            if (fnIsStreamReset(nStreamId) == false)
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (nHeaderLen < nBufSize)
+            {
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            }
             soMetaDa.fResetTimer();
 
             CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
@@ -2306,10 +2335,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         optHeader.insert(end(optHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER | ADDCONENTLENGTH, 200, optHeader, 0);
-        if (httpVers == 2)
-            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-        if (fnIsStreamReset(nStreamId) == false)
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        if (nHeaderLen < nBufSize)
+        {
+            if (httpVers == 2)
+                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+            if (fnIsStreamReset(nStreamId) == false)
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        }
         soMetaDa.fResetTimer();
         if (bCloseConnection == true)
             soMetaDa.fSocketClose();
@@ -2343,11 +2375,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
         // Build response header
         size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, stFileInfo.st_size);
-        if (httpVers == 2)
-            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
-        if (fnIsStreamReset(nStreamId) == false)
-            soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-
+        if (nHeaderLen < nBufSize)
+        {
+            if (httpVers == 2)
+                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x5, nStreamId);
+            if (fnIsStreamReset(nStreamId) == false)
+                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+        }
         soMetaDa.fResetTimer();
         if (bCloseConnection == true)
             soMetaDa.fSocketClose();
@@ -2407,10 +2441,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 umPhpHeaders.emplace_back(make_pair("Transfer-Encoding", "chunked"));
 
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
-            if (fnIsStreamReset(nStreamId) == false)
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (nHeaderLen < nBufSize)
+            {
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            }
             soMetaDa.fResetTimer();
 
             GZipPack gzipEncoder;
@@ -2489,10 +2526,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 umPhpHeaders.emplace_back(make_pair("Transfer-Encoding", "chunked"));
 
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
-            if (fnIsStreamReset(nStreamId) == false)
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (nHeaderLen < nBufSize)
+            {
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            }
             soMetaDa.fResetTimer();
 
             BrotliEncoderState* s = BrotliEncoderCreateInstance(0, 0, 0);
@@ -2575,10 +2615,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             // Build response header
             size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, nFSize);
-            if (httpVers == 2)
-                BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
-            if (fnIsStreamReset(nStreamId) == false)
-                soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            if (nHeaderLen < nBufSize)
+            {
+                if (httpVers == 2)
+                    BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, 0x4, nStreamId);
+                if (fnIsStreamReset(nStreamId) == false)
+                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+            }
             soMetaDa.fResetTimer();
 
             auto apBuf = make_unique<char[]>(nSizeSendBuf + nHttp2Offset + 2);
