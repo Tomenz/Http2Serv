@@ -264,19 +264,28 @@ bool SpawnProcess::StillSpawning() noexcept
     return false;
 }
 
-int SpawnProcess::ReadFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
+size_t SpawnProcess::ReadFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
 {
-    return _read(m_fdStdOutPipe[READ_FD], pBuffer, nBufSize);
+    int iRead = _read(m_fdStdOutPipe[READ_FD], pBuffer, nBufSize);
+    if (iRead >= 0)
+        return iRead;
+    return 0;
 }
 
-int SpawnProcess::ReadErrFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
+size_t SpawnProcess::ReadErrFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
 {
-    return _read(m_fdStdErrPipe[READ_FD], pBuffer, nBufSize);
+    int iRead = _read(m_fdStdErrPipe[READ_FD], pBuffer, nBufSize);
+    if (iRead >= 0)
+        return iRead;
+    return 0;
 }
 
-int SpawnProcess::WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
+size_t SpawnProcess::WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
 {
-    return _write(m_fdStdInPipe[WRITE_FD], pBuffer, nBufSize);
+    int iWrite = _write(m_fdStdInPipe[WRITE_FD], pBuffer, nBufSize);
+    if (iWrite >= 0)
+        return iWrite;
+    return 0;
 }
 
 void SpawnProcess::CloseWritePipe() noexcept

@@ -1749,10 +1749,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         HeadList umPhpHeaders;
         basic_string<char> strBuffer;
         size_t nTotal = 0;
-        int nOffset = 0;
+        size_t nOffset = 0;
         bool bChunkedTransfer = false;
 
-        function<void(char*, int)> fnSendOutput = [&](char* szBuffer, int nBufLen)
+        function<void(char*, size_t)> fnSendOutput = [&](char* szBuffer, size_t nBufLen)
         {
             if (bEndOfHeader == false)
             {
@@ -1794,7 +1794,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         soMetaDa.fResetTimer();
 
                         bEndOfHeader = true;
-                        nBufLen -= static_cast<int>(nPosEnd);
+                        nBufLen -= nPosEnd;
                         strBuffer.erase(0, nPosEnd);
                         strBuffer.copy(szBuffer + nHttp2Offset, nBufLen);
                         break;
@@ -1816,7 +1816,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         else if (nPosEnd - nPosStart > 1 && strBuffer.compare(nPosStart, 2, "\n\n") == 0)
                             nPosEnd -= 1;
 
-                        nBufLen -= static_cast<int>(nPosEnd);
+                        nBufLen -= nPosEnd;
                         strBuffer.erase(0, nPosEnd);
                     }
                     else
@@ -1834,12 +1834,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             if (httpVers == 2)
             {
-                nOffset = min(nBufLen, 10);
+                nOffset = min(nBufLen, static_cast<size_t>(10));
                 nBufLen -= nOffset;
             }
 
             size_t nBytesTransfered = 0;
-            while (nBytesTransfered < static_cast<size_t>(nBufLen) && patStop.load() == false)
+            while (nBytesTransfered < nBufLen && patStop.load() == false)
             {
                 int64_t nStreamWndSize = INT32_MAX;
                 if (fnGetStreamWindowSize(nStreamWndSize) == false)
@@ -1972,7 +1972,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         {
                             if (nDataLen != 0)
                             {
-                                int nRead = min(65536 + 10 - nOffset, static_cast<int>(nDataLen));
+                                size_t nRead = min(65536 + 10 - nOffset, static_cast<size_t>(nDataLen));
                                 copy(pData, pData + nRead, reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset));
                                 fnSendOutput(pBuf.get(), nRead + nOffset);  //OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pData, nDataLen).c_str()));
                             }
@@ -2128,7 +2128,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     bStillRunning = run.StillSpawning();
 
                     bool bHasRead = false;
-                    int nRead;
+                    size_t nRead;
                     while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0 && patStop.load() == false)
                     {
                         bHasRead = true;
