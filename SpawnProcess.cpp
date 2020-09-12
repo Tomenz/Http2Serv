@@ -280,11 +280,11 @@ size_t SpawnProcess::ReadErrFromSpawn(unsigned char* const pBuffer, const uint32
     return 0;
 }
 
-size_t SpawnProcess::WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
+uint32_t SpawnProcess::WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept
 {
     int iWrite = _write(m_fdStdInPipe[WRITE_FD], pBuffer, nBufSize);
     if (iWrite >= 0)
-        return iWrite;
+        return static_cast<uint32_t>(iWrite);
     return 0;
 }
 

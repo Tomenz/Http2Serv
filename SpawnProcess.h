@@ -18,7 +18,7 @@ public:
     bool StillSpawning() noexcept;
     size_t ReadFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
     size_t ReadErrFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
-    size_t WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
+    uint32_t WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
     void CloseWritePipe() noexcept;
     void AddEnvironment(const wstring& strEnvironment) noexcept { m_vstrEnvironment.push_back(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strEnvironment)); }
     void AddEnvironment(const string& strEnvironment) noexcept { m_vstrEnvironment.push_back(strEnvironment); }

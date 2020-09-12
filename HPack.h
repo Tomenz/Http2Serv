@@ -43,8 +43,8 @@ public:
     }
     HeadList::iterator ifind(string strSearch)
     {
-        transform(strSearch.begin(), strSearch.end(), strSearch.begin(), ::tolower);
-        return find_if(begin(), end(), [&](auto item) { string strTmp(item.first.size(), 0);  transform(item.first.begin(), item.first.end(), strTmp.begin(), ::tolower);  return strSearch == strTmp ? true : false; });
+        transform(strSearch.begin(), strSearch.end(), strSearch.begin(), [](char c) { return static_cast<char>(::tolower(c)); });
+        return find_if(begin(), end(), [&](auto item) { string strTmp(item.first.size(), 0);  transform(item.first.begin(), item.first.end(), strTmp.begin(), [](char c) { return static_cast<char>(::tolower(c)); });  return strSearch == strTmp ? true : false; });
     }
 };
 
@@ -64,7 +64,7 @@ public:
     size_t HPackEncode(char* const szBuf, size_t nLen, const char* const strHeaderId, const char* const strHeaderValue) const noexcept;
     size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HeadList& lstHeaderFields, STREAMSETTINGS& tuStreamSettings) const;
 
-    class H2ProtoException : exception
+    class H2ProtoException : public exception
     {
     public:
         enum HPACKEXCODE : uint32_t

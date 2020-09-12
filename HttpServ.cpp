@@ -259,7 +259,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
 
 void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
 {
-    uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
+    size_t nAvalible = pTcpSocket->GetBytesAvailible();
 
     if (nAvalible == 0)
     {
@@ -269,7 +269,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
 
     shared_ptr<char[]> spBuffer(new char[nAvalible]);
 
-    uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
+    size_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 
     if (nRead > 0)
     {
@@ -416,7 +416,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                         if (nPos1 != string::npos)
                         {
                             string strTmp = line->str().substr(0, nPos1);
-                            transform(begin(strTmp), begin(strTmp) + nPos1, begin(strTmp), ::tolower);
+                            transform(begin(strTmp), begin(strTmp) + nPos1, begin(strTmp), [](char c) { return static_cast<char>(::tolower(c)); });
 
                             auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(strTmp, line->str().substr(nPos1 + 1)));
                             if (parResult != end(pConDetails->HeaderList))
@@ -565,7 +565,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                 //m_mtxConnections.unlock();
                 //DoAction(soMetaDa, nStreamId, pConDetails->H2Streams, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
                 m_ActThrMutex.lock();
-                thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 1, nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), ref(*pConDetails->mutStreams.get()), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(*pConDetails->atStop.get()), ref(*pConDetails->mutReqData.get()), ref(pConDetails->vecReqData), ref(pConDetails->lstAuthInfo));
+                thread thTemp(&CHttpServ::DoAction, this, soMetaDa, static_cast<uint8_t>(1), nNextId, ref(pConDetails->H2Streams), ref(pConDetails->StreamParam), ref(*pConDetails->mutStreams.get()), ref(pConDetails->StreamResWndSizes), bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(*pConDetails->atStop.get()), ref(*pConDetails->mutReqData.get()), ref(pConDetails->vecReqData), ref(pConDetails->lstAuthInfo));
                 m_umActionThreads.emplace(thTemp.get_id(), *pConDetails->atStop.get());
                 m_ActThrMutex.unlock();
                 thTemp.detach();
@@ -678,7 +678,7 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
     m_mtxConnections.unlock();
 }
 
-void CHttpServ::OnTimeout(const Timer* const pTimer, void* vpData)
+void CHttpServ::OnTimeout(const Timer* const /*pTimer*/, void* vpData)
 {
     TcpSocket* pSocket = reinterpret_cast<TcpSocket*>(vpData);
 
@@ -740,7 +740,7 @@ size_t CHttpServ::BuildH2ResponsHeader(char* const szBuffer, size_t nBufLen, int
     for (const auto& item : umHeaderList)
     {
         string strHeaderFiled(item.first);
-        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), ::tolower);
+        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), [](char c) { return static_cast<char>(::tolower(c)); });
         if (strHeaderFiled == "cache-control")
             iFlag &= ~ADDNOCACHE;
         if (strHeaderFiled == "connection" || strHeaderFiled == "transfer-encoding")
@@ -818,7 +818,7 @@ size_t CHttpServ::BuildResponsHeader(char* const szBuffer, size_t nBufLen, int i
     for (const auto& item : umHeaderList)
     {
         string strHeaderFiled(item.first);
-        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), ::tolower);
+        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), [](char c) { return static_cast<char>(::tolower(c)); });
 
         if (strHeaderFiled == "pragma" || strHeaderFiled == "cache-control")
             iFlag &= ~ADDNOCACHE;
@@ -1185,7 +1185,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         fuExitDoAction();
         return;
     }
-    transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), ::toupper);
+    transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), [](char c) { return static_cast<char>(::toupper(c)); });
 
     // Decode URL (%20 -> ' ')
     wstring strItemPath;
@@ -1330,7 +1330,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             {
                 vStrEnvVariable.push_back(get<2>(strEnvIf));
                 wstring strTmp(get<2>(strEnvIf));
-                transform(begin(strTmp), end(strTmp), begin(strTmp), ::toupper);
+                transform(begin(strTmp), end(strTmp), begin(strTmp), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
                 if (strTmp == L"DONTLOG")
                     CLogFile::SetDontLog();
             }
@@ -1419,11 +1419,11 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             auto itAuth = lstHeaderFields.find("authorization");
             if (itAuth == end(lstHeaderFields))
             {
-                for (auto& itAuth : lstAuthInfo)
+                for (auto& itAuthInfo : lstAuthInfo)
                 {
-                    if (itAuth.strUrl == mr.str())
+                    if (itAuthInfo.strUrl == mr.str())
                     {
-                        strRemoteUser = itAuth.strUser;
+                        strRemoteUser = itAuthInfo.strUser;
                         break;
                     }
                 }
@@ -1432,31 +1432,31 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 return fnSendAuthRespons();
             }
 
-            string::size_type nPos = itAuth->second.find(' ');
-            if (nPos == string::npos)
+            string::size_type nPosSpace = itAuth->second.find(' ');
+            if (nPosSpace == string::npos)
                 return fnSendAuthRespons();
-            if (itAuth->second.substr(0, nPos) == "Basic" && get<1>(strAuth.second).find(L"BASIC") != string::npos)
+            if (itAuth->second.substr(0, nPosSpace) == "Basic" && get<1>(strAuth.second).find(L"BASIC") != string::npos)
             {
-                wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPos + 1)));
+                wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPosSpace + 1)));
                 if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredenial](const auto& strUser) { return strCredenial == strUser ? true : false; }) == end(get<2>(strAuth.second)))
                     return fnSendAuthRespons();
                 strRemoteUser = strCredenial.substr(0, strCredenial.find(L':'));
                 break;
             }
-            else if (itAuth->second.substr(0, nPos) == "Digest" && get<1>(strAuth.second).find(L"DIGEST") != string::npos)
+            else if (itAuth->second.substr(0, nPosSpace) == "Digest" && get<1>(strAuth.second).find(L"DIGEST") != string::npos)
             {   // username="Thomas", realm="Http-Utility Digest", nonce="cmFuZG9tbHlnZW5lcmF0ZWRub25jZQ", uri="/iso/", response="2254355340eede0649b9df7f0121dcca", opaque="c29tZXJhbmRvbW9wYXF1ZXN0cmluZw", qop=auth, nc=00000002, cnonce="78a4421707fa60bc"
                 const static regex spaceSeperator(",");
-                string strTmp = itAuth->second.substr(nPos + 1);
+                string strTmp = itAuth->second.substr(nPosSpace + 1);
                 sregex_token_iterator token(begin(strTmp), end(strTmp), spaceSeperator, -1);
                 map<string, string> maDigest;
                 while (token != sregex_token_iterator())
                 {
-                    if (nPos = token->str().find("="), nPos != string::npos)
+                    if (nPosSpace = token->str().find("="), nPosSpace != string::npos)
                     {
-                        string strKey = token->str().substr(0, nPos);
+                        string strKey = token->str().substr(0, nPosSpace);
                         strKey.erase(strKey.find_last_not_of(" \t") + 1);
                         strKey.erase(0, strKey.find_first_not_of(" \t"));
-                        auto itInsert = maDigest.emplace(strKey, token->str().substr(nPos + 1));
+                        auto itInsert = maDigest.emplace(strKey, token->str().substr(nPosSpace + 1));
                         if (itInsert.second == true)
                         {
                             itInsert.first->second.erase(itInsert.first->second.find_last_not_of("\" \t") + 1);
@@ -1520,10 +1520,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         auto itReferer = lstHeaderFields.find("referer");
         if (itReferer != end(lstHeaderFields))
         {
-            size_t nPos = itReferer->second.find(strHostRedirect);
+            size_t nPosHost = itReferer->second.find(strHostRedirect);
             strReferer = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itReferer->second);
-            //size_t nPos = strReferer.find(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strHostRedirect));
-            strReferer.erase(0, nPos + strHostRedirect.size());
+            strReferer.erase(0, nPosHost + strHostRedirect.size());
         }
 
         for (auto& strProxyAlias : m_vHostParam[szHost].m_mstrReverseProxy)
@@ -1531,9 +1530,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             wregex reProxy(strProxyAlias.first);
 
             wstring strStriptRef = regex_replace(strReferer, reProxy, L"$1", regex_constants::format_first_only);
-            size_t nPos = strReferer.find(strStriptRef);
-            if (nPos != string::npos) nPos--;
-            wstring strTmp = strReferer.substr(0, nPos);
+            size_t nPosScriptRef = strReferer.find(strStriptRef);
+            if (nPosScriptRef != string::npos) nPosScriptRef--;
+            wstring strTmp = strReferer.substr(0, nPosScriptRef);
             if (strTmp.empty() == false && strTmp.back() == L'/') strTmp.erase(strTmp.size() - 1);
 
             wstring strNewPath = regex_replace(strItemPath, reProxy, L".//Http2Fetch.exe/$1", regex_constants::format_first_only);
@@ -1676,7 +1675,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
     // Get file type of item
     wstring strFileExtension(strItemPath.substr(strItemPath.rfind(L'.') + 1));
-    transform(begin(strFileExtension), end(strFileExtension), begin(strFileExtension), ::tolower);
+    transform(begin(strFileExtension), end(strFileExtension), begin(strFileExtension), [](wchar_t c) { return static_cast<wchar_t>(::tolower(c)); });
 
     uint32_t iStatus = 200;
 
@@ -1704,7 +1703,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 {
                     wstring strHeader(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itHeader.first));
                     //strHeader.erase(0, strHeader.find_first_not_of(L':'));
-                    transform(begin(strHeader), end(strHeader), begin(strHeader), ::toupper);
+                    transform(begin(strHeader), end(strHeader), begin(strHeader), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
                     strHeader = regex_replace(strHeader, wregex(L"-"), wstring(L"_"));
                     vCgiParam.emplace_back(make_pair("HTTP_" + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strHeader), itHeader.second));
                 }
@@ -1740,8 +1739,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         for (const auto& strEnvVar : vStrEnvVariable)
         {
             string strTmp = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strEnvVar);
-            size_t nPos = strTmp.find("=");
-            vCgiParam.emplace_back(make_pair(strTmp.substr(0, nPos), nPos != string::npos ? strTmp.substr(nPos + 1) : "1"));
+            size_t nPosEqual = strTmp.find("=");
+            vCgiParam.emplace_back(make_pair(strTmp.substr(0, nPosEqual), nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : "1"));
         }
         //AUTH_TYPE, 
 
@@ -1935,15 +1934,15 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             string strIpAdd(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) ? itFileTyp->second[1] : pveAlaisMatch->at(1)));
             uint16_t nPort = 0;
-            size_t nPos = strIpAdd.find_first_of(":");
+            size_t nPosColon = strIpAdd.find_first_of(":");
 
-            if (nPos != string::npos)
+            if (nPosColon != string::npos)
             {
-                try { nPort = stoi(strIpAdd.substr(nPos + 1)); }
+                try { nPort = static_cast<uint16_t>(stoi(strIpAdd.substr(nPosColon + 1))); }
                 catch (const std::exception& /*ex*/) { }
             }
 
-            if (nPos != string::npos && nPort > 0)
+            if (nPosColon != string::npos && nPort > 0)
             {
                 s_mxFcgi.lock();
                 auto itFcgi = s_mapFcgiConnections.find(strIpAdd);
@@ -1954,7 +1953,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 }
 
                 if (itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == false)
-                    itFcgi->second.Connect(strIpAdd.substr(0, nPos), nPort);
+                    itFcgi->second.Connect(strIpAdd.substr(0, nPosColon), nPort);
                 s_mxFcgi.unlock();
 
                 if (itFcgi->second.IsFcgiProcessActiv() == true && itFcgi->second.IsConnected() == true)
@@ -1964,7 +1963,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     bool l_bReqEnde = false;
                     condition_variable l_cvReqEnd;
                     unique_ptr<char[]> pBuf(new char[65536 + nHttp2Offset + 10]);
-                    uint32_t nReqId;
+                    uint16_t nReqId;
                     bool bReConnect = false;
                     do
                     {
@@ -1983,7 +1982,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             if (itFcgi->second.IsConnected() == true)
                                 this_thread::sleep_for(chrono::milliseconds(1));
                             else if (bReConnect == false)
-                                bReConnect = true, itFcgi->second.Connect(strIpAdd.substr(0, nPos), nPort);
+                                bReConnect = true, itFcgi->second.Connect(strIpAdd.substr(0, nPosColon), nPort);
                             s_mxFcgi.unlock();
                         }
                     } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && patStop.load() == false);
@@ -2093,7 +2092,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     while (data != nullptr && patStop.load() == false && fnIsStreamReset(nStreamId) == false)  // loop until we have nullptr packet
                     {
                         uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
-                        if (run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen) != static_cast<int>(nDataLen))
+                        if (run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen) != nDataLen)
                         {
                             run.KillProcess();
                             while (run.StillSpawning() == true && patStop.load() == false)
@@ -2129,7 +2128,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                     bool bHasRead = false;
                     size_t nRead;
-                    while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<int>(65536 - nOffset)), nRead > 0 && patStop.load() == false)
+                    while (nRead = run.ReadFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset), static_cast<uint32_t>(65536 - nOffset)), nRead > 0 && patStop.load() == false)
                     {
                         bHasRead = true;
                         nRead += nOffset;
@@ -2137,7 +2136,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                         fnSendOutput(pBuf.get(), nRead);
                     }
-                    if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get()), static_cast<int>(65536)), nRead > 0)
+                    if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get()), 65536), nRead > 0)
                     {
                         CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", soMetaDa.strIpClient, "] CGI error output: ", string(pBuf.get(), nRead));
                     }
@@ -2457,7 +2456,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
 
                 uint64_t nBytesTransfered = 0;
-                int iRet;
+                int iResult;
                 do
                 {
                     streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
@@ -2472,10 +2471,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     do
                     {
                         nBytesConverted = nSizeSendBuf - nHttp2Offset;
-                        iRet = gzipEncoder.Enflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, nFlush);
+                        iResult = gzipEncoder.Enflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, nFlush);
 
                         size_t nOffset = 0;
-                        while ((iRet == Z_OK || iRet == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
+                        while ((iResult == Z_OK || iResult == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                         {
                             int64_t nStreamWndSize = INT32_MAX;
                             if (fnGetStreamWindowSize(nStreamWndSize) == false)
@@ -2488,7 +2487,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             if (httpVers == 2)
                             {
                                 bool bLastPaket = false;
-                                if (iRet == Z_STREAM_END && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) == nSendBufLen) // Letztes Paket
+                                if (iResult == Z_STREAM_END && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) == nSendBufLen) // Letztes Paket
                                     bLastPaket = true;
                                 BuildHttp2Frame(reinterpret_cast<char*>(dstBuf.get()) + nOffset, nSendBufLen, 0x0, bLastPaket == true ? 0x1 : 0x0, nStreamId);
                             }
@@ -2512,9 +2511,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                         fnResetReservierteWindowSize();
 
-                    } while (iRet == Z_OK && nBytesConverted == 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
+                    } while (iResult == Z_OK && nBytesConverted == 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
 
-                } while (iRet == Z_OK && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
+                } while (iResult == Z_OK && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
 
                 if (httpVers < 2 && patStop.load() == false)
                     soMetaDa.fSocketWrite("0\r\n\r\n", 5);
@@ -2684,7 +2683,7 @@ void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
     }
 
     m_ActThrMutex.lock();
-    thread thTemp(&CHttpServ::DoAction, this, soMetaDa, 2, streamId, ref(StreamList), ref(tuStreamSettings), ref(pmtxStream), ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(patStop), ref(pmtxReqdata), ref(vecData), ref(lstAuthInfo));
+    thread thTemp(&CHttpServ::DoAction, this, soMetaDa, static_cast<uint8_t>(2), streamId, ref(StreamList), ref(tuStreamSettings), ref(pmtxStream), ref(maResWndSizes), bind(&CHttpServ::BuildH2ResponsHeader, this, _1, _2, _3, _4, _5, _6), ref(patStop), ref(pmtxReqdata), ref(vecData), ref(lstAuthInfo));
     m_umActionThreads.emplace(thTemp.get_id(), patStop);
     m_ActThrMutex.unlock();
     thTemp.detach();

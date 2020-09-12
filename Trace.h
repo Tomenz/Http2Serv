@@ -34,6 +34,8 @@ void MyTrace(const T& value)
     ssTrace << endl;
     TraceOutput();
     stringstream().swap(ssTrace);
+#elif defined(_WIN32) || defined(_WIN64)
+    value;
 #endif
 }
 
@@ -45,6 +47,9 @@ void MyTrace(const T& value, const Args&... rest)
         ssTrace.imbue(locale("C"));
 
     MyTraceAdd(value);
+    MyTrace(rest...);
+#elif defined(_WIN32) || defined(_WIN64)
+    value;
     MyTrace(rest...);
 #endif
 }

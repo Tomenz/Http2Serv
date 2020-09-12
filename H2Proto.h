@@ -67,7 +67,7 @@ typedef struct
     bool bIsSsl;
     function<size_t(const void*, size_t)> fSocketWrite;
     function<void()> fSocketClose;
-    function<uint32_t()> fSockGetOutBytesInQue;
+    function<size_t()> fSockGetOutBytesInQue;
     function<void()> fResetTimer;
     function<void(uint32_t)> fSetNewTimeout;
 }MetaSocketData;
@@ -160,21 +160,22 @@ public:
             if (itExpect != end(GETHEADERLIST(streamData)))
             {
                 char caBuffer[128];
+                size_t nResult = 0;
                 if (itExpect->second == "100-continue")
                 {
-                    size_t nReturn = HPackEncode(caBuffer + 9, sizeof(caBuffer) - 9, ":status", to_string(100).c_str());
-                    if (nReturn == SIZE_MAX)
+                    nResult = HPackEncode(caBuffer + 9, sizeof(caBuffer) - 9, ":status", to_string(100).c_str());
+                    if (nResult == SIZE_MAX)
                         return;
-                    BuildHttp2Frame(caBuffer, nReturn, 0x1, END_OF_HEADER, h2f.streamId);
+                    BuildHttp2Frame(caBuffer, nResult, 0x1, END_OF_HEADER, h2f.streamId);
                 }
                 else
                 {
-                    size_t nReturn = HPackEncode(caBuffer + 9, sizeof(caBuffer) - 9, ":status", to_string(400).c_str());
-                    if (nReturn == SIZE_MAX)
+                    nResult = HPackEncode(caBuffer + 9, sizeof(caBuffer) - 9, ":status", to_string(400).c_str());
+                    if (nResult == SIZE_MAX)
                         return;
-                    BuildHttp2Frame(caBuffer, nReturn, 0x1, END_OF_HEADER | END_OF_STREAM, h2f.streamId);
+                    BuildHttp2Frame(caBuffer, nResult, 0x1, END_OF_HEADER | END_OF_STREAM, h2f.streamId);
                 }
-                soMetaDa.fSocketWrite(caBuffer, nReturn + 9);
+                soMetaDa.fSocketWrite(caBuffer, nResult + 9);
             }
         };
 

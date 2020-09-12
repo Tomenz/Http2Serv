@@ -12,7 +12,6 @@
 #include <io.h>
 #else
 #include <syslog.h>
-#pragma message("TODO!!! Folge Zeile wieder entfernen.")
 #include <termios.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -37,7 +36,7 @@ std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> Utf8Converter;
 #include "Psapi.h"
 #pragma comment(lib, "Psapi.lib")
 
-void se_translator(size_t e, _EXCEPTION_POINTERS* p)
+void se_translator(size_t e, _EXCEPTION_POINTERS* /*p*/)
 {
     throw e;
 }
@@ -145,8 +144,8 @@ public:
                 vPort.push_back(L"80");
             for (const auto& strPort : vPort)
             {   // Default Werte setzen
-                uint16_t nPort;
-                try { nPort = stoi(strPort);}
+                uint16_t nPort = 0;
+                try { nPort = static_cast<uint16_t>(stoi(strPort));}
                 catch (const std::exception& /*ex*/) { }
 
                 if (mIpPortCombi.find(strIp) == end(mIpPortCombi))
@@ -220,7 +219,7 @@ public:
                         case 6: HostParam.m_strHostKey = Utf8Converter.to_bytes(strValue); break;
                         case 7: HostParam.m_strHostCertificate = Utf8Converter.to_bytes(strValue); break;
                         case 8: HostParam.m_strCAcertificate = Utf8Converter.to_bytes(strValue); break;
-                        case 9: transform(begin(strValue), end(strValue), begin(strValue), ::toupper);
+                        case 9: transform(begin(strValue), end(strValue), begin(strValue), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
                             HostParam.m_bSSL = strValue == L"TRUE" ? true : false; break;
                         case 10:HostParam.m_strMsgDir = strValue; break;
                         case 11:HostParam.m_strSslCipher = Utf8Converter.to_bytes(strValue); break;
@@ -313,7 +312,7 @@ public:
                                 vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
                                 if (token.size() >= 3)
                                 {
-                                    transform(begin(token[0]), end(token[0]), begin(token[0]), ::toupper);
+                                    transform(begin(token[0]), end(token[0]), begin(token[0]), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
                                     for (size_t n = 0; n < token.size(); ++n)
                                     {
                                         token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
@@ -355,7 +354,7 @@ public:
                                         token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
                                         token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
                                     }
-                                    transform(begin(token[2]), end(token[2]), begin(token[2]), ::toupper);
+                                    transform(begin(token[2]), end(token[2]), begin(token[2]), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
 
                                     pair<unordered_map<wstring, tuple<wstring, wstring, vector<wstring>>>::iterator, bool> itNew;
                                     if (HostParam.m_mAuthenticate.find(token[0]) == end(HostParam.m_mAuthenticate))

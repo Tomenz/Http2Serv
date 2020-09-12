@@ -33,7 +33,7 @@ int CBaseSrv::Run(void)
 	return 0;
 }
 
-void WINAPI CBaseSrv::ServiceStartCB(DWORD argc, LPTSTR *argv)
+void WINAPI CBaseSrv::ServiceStartCB(DWORD /*argc*/, LPTSTR *argv)
 {
 	s_stSrvStatus.dwServiceType        = SERVICE_WIN32_OWN_PROCESS;
     s_stSrvStatus.dwCurrentState       = SERVICE_START_PENDING;
