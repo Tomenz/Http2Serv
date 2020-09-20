@@ -25,12 +25,6 @@
     <ClInclude Include="Timer.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="SvrLib\BaseSvr.h">
-      <Filter>SvrLib</Filter>
-    </ClInclude>
-    <ClInclude Include="SvrLib\SvrCtrl.h">
-      <Filter>SvrLib</Filter>
-    </ClInclude>
     <ClInclude Include="SpawnProcess.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
@@ -45,9 +39,6 @@
     </Filter>
     <Filter Include="Quelldateien">
       <UniqueIdentifier>{5183d832-3686-4473-b7e4-79f80801237a}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="SvrLib">
-      <UniqueIdentifier>{c0cc47f4-391f-4e1e-8a16-f79e56ce3b02}</UniqueIdentifier>
     </Filter>
     <Filter Include="FastCgi">
       <UniqueIdentifier>{1220d2a8-49b5-4f3c-8972-3a35139916e7}</UniqueIdentifier>
@@ -65,12 +56,6 @@
     </ClCompile>
     <ClCompile Include="Trace.cpp">
       <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="SvrLib\BaseSvr.cpp">
-      <Filter>SvrLib</Filter>
-    </ClCompile>
-    <ClCompile Include="SvrLib\SvrCtrl.cpp">
-      <Filter>SvrLib</Filter>
     </ClCompile>
     <ClCompile Include="SpawnProcess.cpp">
       <Filter>Quelldateien</Filter>
