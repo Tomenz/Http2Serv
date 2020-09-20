@@ -17,7 +17,7 @@ endif
 LDFLAGS = -Wl,--gc-sections -lpthread -static-libgcc -static-libstdc++
 TARGET = Http2Serv
 Fetch = Http2Fetch
-DIRS = SocketLib CommonLib FastCgi
+DIRS = SocketLib CommonLib FastCgi SrvLib
 ZLIBDIR = zlib
 BRLIBDIR = brotli
 
@@ -25,10 +25,10 @@ BUILDDIRS = $(DIRS:%=build-%)
 CLEANDIRS = $(DIRS:%=clean-%)
 
 INC_PATH = -I ./brotli/c/include -I .
-LIB_PATH = -L ./zlib -L ./SocketLib -L ./brotli -L ./CommonLib -L ./FastCgi
+LIB_PATH = -L ./zlib -L ./SocketLib -L ./brotli -L ./CommonLib -L ./FastCgi -L ./SrvLib
 
 OBJ = Http2Serv.o HttpServ.o ConfFile.o LogFile.o Trace.o SpawnProcess.o HPack.o #OBJ = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
-LIB = -l z -l socketlib -l brotli -l crypto -l ssl -l commonlib -l fastcgi
+LIB = -l z -l socketlib -l brotli -l crypto -l ssl -l commonlib -l fastcgi -l srvlib
 
 export $(DEBUG)
 
