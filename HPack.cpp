@@ -228,10 +228,10 @@ size_t HPack::HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qD
     return (szBuf - szStart);
 }
 
-size_t HPack::HufmanEncode(char* szBuf, size_t nBufSize, const char* const szString, size_t nStrLen) const noexcept
+size_t HPack::HufmanEncode(uint8_t* szBuf, size_t nBufSize, const char* const szString, size_t nStrLen) const noexcept
 {
     ::memset(szBuf, 0, nBufSize);   // clear buffer with all 0 because of the "or" operation
-
+    uint8_t* szEnd = szBuf + nBufSize;
     size_t nTotalBits = 0;
 
     for (size_t n = 0; n < nStrLen; ++n)
@@ -248,7 +248,11 @@ size_t HPack::HufmanEncode(char* szBuf, size_t nBufSize, const char* const szStr
         int iAnzByte = (iGesBits / 8) + ((iGesBits % 8) != 0 ? 1 : 0);  // Ganze Bytes + wenn rest noch eins
         uint64_t nBitField = static_cast<uint64_t>(itCode->first) << ((64 - itCode->second) - iUsedBits);
         for (int i = 0; i < iAnzByte; ++i)
+        {
+            if (szBuf + i >= szEnd)
+                return SIZE_MAX;
             *(szBuf + i) |= static_cast<char>(nBitField >> (56 - (i * 8)) & 0xff);
+        }
 
         szBuf += iGesBits / 8;  // Bits bereits benutzt + neue Bits / 8 ist die Anzahl der fertigen Bytes
         nTotalBits += itCode->second;
@@ -272,7 +276,7 @@ size_t HPack::EncodeInteger(char* const szBuf, size_t nBufSize, size_t nIndex, u
         return SIZE_MAX;
 
     if (nIndex < nBitMask)
-        *szBuf = static_cast<char>(nIndex | nRepBits);
+        *szBuf = static_cast<uint8_t>(nIndex | nRepBits);
     else
     {
         nIndex -= nBitMask;
@@ -289,7 +293,7 @@ size_t HPack::EncodeInteger(char* const szBuf, size_t nBufSize, size_t nIndex, u
 
         if (nBufSize < nRet + 1)
             return SIZE_MAX;
-        *(szBuf + nRet++) = static_cast<char>(nIndex);
+        *(szBuf + nRet++) = static_cast<uint8_t>(nIndex);
     }
 
     return nRet;
@@ -299,7 +303,7 @@ size_t HPack::EncodeString(char* const szBuf, size_t nBufSize, const char* szStr
 {
     size_t nRet = 0;
 
-    auto caBuffer = make_unique<char[]>(nStrLen);
+    auto caBuffer = make_unique<uint8_t[]>(nStrLen);
     if (caBuffer.get() == 0)
         return SIZE_MAX;
     size_t nEncLen = HufmanEncode(caBuffer.get(), nStrLen, szString, nStrLen);
