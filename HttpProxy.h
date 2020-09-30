@@ -145,7 +145,7 @@ private:
 
     void OnDataRecieved(TcpSocket* const pTcpSocket)
     {
-        uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
+        size_t nAvalible = pTcpSocket->GetBytesAvailible();
 
         if (nAvalible == 0)
         {
@@ -155,7 +155,7 @@ private:
 
         shared_ptr<char[]> spBuffer(new char[nAvalible]);
 
-        uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
+        size_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 
         if (nRead > 0)
         {
@@ -375,7 +375,7 @@ private:
 
     void OnDataRecievedClient(TcpSocket* const pTcpSocket)
     {
-        uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
+        size_t nAvalible = pTcpSocket->GetBytesAvailible();
 
         if (nAvalible == 0)
         {
@@ -394,7 +394,7 @@ private:
             }
 
             shared_ptr<char[]> spBuffer(new char[nAvalible]);
-            uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
+            size_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 
             if (nRead > 0)
             {
@@ -508,7 +508,7 @@ private:
 
     void OnDataRecievedDest(TcpSocket* const pTcpSocket)
     {
-        uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
+        size_t nAvalible = pTcpSocket->GetBytesAvailible();
 
         if (nAvalible == 0)
         {
@@ -533,7 +533,7 @@ private:
 
         shared_ptr<char[]> spBuffer(new char[nAvalible]);
 
-        uint32_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
+        size_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
 
         if (nRead > 0)
         {

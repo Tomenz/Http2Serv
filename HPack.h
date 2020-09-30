@@ -60,9 +60,9 @@ public:
     size_t DecodeIndex(const char** pszBuf, size_t* const pnLen, uint32_t nBitMask) const;
     size_t HPackDecode(const char* szBuf, size_t nLen, deque<HEADERENTRY>& qDynTable, string& strHeaderName, string& strHeaderValue, uint32_t& nHeaderCount, STREAMSETTINGS& tuStreamSettings) const;
     size_t HufmanEncode(uint8_t* szBuf, size_t nBufSize, const char* const szString, size_t nStrLen) const noexcept;
-    size_t EncodeInteger(char* const szBuf, size_t nBufSize, size_t nIndex, uint8_t nBitMask, uint8_t nRepBits) const noexcept;
-    size_t EncodeString(char* const szBuf, size_t nBufSize, const char* szString, size_t nStrLen) const noexcept;
-    size_t HPackEncode(char* const szBuf, size_t nLen, const char* const strHeaderId, const char* const strHeaderValue) const noexcept;
+    size_t EncodeInteger(uint8_t* const szBuf, size_t nBufSize, size_t nIndex, uint8_t nBitMask, uint8_t nRepBits) const noexcept;
+    size_t EncodeString(uint8_t* const szBuf, size_t nBufSize, const char* szString, size_t nStrLen) const noexcept;
+    size_t HPackEncode(uint8_t* const szBuf, size_t nLen, const char* const strHeaderId, const char* const strHeaderValue) const noexcept;
     size_t Http2DecodeHeader(const char* szHeaderStart, size_t nHeaderLen, deque<HEADERENTRY>& qDynTable, HeadList& lstHeaderFields, STREAMSETTINGS& tuStreamSettings) const;
 
     class H2ProtoException : public exception

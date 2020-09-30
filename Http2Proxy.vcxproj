@@ -115,7 +115,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>socketlib;$(OpenSSL_Home)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>x64\Debug;$(OpenSSL_Home)</AdditionalLibraryDirectories>
       <OutputFile>$(SolutionDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
   </ItemDefinitionGroup>
@@ -164,15 +164,11 @@
   <ItemGroup>
     <ClCompile Include="ConfFile.cpp" />
     <ClCompile Include="Http2Proxy.cpp" />
-    <ClCompile Include="SvrLib\BaseSvr.cpp" />
-    <ClCompile Include="SvrLib\SvrCtrl.cpp" />
     <ClCompile Include="Trace.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ConfFile.h" />
     <ClInclude Include="HttpProxy.h" />
-    <ClInclude Include="SvrLib\BaseSvr.h" />
-    <ClInclude Include="SvrLib\SvrCtrl.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="Trace.h" />
   </ItemGroup>

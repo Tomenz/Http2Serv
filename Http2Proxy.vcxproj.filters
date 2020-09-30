@@ -13,19 +13,10 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="SvrLib">
-      <UniqueIdentifier>{09044888-fc71-4f7a-b251-41e525946efb}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Http2Proxy.cpp">
       <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="SvrLib\BaseSvr.cpp">
-      <Filter>SvrLib</Filter>
-    </ClCompile>
-    <ClCompile Include="SvrLib\SvrCtrl.cpp">
-      <Filter>SvrLib</Filter>
     </ClCompile>
     <ClCompile Include="ConfFile.cpp">
       <Filter>Quelldateien</Filter>
@@ -35,12 +26,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="SvrLib\BaseSvr.h">
-      <Filter>SvrLib</Filter>
-    </ClInclude>
-    <ClInclude Include="SvrLib\SvrCtrl.h">
-      <Filter>SvrLib</Filter>
-    </ClInclude>
     <ClInclude Include="HttpProxy.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>

@@ -98,7 +98,7 @@ public:
     Http2Protocol() {}
     virtual ~Http2Protocol() {}
 
-    void BuildHttp2Frame(char* const szBuf, size_t nDataLen, uint8_t cTyp, uint8_t cFlag, uint32_t nStreamId) const noexcept
+    void BuildHttp2Frame(uint8_t* const szBuf, size_t nDataLen, uint8_t cTyp, uint8_t cFlag, uint32_t nStreamId) const noexcept
     {
         H2FRAME h2f = { static_cast<unsigned long>(nDataLen), cTyp, cFlag, nStreamId, false };
         h2f.size = htonl(h2f.size) & 0xffffff00;
@@ -111,7 +111,7 @@ public:
 
     void Http2WindowUpdate(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulStreamSize) const
     {
-        char caBuffer[20];
+        uint8_t caBuffer[20];
         unsigned long ulSizeStream = htonl(ulStreamSize);
         BuildHttp2Frame(caBuffer, 4, 8, 0, ulStreamID); // 8 = WINDOW_UPDATE
         ::memcpy(&caBuffer[9], &ulSizeStream, 4);
@@ -120,7 +120,7 @@ public:
 
     void Http2StreamError(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulErrorCode) const
     {
-        char caBuffer[20];
+        uint8_t caBuffer[20];
         unsigned long ulErrCode = htonl(ulErrorCode);
         BuildHttp2Frame(caBuffer, 4, 3, 0, ulStreamID); // 3 = RST_STREAM
         ::memcpy(&caBuffer[9], &ulErrCode, 4);
@@ -131,7 +131,7 @@ public:
 
     void Http2Goaway(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulLastStreamID, unsigned long ulErrorCode) const
     {
-        char caBuffer[20];
+        uint8_t caBuffer[20];
         unsigned long ulLastStream = htonl(ulLastStreamID);
         unsigned long ulErrCode = htonl(ulErrorCode);
         BuildHttp2Frame(caBuffer, 8, 7, 0, ulStreamID); // GOAWAY frame (7) streamID = 0, LastStreamId, error
@@ -160,7 +160,7 @@ public:
             auto itExpect = GETHEADERLIST(streamData).find("expect");
             if (itExpect != end(GETHEADERLIST(streamData)))
             {
-                char caBuffer[128];
+                uint8_t caBuffer[128];
                 size_t nResult = 0;
                 if (itExpect->second == "100-continue")
                 {

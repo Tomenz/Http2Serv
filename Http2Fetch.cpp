@@ -349,12 +349,19 @@ if (nPos != string::npos)
 //    fetch.Fetch("https://webdav.magentacloud.de/", "PROPFIND");
     //fetch.Fetch("http://192.66.65.226/", "POST");
 
-    while (!cin.eof())
+    while (!cin.eof() && bFertig == false)
     {
-        char caBuffer[0x4000];
-        cin.read(caBuffer, 0x4000);
-        size_t nRead = cin.gcount();
-        fetch.AddContent(caBuffer, nRead);
+        std::streampos pos = cin.tellg();
+        cin.seekg(0, std::ios::end);
+        std::streamsize len = cin.tellg() - pos;
+        cin.seekg(pos);
+        if (len > 0)
+        {
+            char caBuffer[0x4000];
+            cin.read(caBuffer, 0x4000);
+            size_t nRead = cin.gcount();
+            fetch.AddContent(caBuffer, nRead);
+        }
     }
     fetch.AddContent(nullptr, 0);
 

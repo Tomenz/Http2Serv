@@ -160,7 +160,7 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
         pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x3\x0\x0\x0\x64\x0\x4\x0\x10\x0\x0", 21);// SETTINGS frame (4) with ParaID(3) and 100 Value and ParaID(4) and 1048576 Value
         pTcpSocket->Write("\x0\x0\x4\x8\x0\x0\x0\x0\x0\x0\xf\x0\x1", 13);      // WINDOW_UPDATE frame (8) with value ?1048576? (minus 65535) == 983041
 
-        char caBuffer[2048];
+        uint8_t caBuffer[2048];
         size_t nHeaderLen = 0;
 
         size_t nReturn = HPackEncode(caBuffer + 9, 2048 - 9, ":method", m_strMethode.c_str());
@@ -207,7 +207,7 @@ uint32_t nSend = 0;
         {
             uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
 
-            auto apBuf = make_unique<unsigned char[]>(nDataLen + 9);
+            auto apBuf = make_unique<uint8_t[]>(nDataLen + 9);
             copy(reinterpret_cast<unsigned char*>(data.get() + 4), reinterpret_cast<unsigned char*>(data.get() + 4 + nDataLen), apBuf.get() + 9);
 
 nSend += nDataLen;
@@ -225,7 +225,7 @@ nSend += nDataLen;
             }
             m_mxVecData.unlock();
 
-            BuildHttp2Frame(reinterpret_cast<char*>(apBuf.get()), static_cast<size_t>(nDataLen), 0x0, data != nullptr ? 0x0 : 0x1, 1);
+            BuildHttp2Frame(apBuf.get(), static_cast<size_t>(nDataLen), 0x0, data != nullptr ? 0x0 : 0x1, 1);
             pTcpSocket->Write(apBuf.get(), static_cast<size_t>(nDataLen) + 9);
         }
 
@@ -317,7 +317,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
     static atomic_bool atTmp;
     static deque<AUTHITEM> dqAuth;
 
-    uint32_t nAvalible = pTcpSocket->GetBytesAvailible();
+    size_t nAvalible = pTcpSocket->GetBytesAvailible();
 
     if (nAvalible == 0)
     {

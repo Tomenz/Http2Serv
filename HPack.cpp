@@ -251,7 +251,7 @@ size_t HPack::HufmanEncode(uint8_t* szBuf, size_t nBufSize, const char* const sz
         {
             if (szBuf + i >= szEnd)
                 return SIZE_MAX;
-            *(szBuf + i) |= static_cast<char>(nBitField >> (56 - (i * 8)) & 0xff);
+            *(szBuf + i) |= static_cast<uint8_t>(nBitField >> (56 - (i * 8)) & 0xff);
         }
 
         szBuf += iGesBits / 8;  // Bits bereits benutzt + neue Bits / 8 ist die Anzahl der fertigen Bytes
@@ -268,7 +268,7 @@ size_t HPack::HufmanEncode(uint8_t* szBuf, size_t nBufSize, const char* const sz
     return (nTotalBits / 8);
 }
 
-size_t HPack::EncodeInteger(char* const szBuf, size_t nBufSize, size_t nIndex, uint8_t nBitMask, uint8_t nRepBits) const noexcept
+size_t HPack::EncodeInteger(uint8_t* const szBuf, size_t nBufSize, size_t nIndex, uint8_t nBitMask, uint8_t nRepBits) const noexcept
 {
     size_t nRet = 1;    // 1 Byte is allays written
 
@@ -299,7 +299,7 @@ size_t HPack::EncodeInteger(char* const szBuf, size_t nBufSize, size_t nIndex, u
     return nRet;
 }
 
-size_t HPack::EncodeString(char* const szBuf, size_t nBufSize, const char* szString, size_t nStrLen) const noexcept
+size_t HPack::EncodeString(uint8_t* const szBuf, size_t nBufSize, const char* szString, size_t nStrLen) const noexcept
 {
     size_t nRet = 0;
 
@@ -328,7 +328,7 @@ size_t HPack::EncodeString(char* const szBuf, size_t nBufSize, const char* szStr
     return nRet;
 }
 
-size_t HPack::HPackEncode(char* const szBuf, size_t nLen, const char* const strHeaderId, const char* const strHeaderValue) const noexcept
+size_t HPack::HPackEncode(uint8_t* const szBuf, size_t nLen, const char* const strHeaderId, const char* const strHeaderValue) const noexcept
 {
     uint8_t nIndex = 0;
     string strValue;
