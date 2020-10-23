@@ -22,15 +22,19 @@ using namespace std;
 class SpawnProcess
 {
 public:
-    SpawnProcess() noexcept;
+    SpawnProcess();
     virtual ~SpawnProcess() noexcept;
+    SpawnProcess(const SpawnProcess&) = delete;
+    SpawnProcess(SpawnProcess&&) = delete;
+    SpawnProcess& operator=(const SpawnProcess&) = delete;
+    SpawnProcess& operator=(SpawnProcess&&) = delete;
 
-    int Spawn(const wstring& strCmd, const wstring& strWorkingDir = wstring()) noexcept;
+    int Spawn(const wstring& strCmd, const wstring& strWorkingDir = wstring());
     int KillProcess() noexcept;
     bool StillSpawning() noexcept;
     size_t ReadFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
     size_t ReadErrFromSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
-    uint32_t WriteToSpawn(unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
+    uint32_t WriteToSpawn(const unsigned char* const pBuffer, const uint32_t nBufSize) noexcept;
     void CloseWritePipe() noexcept;
     void AddEnvironment(const wstring& strEnvironment) noexcept { m_vstrEnvironment.push_back(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strEnvironment)); }
     void AddEnvironment(const string& strEnvironment) noexcept { m_vstrEnvironment.push_back(strEnvironment); }

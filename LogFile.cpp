@@ -35,7 +35,7 @@ CLogFile& CLogFile::GetInstance(const wstring& strLogfileName)
     if (m_ssMsg.getloc().name() != "C")
         m_ssMsg.imbue(locale("C"));
 
-    auto instance = s_lstLogFiles.find(strLogfileName);
+    const auto instance = s_lstLogFiles.find(strLogfileName);
     if (instance == s_lstLogFiles.end())
     {
         s_lstLogFiles.emplace(strLogfileName, CLogFile(strLogfileName));
@@ -75,8 +75,8 @@ CLogFile& CLogFile::operator << (const LOGTYPES lt)
     }
     else if (lt == LOGTYPES::PUTTIME && m_strFileName.empty() == false)
     {
-        auto in_time_t = system_clock::to_time_t(system_clock::now());
-        struct tm* stTime = ::localtime(&in_time_t);
+        const auto in_time_t = system_clock::to_time_t(system_clock::now());
+        const struct tm* stTime = ::localtime(&in_time_t);
         const static string pattern = "%d/%b/%Y:%H:%M:%S %z";
         use_facet <time_put <char> >(locale("C")).put(m_ssMsg.rdbuf(), m_ssMsg, ' ', stTime, pattern.c_str(), pattern.c_str() + pattern.size());
     }

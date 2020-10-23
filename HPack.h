@@ -40,12 +40,12 @@ public:
     explicit HeadList(const vector<pair<string, string>>& v) : vector<pair<string, string>>(v) {}
     HeadList::iterator find(const string& strSearch)
     {   // Search strings as of now are always lower case
-        return find_if(begin(), end(), [&](auto item) { return strSearch == item.first ? true : false; });
+        return find_if(begin(), end(), [&](auto item) noexcept { return strSearch == item.first ? true : false; });
     }
     HeadList::iterator ifind(string strSearch)
     {
-        transform(strSearch.begin(), strSearch.end(), strSearch.begin(), [](char c) { return static_cast<char>(::tolower(c)); });
-        return find_if(begin(), end(), [&](auto item) { string strTmp(item.first.size(), 0);  transform(item.first.begin(), item.first.end(), strTmp.begin(), [](char c) { return static_cast<char>(::tolower(c)); });  return strSearch == strTmp ? true : false; });
+        transform(strSearch.begin(), strSearch.end(), strSearch.begin(), [](char c) noexcept { return static_cast<char>(::tolower(c)); });
+        return find_if(begin(), end(), [&](auto item) { string strTmp(item.first.size(), 0);  transform(item.first.begin(), item.first.end(), strTmp.begin(), [](char c) noexcept { return static_cast<char>(::tolower(c)); });  return strSearch == strTmp ? true : false; });
     }
 };
 
@@ -107,12 +107,12 @@ public:
 
         explicit H2ProtoException(HPACKEXCODE eCode) : m_eCode(eCode), m_nStreamId(0) {}
         explicit H2ProtoException(HPACKEXCODE eCode, uint32_t nStreamId) : m_eCode(eCode), m_nStreamId(nStreamId) {}
-        virtual ~H2ProtoException() noexcept {}
+        ~H2ProtoException() noexcept {}
         const char* what() const throw() {
             return m_strError.c_str();
         }
-        const HPACKEXCODE GetCode() { return m_eCode; }
-        const uint32_t GetStreamId() { return m_nStreamId; }
+        const HPACKEXCODE GetCode() noexcept { return m_eCode; }
+        const uint32_t GetStreamId() noexcept { return m_nStreamId; }
 
     private:
         string      m_strError;

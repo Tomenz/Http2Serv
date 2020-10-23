@@ -30,7 +30,7 @@ public:
             unique_lock<mutex> lock(m_mxCv);
             do
             {
-                uint32_t nDifMilliSeconds = static_cast<uint32_t>((chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()) - m_tStart).count());
+                const uint32_t nDifMilliSeconds = static_cast<uint32_t>((chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()) - m_tStart).count());
                 uint32_t tRestMilliSeconds = 1;
                 if (nDifMilliSeconds < m_tMilliSeconds)
                     tRestMilliSeconds = m_tMilliSeconds - nDifMilliSeconds;
@@ -52,7 +52,7 @@ public:
         while (m_bIsStoped == false)
         {
             this_thread::sleep_for(chrono::microseconds(1));
-            bool bIsLocked = m_mxCv.try_lock();
+            const bool bIsLocked = m_mxCv.try_lock();
             if (bIsLocked == true)  // if it is not looked, the timeout is right now
             {
                 m_cv.notify_all();
@@ -66,7 +66,7 @@ public:
     void Reset() noexcept
     {
         m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
-        bool bIsLocked = m_mxCv.try_lock();
+        const bool bIsLocked = m_mxCv.try_lock();
         if (bIsLocked == true)  // if it is not looked, the timeout is right now
         {
             m_cv.notify_all();
@@ -77,7 +77,7 @@ public:
     void Stop() noexcept
     {
         m_bStop = true;
-        bool bIsLocked = m_mxCv.try_lock();
+        const bool bIsLocked = m_mxCv.try_lock();
         if (bIsLocked == true)  // if it is not looked, the timeout is right now
         {
             m_cv.notify_all();
@@ -85,7 +85,7 @@ public:
         }
     }
 
-    bool IsStopped()
+    bool IsStopped() noexcept
     {
         return m_bIsStoped;
     }
@@ -94,7 +94,7 @@ public:
     {
         m_tMilliSeconds = nNewTime;
         m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
-        bool bIsLocked = m_mxCv.try_lock();
+        const bool bIsLocked = m_mxCv.try_lock();
         if (bIsLocked == true)  // if it is not looked, the timeout is right now
         {
             m_cv.notify_all();

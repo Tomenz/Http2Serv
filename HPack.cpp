@@ -41,8 +41,8 @@ string HPack::HufmanDecode(const char* szBuf, size_t nLen, int& iError) const no
         size_t nIndex = HUFFCODES.size();
         for (uint32_t i = 0; i < BITNUMBERS.size(); ++i)
         {
-            size_t iGesBits = nAnzBit + BITNUMBERS[i];  // Bereits geschrieben Bits des Momentanen Byts + die neuen Bits
-            size_t iAnzByte = (iGesBits / 8) + ((iGesBits % 8) != 0 ? 1 : 0);  // Ganze Bytes + wenn rest noch eins
+            const size_t iGesBits = nAnzBit + BITNUMBERS[i];  // Bereits geschrieben Bits des Momentanen Byts + die neuen Bits
+            const size_t iAnzByte = (iGesBits / 8) + ((iGesBits % 8) != 0 ? 1 : 0);  // Ganze Bytes + wenn rest noch eins
             if (iAnzByte > nLen)        // Wenn wir mehr Byts benötigen als Bytes im Buffer
                 break;
 

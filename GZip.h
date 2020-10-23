@@ -45,7 +45,7 @@ public:
     int Init()
     {
         /* allocate inflate state */
-        int iRet = inflateInit2(&m_strm, 15 + 32);
+        const int iRet = inflateInit2(&m_strm, 15 + 32);
         inflateReset(&m_strm);
 
         return iRet;
@@ -62,7 +62,7 @@ public:
         m_strm.avail_out = *pnOutCount;
         m_strm.next_out  = pOut;
 
-        int iRet = inflate(&m_strm, Z_NO_FLUSH);
+        const int iRet = inflate(&m_strm, Z_NO_FLUSH);
 
         *pnOutCount -= m_strm.avail_out;
 
@@ -87,7 +87,7 @@ public:
     int Init(bool bUseDeflate = false)
     {
         /* allocate inflate state */
-        int iRet = deflateInit2(&m_strm, Z_BEST_SPEED/*Z_DEFAULT_COMPRESSION*//*Z_BEST_COMPRESSION*/, Z_DEFLATED, 15 + (bUseDeflate == false ? 16 : 0), 9, Z_DEFAULT_STRATEGY);
+        const int iRet = deflateInit2(&m_strm, Z_BEST_SPEED/*Z_DEFAULT_COMPRESSION*//*Z_BEST_COMPRESSION*/, Z_DEFLATED, 15 + (bUseDeflate == false ? 16 : 0), 9, Z_DEFAULT_STRATEGY);
         //deflateReset(&m_strm);
         //int iRet = deflateInit(&m_strm, Z_BEST_COMPRESSION);
 
@@ -105,7 +105,7 @@ public:
         m_strm.avail_out = static_cast<uint32_t>(*pnOutCount);
         m_strm.next_out = pOut;
 
-        int iRet = deflate(&m_strm, nFlush);
+        const int iRet = deflate(&m_strm, nFlush);
 
         *pnOutCount = m_strm.avail_out;
 

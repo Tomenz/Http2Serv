@@ -32,7 +32,7 @@
 
 map<wstring, ConfFile> ConfFile::s_lstConfFiles;
 
-const ConfFile& ConfFile::GetInstance(const wstring& strConfigFile)
+ConfFile& ConfFile::GetInstance(const wstring& strConfigFile)
 {
     const auto& instance = s_lstConfFiles.find(strConfigFile);
     if (instance == end(s_lstConfFiles))
@@ -48,9 +48,7 @@ ConfFile::ConfFile(const ConfFile& src) : m_strFileName(src.m_strFileName), m_tL
 {
 }
 
-ConfFile::~ConfFile() {}
-
-vector<wstring> ConfFile::get() const
+vector<wstring> ConfFile::get()
 {
     CheckFileLoaded();
 
@@ -64,7 +62,7 @@ vector<wstring> ConfFile::get() const
     return vReturn;
 }
 
-vector<wstring> ConfFile::get(const wstring& strSektion) const
+vector<wstring> ConfFile::get(const wstring& strSektion)
 {
     CheckFileLoaded();
 
@@ -82,7 +80,7 @@ vector<wstring> ConfFile::get(const wstring& strSektion) const
     return vReturn;
 }
 
-vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strValue) const
+vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strValue)
 {
     CheckFileLoaded();
 
@@ -101,7 +99,7 @@ vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strValue
     return vReturn;
 }
 
-const wstring& ConfFile::getUnique(const wstring& strSektion, const wstring& strValue) const
+const wstring& ConfFile::getUnique(const wstring& strSektion, const wstring& strValue)
 {
     CheckFileLoaded();
 
@@ -123,13 +121,13 @@ const wstring& ConfFile::getUnique(const wstring& strSektion, const wstring& str
     return strEmpty;
 }
 
-void ConfFile::CheckFileLoaded() const
+void ConfFile::CheckFileLoaded()
 {
-    lock_guard<mutex> lock(const_cast<ConfFile*>(this)->m_mtxLoad);
+    lock_guard<mutex> lock(m_mtxLoad);
 
     if (m_mSections.empty() == true || AreFilesModifyed() == true)
     {
-        const_cast<ConfFile*>(this)->LoadFile(m_strFileName);
+        LoadFile(m_strFileName);
     }
 }
 
@@ -211,7 +209,7 @@ void ConfFile::LoadFile(const wstring& strFilename)
     fnLoadFileRecrusive(strFilename);
 }
 
-bool ConfFile::AreFilesModifyed() const
+bool ConfFile::AreFilesModifyed() const noexcept
 {
     if (m_tFileTime == 0)    // We have no files, we return true as if the file is modified
         return true;
@@ -225,7 +223,7 @@ bool ConfFile::AreFilesModifyed() const
         return true;
     }
 
-    const_cast<ConfFile*>(this)->m_tLastCheck = chrono::steady_clock::now();
+    m_tLastCheck = chrono::steady_clock::now();
 
     return false;
 }

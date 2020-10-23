@@ -260,7 +260,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
 
 void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
 {
-    size_t nAvalible = pTcpSocket->GetBytesAvailible();
+    const size_t nAvalible = pTcpSocket->GetBytesAvailible();
 
     if (nAvalible == 0)
     {
@@ -268,19 +268,19 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
         return;
     }
 
-    shared_ptr<char[]> spBuffer(new char[nAvalible]);
+    unique_ptr<char[]> spBuffer = make_unique<char[]>(nAvalible);
 
-    size_t nRead = pTcpSocket->Read(spBuffer.get(), nAvalible);
+    const size_t nRead = pTcpSocket->Read(&spBuffer[0], nAvalible);
 
     if (nRead > 0)
     {
         m_mtxConnections.lock();
-        CONNECTIONLIST::iterator item = m_vConnections.find(pTcpSocket);
+        const CONNECTIONLIST::iterator item = m_vConnections.find(pTcpSocket);
         if (item != end(m_vConnections))
         {
             CONNECTIONDETAILS* pConDetails = &item->second;
             pConDetails->pTimer->Reset();
-            pConDetails->strBuffer.append(spBuffer.get(), nRead);
+            pConDetails->strBuffer.append(&spBuffer[0], nRead);
 
             if (pConDetails->bIsH2Con == false)
             {
@@ -375,7 +375,7 @@ void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
             }
 
 
-            size_t nPosEndOfHeader =  pConDetails->strBuffer.find("\r\n\r\n");
+            const size_t nPosEndOfHeader =  pConDetails->strBuffer.find("\r\n\r\n");
             if (nPosEndOfHeader != string::npos)
             {
 auto dwStart = chrono::high_resolution_clock::now();
@@ -397,7 +397,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                             pConDetails->HeaderList.emplace_back(make_pair(":path", token++->str()));
                         if (token != sregex_token_iterator() && token->str().empty() == false)
                         {
-                            auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(":version", token++->str()));
+                            const auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(":version", token++->str()));
                             if (parResult != end(pConDetails->HeaderList))
                                 parResult->second.erase(0, parResult->second.find_first_of('.') + 1);
                         }
@@ -417,9 +417,9 @@ auto dwStart = chrono::high_resolution_clock::now();
                         if (nPos1 != string::npos)
                         {
                             string strTmp = line->str().substr(0, nPos1);
-                            transform(begin(strTmp), begin(strTmp) + nPos1, begin(strTmp), [](char c) { return static_cast<char>(::tolower(c)); });
+                            transform(begin(strTmp), begin(strTmp) + nPos1, begin(strTmp), [](char c) noexcept { return static_cast<char>(::tolower(c)); });
 
-                            auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(strTmp, line->str().substr(nPos1 + 1)));
+                            const auto parResult = pConDetails->HeaderList.emplace(pConDetails->HeaderList.end(), make_pair(strTmp, line->str().substr(nPos1 + 1)));
                             if (parResult != end(pConDetails->HeaderList))
                             {
                                 parResult->second.erase(parResult->second.find_last_not_of(" \r\n\t")  + 1);
@@ -447,7 +447,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                 }
                 pConDetails->strBuffer.erase(0, nPosEndOfHeader + 4);
 
-                auto expect = pConDetails->HeaderList.find("expect");
+                const auto expect = pConDetails->HeaderList.find("expect");
                 if (expect != end(pConDetails->HeaderList))
                 {
                     if (expect->second == "100-continue")
@@ -467,7 +467,7 @@ auto dwStart = chrono::high_resolution_clock::now();
                 pConDetails->mutReqData->unlock();
 
                 // is data (body) on the request, only HTTP/1.1
-                auto contentLength = pConDetails->HeaderList.find("content-length");
+                const auto contentLength = pConDetails->HeaderList.find("content-length");
                 if (contentLength != end(pConDetails->HeaderList) && contentLength->second != "18446744073709551615")   // SSTL senden ULONGLONG_MAX as Content-length
                 {
                     try
@@ -524,10 +524,10 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
             }
 
             uint32_t nStreamId = 0;
-            auto upgradeHeader = pConDetails->HeaderList.find("upgrade");
+            const auto upgradeHeader = pConDetails->HeaderList.find("upgrade");
             if (upgradeHeader != end(pConDetails->HeaderList) && upgradeHeader->second == "h2c")
             {
-                auto http2SettingsHeader = pConDetails->HeaderList.find("http2-settings");
+                const auto http2SettingsHeader = pConDetails->HeaderList.find("http2-settings");
                 if (http2SettingsHeader != end(pConDetails->HeaderList))
                 {
                     string strHttp2Settings = Base64::Decode(http2SettingsHeader->second, true);
@@ -603,7 +603,7 @@ void CHttpServ::OnSocketError(BaseSocket* const pBaseSocket)
     string szHost;
 
     m_mtxConnections.lock();
-    auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
+    const auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
     if (item != end(m_vConnections))
     {
         item->second.pTimer->Stop();
@@ -684,7 +684,7 @@ void CHttpServ::OnTimeout(const Timer* const /*pTimer*/, void* vpData)
     TcpSocket* pSocket = reinterpret_cast<TcpSocket*>(vpData);
 
     lock_guard<mutex> lock(m_mtxConnections);
-    auto item = m_vConnections.find(pSocket);
+    const auto item = m_vConnections.find(pSocket);
     if (item != end(m_vConnections))
     {
         if (item->second.nContentsSoll != 0 && item->second.nContentRecv < item->second.nContentsSoll)  // File upload in progress HTTP/1.1
@@ -706,7 +706,7 @@ size_t CHttpServ::BuildH2ResponsHeader(uint8_t* const szBuffer, size_t nBufLen, 
         return 0;
     nHeaderSize += nReturn;
 
-    auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    const auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
 
     stringstream strTemp;
     strTemp.imbue(m_cLocal);
@@ -741,7 +741,7 @@ size_t CHttpServ::BuildH2ResponsHeader(uint8_t* const szBuffer, size_t nBufLen, 
     for (const auto& item : umHeaderList)
     {
         string strHeaderFiled(item.first);
-        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), [](char c) { return static_cast<char>(::tolower(c)); });
+        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), [](char c) noexcept { return static_cast<char>(::tolower(c)); });
         if (strHeaderFiled == "cache-control")
             iFlag &= ~ADDNOCACHE;
         if (strHeaderFiled == "connection" || strHeaderFiled == "transfer-encoding")
@@ -819,7 +819,7 @@ size_t CHttpServ::BuildResponsHeader(uint8_t* const szBuffer, size_t nBufLen, in
     for (const auto& item : umHeaderList)
     {
         string strHeaderFiled(item.first);
-        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), [](char c) { return static_cast<char>(::tolower(c)); });
+        transform(begin(strHeaderFiled), end(strHeaderFiled), begin(strHeaderFiled), [](char c) noexcept { return static_cast<char>(::tolower(c)); });
 
         if (strHeaderFiled == "pragma" || strHeaderFiled == "cache-control")
             iFlag &= ~ADDNOCACHE;
@@ -847,7 +847,7 @@ size_t CHttpServ::BuildResponsHeader(uint8_t* const szBuffer, size_t nBufLen, in
     if (iFlag & TERMINATEHEADER)
         strRespons += "\r\n";
 
-    size_t nRet = strRespons.size();
+    const size_t nRet = strRespons.size();
     if (nRet > nBufLen)
         return 0;
 
@@ -906,10 +906,10 @@ void CHttpServ::SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<T
     string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
     umHeaderList.insert(end(umHeaderList), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-    const uint32_t nBufSize = 1024;
+    constexpr uint32_t nBufSize = 1024;
     unique_ptr<uint8_t[]> pBuffer = make_unique<uint8_t[]>(nBufSize);
     uint8_t* caBuffer = pBuffer.get();
-    size_t nHeaderLen = BuildResponsHeader(caBuffer, nBufSize, iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
+    const size_t nHeaderLen = BuildResponsHeader(caBuffer, nBufSize, iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
     pTcpSocket->Write(caBuffer, nHeaderLen);
     if (strHtmlRespons.size() > 0)
         pTcpSocket->Write(strHtmlRespons.c_str(), strHtmlRespons.size());
@@ -935,7 +935,7 @@ void CHttpServ::SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<T
     CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pTcpSocket->GetClientAddr(), "] ", RespText.find(iRespCode) != end(RespText) ? RespText.find(iRespCode)->second : "");
 }
 
-void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, function<size_t(uint8_t*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList/* = HeadList()*/)
+void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, function<size_t(uint8_t*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, const string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList/* = HeadList()*/)
 {
     string szHost;
     const auto& host = HeaderList.find("host");   // Get the Host Header from the request
@@ -950,10 +950,10 @@ void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t h
     umHeaderList.insert(end(umHeaderList), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
     const uint32_t nHttp2Offset = httpVers == 2 ? 9 : 0;
-    const uint32_t nBufSize = 1024;
+    constexpr uint32_t nBufSize = 1024;
     unique_ptr<uint8_t[]> pBuffer = make_unique<uint8_t[]>(nBufSize);
     uint8_t* caBuffer = pBuffer.get();
-    size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, /*iHeaderFlag | ADDNOCACHE |*/ iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
+    const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, /*iHeaderFlag | ADDNOCACHE |*/ iFlag | TERMINATEHEADER | ADDCONNECTIONCLOSE, iRespCode, umHeaderList, strHtmlRespons.size());
     if (nHeaderLen < 1024)
     {
         if (httpVers == 2)
@@ -992,7 +992,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if (httpVers == 2)
         {
             lock_guard<mutex> lock(pmtxStream);
-            auto StreamItem = StreamList.find(nStreamId);
+            const auto StreamItem = StreamList.find(nStreamId);
             if (StreamItem != end(StreamList))
                 STREAMSTATE(StreamItem) |= RESET_STREAM;    // StreamList.erase(StreamItem);
         }
@@ -1009,7 +1009,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     {
         if (httpVers < 2) return false;
         lock_guard<mutex> lock(pmtxStream);
-        auto StreamItem = StreamList.find(nId);
+        const auto StreamItem = StreamList.find(nId);
         if (StreamItem != end(StreamList))
             return ((STREAMSTATE(StreamItem) & RESET_STREAM) == RESET_STREAM ? true : false);
         return true;
@@ -1018,7 +1018,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     auto fnSendCueReady = [&](int64_t& nStreamWndSize, size_t& nSendBufLen, uint64_t nBufSize, uint64_t nRestLenToSend) -> bool
     {
         bool bRet = true;
-        size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
+        const size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
         if (nInQue >= 0x200000 || nStreamWndSize <= 0)
         {
             nSendBufLen = 0;
@@ -1031,7 +1031,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             // Liste der reservierten Window Sizes für das nächste senden bereinigen
             lock_guard<mutex> lock(pmtxStream);
-            auto it = maResWndSizes.find(nStreamId);
+            const auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
             {
                 maResWndSizes[0] -= it->second;
@@ -1059,7 +1059,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             lock_guard<mutex> lock(pmtxStream);
             // Liste der reservierten Window Sizes für das nächste senden bereinigen
-            auto it = maResWndSizes.find(nStreamId);
+            const auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
             {
                 maResWndSizes[0] -= it->second;
@@ -1093,7 +1093,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             lock_guard<mutex> lock(pmtxStream);
 
-            auto it = maResWndSizes.find(nStreamId);
+            const auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
             {
                 maResWndSizes[0] -= it->second;
@@ -1120,7 +1120,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             lock_guard<mutex> lock(pmtxStream);
             // Liste der reservierten Window Sizes für das nächste senden bereinigen
-            auto it = maResWndSizes.find(nStreamId);
+            const auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
             {
                 maResWndSizes[0] -= it->second;
@@ -1131,7 +1131,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
     const size_t nHttp2Offset = httpVers == 2 ? 9 : 0;
     const uint32_t nSizeSendBuf = MAXFRAMESIZE(tuStreamSettings);// 0x4000;
-    const uint32_t nBufSize = 4096;
+    constexpr uint32_t nBufSize = 4096;
     unique_ptr<uint8_t[]> pBuffer = make_unique<uint8_t[]>(nBufSize);
     uint8_t* caBuffer = pBuffer.get();
     int iHeaderFlag = 0;
@@ -1160,7 +1160,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             szHost = strTmp;
     }
 
-    auto itVersion = lstHeaderFields.find(":version");
+    const auto itVersion = lstHeaderFields.find(":version");
     if (itVersion != end(lstHeaderFields))
     {
         strHttpVersion = itVersion->second;
@@ -1168,7 +1168,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             iHeaderFlag = HTTPVERSION11;
     }
 
-    auto connection = lstHeaderFields.find("connection");
+    const auto connection = lstHeaderFields.find("connection");
     if (connection != end(lstHeaderFields) && connection->second == "close")
         iHeaderFlag |= ADDCONNECTIONCLOSE;
 
@@ -1186,12 +1186,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         fuExitDoAction();
         return;
     }
-    transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), [](char c) { return static_cast<char>(::toupper(c)); });
+    transform(begin(itMethode->second), end(itMethode->second), begin(itMethode->second), [](char c) noexcept { return static_cast<char>(::toupper(c)); });
 
     // Decode URL (%20 -> ' ')
     wstring strItemPath;
     string strQuery;
-    size_t nLen = itPath->second.size();
+    const size_t nLen = itPath->second.size();
     wchar_t wch = 0;
     int nAnzParts = 0;
     for (size_t n = 0; n < nLen; ++n)
@@ -1207,8 +1207,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 fuExitDoAction();
                 return;
             }
-            char Nipple1 = itPath->second.at(n + 1) - (itPath->second.at(n + 1) <= '9' ? '0' : (itPath->second.at(n + 1) <= 'F' ? 'A' : 'a') - 10);
-            char Nipple2 = itPath->second.at(n + 2) - (itPath->second.at(n + 2) <= '9' ? '0' : (itPath->second.at(n + 2) <= 'F' ? 'A' : 'a') - 10);
+            const char Nipple1 = itPath->second.at(n + 1) - (itPath->second.at(n + 1) <= '9' ? '0' : (itPath->second.at(n + 1) <= 'F' ? 'A' : 'a') - 10);
+            const char Nipple2 = itPath->second.at(n + 2) - (itPath->second.at(n + 2) <= '9' ? '0' : (itPath->second.at(n + 2) <= 'F' ? 'A' : 'a') - 10);
             chr = 16 * Nipple1 + Nipple2;
             n += 2;
 
@@ -1261,7 +1261,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     }
 
     // Falls der RewriteRile dem QueryString etwas hinzufügt
-    size_t nPos = strItemPath.find_first_of(L'?');
+    const size_t nPos = strItemPath.find_first_of(L'?');
     if (nPos != string::npos)
     {
         strQuery += (strQuery.empty() == false ? "&" : "") + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath.substr(nPos + 1));
@@ -1283,7 +1283,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             HeadList redHeader({ make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation)) });
             redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 307, redHeader, 0);
+            const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 307, redHeader, 0);
             if (nHeaderLen < nBufSize)
             {
                 if (httpVers == 2)
@@ -1331,7 +1331,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             {
                 vStrEnvVariable.push_back(get<2>(strEnvIf));
                 wstring strTmp(get<2>(strEnvIf));
-                transform(begin(strTmp), end(strTmp), begin(strTmp), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
+                transform(begin(strTmp), end(strTmp), begin(strTmp), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
                 if (strTmp == L"DONTLOG")
                     CLogFile::SetDontLog();
             }
@@ -1356,12 +1356,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         match_results<wstring::const_iterator> mr;
         if (regex_search(strItemPath, mr, wregex(strAuth.first), regex_constants::format_first_only) == true && strItemPath.substr(0, mr.str().size()) == mr.str())
         {
-            auto fnSendAuthRespons = [&]() -> void
+            const auto fnSendAuthRespons = [&]() -> void
             {
                 HeadList vHeader;
                 if (get<1>(strAuth.second).find(L"DIGEST") != string::npos)
                 {
-                    auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
+                    const auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
                     auto duration = chrono::system_clock::now().time_since_epoch();
                     auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
                     string strNonce = md5(to_string(in_time_t) + "." + to_string(millis) + ":" + soMetaDa.strIpClient + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath));
@@ -1385,7 +1385,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 string strHtmlRespons = LoadErrorHtmlMessage(lstHeaderFields, 401, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
                 vHeader.insert(end(vHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONENTLENGTH/* | ADDCONNECTIONCLOSE*/, 401, vHeader, strHtmlRespons.size());
+                const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONENTLENGTH/* | ADDCONNECTIONCLOSE*/, 401, vHeader, strHtmlRespons.size());
                 if (nHeaderLen < nBufSize)
                 {
                     if (httpVers == 2)
@@ -1417,7 +1417,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 fuExitDoAction();
             };
 
-            auto itAuth = lstHeaderFields.find("authorization");
+            const auto itAuth = lstHeaderFields.find("authorization");
             if (itAuth == end(lstHeaderFields))
             {
                 for (auto& itAuthInfo : lstAuthInfo)
@@ -1439,7 +1439,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             if (itAuth->second.substr(0, nPosSpace) == "Basic" && get<1>(strAuth.second).find(L"BASIC") != string::npos)
             {
                 wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPosSpace + 1)));
-                if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredenial](const auto& strUser) { return strCredenial == strUser ? true : false; }) == end(get<2>(strAuth.second)))
+                if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredenial](const auto& strUser) noexcept { return strCredenial == strUser ? true : false; }) == end(get<2>(strAuth.second)))
                     return fnSendAuthRespons();
                 strRemoteUser = strCredenial.substr(0, strCredenial.find(L':'));
                 break;
@@ -1457,7 +1457,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         string strKey = token->str().substr(0, nPosSpace);
                         strKey.erase(strKey.find_last_not_of(" \t") + 1);
                         strKey.erase(0, strKey.find_first_not_of(" \t"));
-                        auto itInsert = maDigest.emplace(strKey, token->str().substr(nPosSpace + 1));
+                        const auto itInsert = maDigest.emplace(strKey, token->str().substr(nPosSpace + 1));
                         if (itInsert.second == true)
                         {
                             itInsert.first->second.erase(itInsert.first->second.find_last_not_of("\" \t") + 1);
@@ -1518,10 +1518,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     if (m_vHostParam[szHost].m_mstrReverseProxy.size() > 0)
     {
         wstring strReferer(strItemPath);
-        auto itReferer = lstHeaderFields.find("referer");
+        const auto itReferer = lstHeaderFields.find("referer");
         if (itReferer != end(lstHeaderFields))
         {
-            size_t nPosHost = itReferer->second.find(strHostRedirect);
+            const size_t nPosHost = itReferer->second.find(strHostRedirect);
             strReferer = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itReferer->second);
             strReferer.erase(0, nPosHost + strHostRedirect.size());
         }
@@ -1552,7 +1552,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 HeadList redHeader({ make_pair("Location", wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strTmp) + lstHeaderFields.find(":path")->second) });
                 redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-                size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 307, redHeader, 0);
+                const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 307, redHeader, 0);
                 if (nHeaderLen < nBufSize)
                 {
                     if (httpVers == 2)
@@ -1623,7 +1623,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             HeadList redHeader({ make_pair("Location", lstHeaderFields.find(":path")->second + '/') });
             redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 301, redHeader, 0);
+            const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, 301, redHeader, 0);
             if (nHeaderLen < nBufSize)
             {
                 if (httpVers == 2)
@@ -1676,7 +1676,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
     // Get file type of item
     wstring strFileExtension(strItemPath.substr(strItemPath.rfind(L'.') + 1));
-    transform(begin(strFileExtension), end(strFileExtension), begin(strFileExtension), [](wchar_t c) { return static_cast<wchar_t>(::tolower(c)); });
+    transform(begin(strFileExtension), end(strFileExtension), begin(strFileExtension), [](wchar_t c) noexcept { return static_cast<wchar_t>(::tolower(c)); });
 
     uint32_t iStatus = 200;
 
@@ -1684,7 +1684,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     if ((itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) || bExecAsScript == true) && (itMethode->second != "OPTIONS" || bOptionsHandlerInScript == true))
     {
         uint64_t nSollLen = 0, nPostLen = 0;
-        auto itContLen = lstHeaderFields.find("content-length");
+        const auto itContLen = lstHeaderFields.find("content-length");
         if (itContLen != end(lstHeaderFields))
         {
             try { nSollLen = stoull(itContLen->second); }
@@ -1704,7 +1704,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 {
                     wstring strHeader(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itHeader.first));
                     //strHeader.erase(0, strHeader.find_first_not_of(L':'));
-                    transform(begin(strHeader), end(strHeader), begin(strHeader), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
+                    transform(begin(strHeader), end(strHeader), begin(strHeader), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
                     strHeader = regex_replace(strHeader, wregex(L"-"), wstring(L"_"));
                     vCgiParam.emplace_back(make_pair("HTTP_" + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strHeader), itHeader.second));
                 }
@@ -1740,7 +1740,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         for (const auto& strEnvVar : vStrEnvVariable)
         {
             string strTmp = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strEnvVar);
-            size_t nPosEqual = strTmp.find("=");
+            const size_t nPosEqual = strTmp.find("=");
             vCgiParam.emplace_back(make_pair(strTmp.substr(0, nPosEqual), nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : "1"));
         }
         //AUTH_TYPE, 
@@ -1759,7 +1759,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 strBuffer.assign(reinterpret_cast<char*>(szBuffer) + nHttp2Offset, nBufLen);
                 for (;;)
                 {
-                    size_t nPosStart = strBuffer.find_first_of("\r\n");
+                    const size_t nPosStart = strBuffer.find_first_of("\r\n");
                     size_t nPosEnd = strBuffer.find_first_not_of("\r\n", nPosStart);
                     if (nPosEnd == string::npos)
                         nPosEnd = nBufLen;
@@ -1783,7 +1783,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             bChunkedTransfer = true;
                         }
                         umPhpHeaders.insert(end(umPhpHeaders), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
-                        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
+                        const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
                         if (nHeaderLen < nBufSize)
                         {
                             if (httpVers == 2)
@@ -1804,7 +1804,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         size_t nPos2 = strBuffer.substr(1, nPosStart).find(":");
                         if (nPos2++ != string::npos)
                         {
-                            auto iter = umPhpHeaders.emplace(umPhpHeaders.end(), make_pair(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1))));
+                            const auto iter = umPhpHeaders.emplace(umPhpHeaders.end(), make_pair(strBuffer.substr(0, nPos2), strBuffer.substr(nPos2 + 1, nPosStart - (nPos2 + 1))));
                             if (iter != end(umPhpHeaders))
                             {
                                 iter->second.erase(0, iter->second.find_first_not_of(" "));
@@ -1915,7 +1915,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             HeadList tmpHeader;
             tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
+            const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
             if (nHeaderLen < nBufSize)
             {
                 if (httpVers == 2)
@@ -1936,7 +1936,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             string strIpAdd(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) ? itFileTyp->second[1] : pveAlaisMatch->at(1)));
             uint16_t nPort = 0;
-            size_t nPosColon = strIpAdd.find_first_of(":");
+            const size_t nPosColon = strIpAdd.find_first_of(":");
 
             if (nPosColon != string::npos)
             {
@@ -1964,8 +1964,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
                     bool l_bReqEnde = false;
                     condition_variable l_cvReqEnd;
-                    unique_ptr<uint8_t[]> pBuf(new uint8_t[65536 + nHttp2Offset + 10]);
-                    uint16_t nReqId;
+                    unique_ptr<uint8_t[]> pBuf = make_unique<uint8_t[]>(65536 + nHttp2Offset + 10);
+                    uint16_t nReqId = 0;
                     bool bReConnect = false;
                     do
                     {
@@ -1973,8 +1973,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         {
                             if (nDataLen != 0)
                             {
-                                size_t nRead = min(65536 + 10 - nOffset, static_cast<size_t>(nDataLen));
-                                copy(pData, pData + nRead, reinterpret_cast<unsigned char*>(pBuf.get() + nHttp2Offset + nOffset));
+                                const size_t nRead = min(65536 + 10 - nOffset, static_cast<size_t>(nDataLen));
+                                copy(pData, pData + nRead, reinterpret_cast<unsigned char*>(&pBuf[nHttp2Offset + nOffset]));
                                 fnSendOutput(pBuf.get(), nRead + nOffset);  //OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pData, nDataLen).c_str()));
                             }
                         });
@@ -2011,7 +2011,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             pmtxReqdata.unlock();
                             while (data != nullptr && patStop.load() == false && fnIsStreamReset(nStreamId) == false)  // loop until we have nullptr packet
                             {
-                                uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                                const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                                 itFcgi->second.SendRequestData(nReqId, reinterpret_cast<char*>(data.get() + 4), nDataLen);
                                 nPostLen += nDataLen;
 
@@ -2034,12 +2034,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         if (patStop.load() == false)
                             itFcgi->second.SendRequestData(nReqId, "", 0);
 
-                        bool bReqDone, bAbort = false;
+                        bool bReqDone = false, bAbort = false;
                         do
                         {
                             mutex mxReqEnde;
                             unique_lock<mutex> lock(mxReqEnde);
-                            bReqDone = l_cvReqEnd.wait_for(lock, chrono::milliseconds(10), [&]() { return l_bReqEnde; });
+                            bReqDone = l_cvReqEnd.wait_for(lock, chrono::milliseconds(10), [&]() noexcept { return l_bReqEnde; });
                             if ((patStop.load() == true || fnIsStreamReset(nStreamId) == true) && bAbort == false)   // Klient connection was interrupted, we Abort the app server request once
                             {
                                 itFcgi->second.AbortRequest(nReqId);
@@ -2093,7 +2093,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     pmtxReqdata.unlock();
                     while (data != nullptr && patStop.load() == false && fnIsStreamReset(nStreamId) == false)  // loop until we have nullptr packet
                     {
-                        uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                        const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                         if (run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen) != nDataLen)
                         {
                             run.KillProcess();
@@ -2179,7 +2179,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
     // evaluating Range header
     vector<pair<uint64_t, uint64_t>> vecRanges;
-    auto range = lstHeaderFields.find("range");
+    const auto range = lstHeaderFields.find("range");
     if (range != end(lstHeaderFields))
     {
         static const regex rx("\\s*(?:(?:bytes\\s*=)|,)\\s*(\\d*)\\s*-\\s*(\\d*)");
@@ -2199,7 +2199,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             strSearch = strSearch.substr(match[0].str().size());
         }
-        sort(begin(vecRanges), end(vecRanges), [](auto& elm1, auto& elm2) { return elm1.first == elm2.first ? (elm1.second < elm2.second ? true : false) : (elm1.first < elm2.first ? true : false); });
+        sort(begin(vecRanges), end(vecRanges), [](auto& elm1, auto& elm2) noexcept { return elm1.first == elm2.first ? (elm1.second < elm2.second ? true : false) : (elm1.first < elm2.first ? true : false); });
         for (size_t n = 0; vecRanges.size() > 1 && n < vecRanges.size() - 1; ++n)
         {
             if (vecRanges[n].first >= vecRanges[n].second || vecRanges[n + 1].first >= vecRanges[n + 1].second || vecRanges[n].first >= static_cast<uint64_t>(stFileInfo.st_size) || vecRanges[n + 1].first >= static_cast<uint64_t>(stFileInfo.st_size))
@@ -2246,10 +2246,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     umPhpHeaders.insert(end(umPhpHeaders), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
     // Static Content, check if we have a matching etag
-    auto ifnonematch = lstHeaderFields.find("if-none-match");
+    const auto ifnonematch = lstHeaderFields.find("if-none-match");
     if (ifnonematch != end(lstHeaderFields) && ifnonematch->second == strEtag)
     {
-        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
+        const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
         if (nHeaderLen < nBufSize)
         {
             if (httpVers == 2)
@@ -2275,16 +2275,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     }
 
     // Static Content, check if we have a Modified Since Header
-    auto ifmodifiedsince = lstHeaderFields.find("if-modified-since");
+    const auto ifmodifiedsince = lstHeaderFields.find("if-modified-since");
     if (ifmodifiedsince != end(lstHeaderFields))
     {
         tm tmIfModified = { 0 };
         stringstream ss(ifmodifiedsince->second);
         ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
-        double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
+        const double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
         if (fabs(dTimeDif) < 0.001)
         {
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
+            const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, 304, umPhpHeaders, 0);
             if (nHeaderLen < nBufSize)
             {
                 if (httpVers == 2)
@@ -2310,7 +2310,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         }
     }
 
-    auto ifrange = lstHeaderFields.find("if-range");
+    const auto ifrange = lstHeaderFields.find("if-range");
     if (ifrange != end(lstHeaderFields))
     {
         if (ifrange->second.find_first_of(",:") != string::npos)    // Datum
@@ -2318,7 +2318,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             tm tmIfModified = { 0 };
             stringstream ss(ifrange->second);
             ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
-            double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
+            const double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
             if (fabs(dTimeDif) > 0.001)
                 vecRanges.clear();
         }
@@ -2335,7 +2335,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         HeadList optHeader({ make_pair("Allow", "OPTIONS, GET, HEAD, POST") });
         optHeader.insert(end(optHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER | ADDCONENTLENGTH, 200, optHeader, 0);
+        const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER | ADDCONENTLENGTH, 200, optHeader, 0);
         if (nHeaderLen < nBufSize)
         {
             if (httpVers == 2)
@@ -2375,7 +2375,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         umPhpHeaders.emplace_back(make_pair("Accept-Ranges", "bytes"));
 
         // Build response header
-        size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, stFileInfo.st_size);
+        const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, stFileInfo.st_size);
         if (nHeaderLen < nBufSize)
         {
             if (httpVers == 2)
@@ -2423,11 +2423,11 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         else
             umPhpHeaders.emplace_back(make_pair("Accept-Ranges", "bytes"));
 
-        auto acceptencoding = lstHeaderFields.find("accept-encoding");
+        const auto acceptencoding = lstHeaderFields.find("accept-encoding");
         if (acceptencoding != end(lstHeaderFields))
         {
             // http://www.filesignatures.net/index.php?page=all
-            if (find_if(begin(m_vHostParam[szHost].m_vDeflateTyps), end(m_vHostParam[szHost].m_vDeflateTyps), [&](const string& strType) { return strType == strMineType ? true : false; }) != end(m_vHostParam[szHost].m_vDeflateTyps))
+            if (find_if(begin(m_vHostParam[szHost].m_vDeflateTyps), end(m_vHostParam[szHost].m_vDeflateTyps), [&](const string& strType) noexcept { return strType == strMineType ? true : false; }) != end(m_vHostParam[szHost].m_vDeflateTyps))
             {
                 if (acceptencoding->second.find("br") != string::npos) iHeaderFlag |= BROTLICODING;
                 else if (acceptencoding->second.find("gzip") != string::npos) iHeaderFlag |= GZIPENCODING;
@@ -2441,7 +2441,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             if (httpVers < 2)
                 umPhpHeaders.emplace_back(make_pair("Transfer-Encoding", "chunked"));
 
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
+            const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
             if (nHeaderLen < nBufSize)
             {
                 if (httpVers == 2)
@@ -2458,16 +2458,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
 
                 uint64_t nBytesTransfered = 0;
-                int iResult;
+                int iResult = 0;
                 do
                 {
-                    streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
+                    const streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
                     if (nBytesRead == 0)
                         break;
                     nBytesTransfered += nBytesRead;
 
                     gzipEncoder.InitBuffer(srcBuf.get(), static_cast<uint32_t>(nBytesRead));
-                    int nFlush = nBytesTransfered == nFSize ? Z_FINISH : Z_NO_FLUSH;
+                    const int nFlush = nBytesTransfered == nFSize ? Z_FINISH : Z_NO_FLUSH;
 
                     size_t nBytesConverted;
                     do
@@ -2526,7 +2526,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             if (httpVers < 2)
                 umPhpHeaders.emplace_back(make_pair("Transfer-Encoding", "chunked"));
 
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
+            const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, 0);
             if (nHeaderLen < nBufSize)
             {
                 if (httpVers == 2)
@@ -2536,7 +2536,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             }
             soMetaDa.fResetTimer();
 
-            BrotliEncoderState* s = BrotliEncoderCreateInstance(0, 0, 0);
+            BrotliEncoderState* s = BrotliEncoderCreateInstance(nullptr, nullptr, nullptr);
             BrotliEncoderSetParameter(s, BROTLI_PARAM_QUALITY, (uint32_t)9);
             BrotliEncoderSetParameter(s, BROTLI_PARAM_LGWIN, (uint32_t)0);
 /*                if (dictionary_path != NULL) {
@@ -2550,7 +2550,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
 
             size_t nBytIn = 0;
-            const uint8_t* input;
+            const uint8_t* input = nullptr;
             size_t nBytOut = nSizeSendBuf - nHttp2Offset;
             uint8_t* output = dstBuf.get() + nHttp2Offset;
 
@@ -2559,13 +2559,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             {
                 if (nBytIn == 0)
                 {
-                    streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
+                    const streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
                     nBytIn = static_cast<size_t>(nBytesRead);
                     input = srcBuf.get();
                     nBytesTransfered += nBytIn;
                 }
 
-                if (!BrotliEncoderCompressStream(s, nBytIn == 0 ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_PROCESS, &nBytIn, &input, &nBytOut, &output, NULL))
+                if (!BrotliEncoderCompressStream(s, nBytIn == 0 ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_PROCESS, &nBytIn, &input, &nBytOut, &output, nullptr))
                     break;
 
                 size_t nOffset = 0;
@@ -2615,7 +2615,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         else
         {
             // Build response header
-            size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, nFSize);
+            const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | TERMINATEHEADER, iStatus, umPhpHeaders, nFSize);
             if (nHeaderLen < nBufSize)
             {
                 if (httpVers == 2)
@@ -2676,7 +2676,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
 void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo)
 {
-    auto StreamPara = StreamList.find(streamId);
+    const auto StreamPara = StreamList.find(streamId);
     if (StreamPara != end(StreamList))
     {
         HeadList& lstHeaderFields = GETHEADERLIST(StreamPara);

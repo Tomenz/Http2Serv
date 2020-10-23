@@ -30,7 +30,7 @@ public:
 
         if (nIndex)
         {
-            size_t nOffset = 3 - nIndex;
+            const size_t nOffset = 3 - nIndex;
 
             strRet += base64chr[(*(szInput + nPos + nOffset - 3) & 0xfc) >> 2];
             strRet += base64chr[((*(szInput + nPos + nOffset - 3) & 0x03) << 4) + (nIndex > 1 ? ((*(szInput + nPos + nOffset - 2) & 0xf0) >> 4) : 0)];

@@ -112,7 +112,7 @@ public:
     void Http2WindowUpdate(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulStreamSize) const
     {
         uint8_t caBuffer[20];
-        unsigned long ulSizeStream = htonl(ulStreamSize);
+        const unsigned long ulSizeStream = htonl(ulStreamSize);
         BuildHttp2Frame(caBuffer, 4, 8, 0, ulStreamID); // 8 = WINDOW_UPDATE
         ::memcpy(&caBuffer[9], &ulSizeStream, 4);
         Write(caBuffer, 9 + 4);

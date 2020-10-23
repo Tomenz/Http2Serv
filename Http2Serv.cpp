@@ -39,14 +39,14 @@ const static wregex s_rxSepComma(L"\\s*,\\s*");
 
 void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServers)
 {
-    const ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
+    ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
 
     static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 } };
     static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },{L"ScriptOptionsHdl",10 },{L"AddHeader", 11 },{L"ReverseProxy", 12} };
 
-    vector<wstring>&& vFileTypExt = conf.get(L"FileTyps");
+    vector<wstring> vFileTypExt = move(conf.get(L"FileTyps"));
 
-    vector<wstring>&& vListen = conf.get(L"Listen");
+    vector<wstring> vListen = move(conf.get(L"Listen"));
     if (vListen.empty() == true)
         vListen.push_back(L"127.0.0.1"), vListen.push_back(L"::1");
 
@@ -55,7 +55,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
     for (const auto& strListen : vListen)
     {
         string strIp = Utf8Converter.to_bytes(strListen);
-        vector<wstring>&& vPort = conf.get(L"Listen", strListen);
+        vector<wstring> vPort = move(conf.get(L"Listen", strListen));
         if (vPort.empty() == true)
             vPort.push_back(L"80");
         for (const auto& strPort : vPort)
@@ -77,7 +77,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
     // Server stoppen how should be deleted
     for (deque<CHttpServ>::iterator itServer = begin(m_vServers); itServer != end(m_vServers);)
     {
-        map<string, vector<wstring>>::iterator itIp = mIpPortCombi.find(itServer->GetBindAdresse());
+        const map<string, vector<wstring>>::iterator itIp = mIpPortCombi.find(itServer->GetBindAdresse());
         if (itIp != end(mIpPortCombi))
         {
             if (find_if(begin(itIp->second), end(itIp->second), [itServer](auto strPort) { return itServer->GetPort() == stoi(strPort) ? true : false; }) != end(itIp->second))
@@ -135,7 +135,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                     case 6: HostParam.m_strHostKey = Utf8Converter.to_bytes(strValue); break;
                     case 7: HostParam.m_strHostCertificate = Utf8Converter.to_bytes(strValue); break;
                     case 8: HostParam.m_strCAcertificate = Utf8Converter.to_bytes(strValue); break;
-                    case 9: transform(begin(strValue), end(strValue), begin(strValue), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
+                    case 9: transform(begin(strValue), end(strValue), begin(strValue), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
                         HostParam.m_bSSL = strValue == L"TRUE" ? true : false; break;
                     case 10:HostParam.m_strMsgDir = strValue; break;
                     case 11:HostParam.m_strSslCipher = Utf8Converter.to_bytes(strValue); break;
@@ -228,7 +228,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                             vector<wstring> token(wsregex_token_iterator(begin(strValue), end(strValue), rx), wsregex_token_iterator());
                             if (token.size() >= 3)
                             {
-                                transform(begin(token[0]), end(token[0]), begin(token[0]), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
+                                transform(begin(token[0]), end(token[0]), begin(token[0]), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
                                 for (size_t n = 0; n < token.size(); ++n)
                                 {
                                     token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
@@ -270,7 +270,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                                     token[n].erase(token[n].find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
                                     token[n].erase(0, token[n].find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
                                 }
-                                transform(begin(token[2]), end(token[2]), begin(token[2]), [](wchar_t c) { return static_cast<wchar_t>(::toupper(c)); });
+                                transform(begin(token[2]), end(token[2]), begin(token[2]), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
 
                                 pair<unordered_map<wstring, tuple<wstring, wstring, vector<wstring>>>::iterator, bool> itNew;
                                 if (HostParam.m_mAuthenticate.find(token[0]) == end(HostParam.m_mAuthenticate))
@@ -306,7 +306,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                                 }
 
                                 string strKeyWord = Utf8Converter.to_bytes(token[0]);
-                                const auto& itHeader = find_if(begin(HostParam.m_vHeader), end(HostParam.m_vHeader), [&](auto& itHeader) { return get<0>(itHeader).compare(strKeyWord) == 0 ? true : false; });
+                                const auto& itHeader = find_if(begin(HostParam.m_vHeader), end(HostParam.m_vHeader), [&](auto& itHeader) noexcept { return get<0>(itHeader).compare(strKeyWord) == 0 ? true : false; });
                                 if (itHeader == end(HostParam.m_vHeader))
                                     HostParam.m_vHeader.emplace_back(make_pair(strKeyWord, Utf8Converter.to_bytes(token[1])));
                                 else
@@ -378,7 +378,7 @@ int main(int argc, const char* argv[])
     {
         m_strModulePath = wstring(FILENAME_MAX, 0);
 #if defined(_WIN32) || defined(_WIN64)
-        if (GetModuleFileName(NULL, &m_strModulePath[0], FILENAME_MAX) > 0)
+        if (GetModuleFileName(nullptr, &m_strModulePath[0], FILENAME_MAX) > 0)
             m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
 
         if (_wchdir(m_strModulePath.c_str()) != 0)

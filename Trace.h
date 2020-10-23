@@ -28,7 +28,7 @@ void MyTraceAdd(const T& value) {
 }
 
 template<typename T>
-void MyTrace(const T& value)
+void MyTrace(const T& value) noexcept
 {
 #ifdef _DEBUG
     MyTraceAdd(value);
@@ -41,7 +41,7 @@ void MyTrace(const T& value)
 }
 
 template<typename T, typename ...Args>
-void MyTrace(const T& value, const Args&... rest)
+void MyTrace(const T& value, const Args&... rest) noexcept
 {
 #ifdef _DEBUG
     if (ssTrace.getloc().name() != "C")
