@@ -123,7 +123,7 @@ private:
     void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo) override;
 
 private:
-    TcpServer*             m_pSocket;
+    unique_ptr<TcpServer>  m_pSocket;
     CONNECTIONLIST         m_vConnections;
     mutex                  m_mtxConnections;
 

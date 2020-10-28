@@ -139,14 +139,13 @@ bool CHttpServ::Start()
 {
     if (m_vHostParam[""].m_bSSL == true)
     {
-        SslTcpServer* pSocket = new SslTcpServer();
+        auto pSocket = make_unique<SslTcpServer>();
 
         if (m_vHostParam[""].m_strCAcertificate.empty() == false && m_vHostParam[""].m_strHostCertificate.empty() == false && m_vHostParam[""].m_strHostKey.empty() == false && m_vHostParam[""].m_strDhParam.empty() == false)
         {
             if (pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str()) == false
             || pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str()) == false)
             {
-                delete pSocket;
                 return false;
             }
             if (m_vHostParam[""].m_strSslCipher.empty() == false)
@@ -160,7 +159,6 @@ bool CHttpServ::Start()
                 if (pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str()) == false
                 || pSocket->SetDHParameter(Item.second.m_strDhParam.c_str()) == false)
                 {
-                    delete pSocket;
                     return false;
                 }
                 if (Item.second.m_strSslCipher.empty() == false)
@@ -171,10 +169,10 @@ bool CHttpServ::Start()
         vector<string> Alpn({ { "h2" },{ "http/1.1" } });
         pSocket->SetAlpnProtokollNames(Alpn);
 
-        m_pSocket = pSocket;
+        m_pSocket = move(pSocket);
     }
     else
-        m_pSocket = new TcpServer();
+        m_pSocket = make_unique<TcpServer>();
 
     m_pSocket->BindNewConnection(static_cast<function<void(const vector<TcpSocket*>&)>>(bind(&CHttpServ::OnNewConnection, this, _1)));
     m_pSocket->BindErrorFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketError, this, _1)));
@@ -186,8 +184,7 @@ bool CHttpServ::Stop()
     if (m_pSocket != nullptr)
     {
         m_pSocket->Close();
-        delete m_pSocket;
-        m_pSocket = nullptr;
+        m_pSocket.reset(nullptr);
     }
 
     m_mtxConnections.lock();
