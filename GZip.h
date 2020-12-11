@@ -17,20 +17,6 @@
 
 #include "zlib/zlib.h"
 
-#ifdef _DEBUG
-#ifdef _WIN64
-#pragma comment(lib, "x64/Debug/zlib")
-#elif _WIN32
-#pragma comment(lib, "Debug/zlib")
-#endif
-#else
-#ifdef _WIN64
-#pragma comment(lib, "x64/Release/zlib")
-#elif _WIN32
-#pragma comment(lib, "Release/zlib")
-#endif
-#endif
-
 class GZipUnpack
 {
 public:

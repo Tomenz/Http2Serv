@@ -43,32 +43,6 @@ using namespace tr1;
 
 #define FN_CA(x) x.c_str()
 #define FN_STR(x) x
-
-#ifdef _DEBUG
-#ifdef _WIN64
-#pragma comment(lib, "x64/Debug/socketlib64d")
-#pragma comment(lib, "x64/Debug/brotli")
-#pragma comment(lib, "x64/Debug/CommonLib")
-#else
-#pragma comment(lib, "Debug/socketlib32d")
-#pragma comment(lib, "Debug/brotli")
-#pragma comment(lib, "Debug/CommonLib")
-#endif
-#else
-#ifdef _WIN64
-#pragma comment(lib, "x64/Release/socketlib64")
-#pragma comment(lib, "x64/Release/brotli")
-#pragma comment(lib, "x64/Release/CommonLib")
-#else
-#pragma comment(lib, "Release/socketlib32")
-#pragma comment(lib, "Release/brotli")
-#pragma comment(lib, "Release/CommonLib")
-#endif
-#endif
-
-#pragma comment(lib, "libcrypto.lib")
-#pragma comment(lib, "libssl.lib")
-
 #else
 #ifndef __USE_LARGEFILE64
 #define __USE_LARGEFILE64
