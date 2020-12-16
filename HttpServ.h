@@ -73,7 +73,6 @@ public:
         string  m_strCAcertificate;
         string  m_strHostCertificate;
         string  m_strHostKey;
-        string  m_strDhParam;
         string  m_strSslCipher;
         unordered_map<wstring, wstring> m_mstrRewriteRule;
         unordered_map<wstring, tuple<vector<wstring>, bool>> m_mstrAliasMatch;

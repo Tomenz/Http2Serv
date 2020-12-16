@@ -115,10 +115,9 @@ bool CHttpServ::Start()
     {
         auto pSocket = make_unique<SslTcpServer>();
 
-        if (m_vHostParam[""].m_strCAcertificate.empty() == false && m_vHostParam[""].m_strHostCertificate.empty() == false && m_vHostParam[""].m_strHostKey.empty() == false && m_vHostParam[""].m_strDhParam.empty() == false)
+        if (m_vHostParam[""].m_strCAcertificate.empty() == false && m_vHostParam[""].m_strHostCertificate.empty() == false && m_vHostParam[""].m_strHostKey.empty() == false)
         {
-            if (pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str()) == false
-            || pSocket->SetDHParameter(m_vHostParam[""].m_strDhParam.c_str()) == false)
+            if (pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str()) == false)
             {
                 return false;
             }
@@ -130,8 +129,7 @@ bool CHttpServ::Start()
         {
             if (Item.first != "" && Item.second.m_bSSL == true)
             {
-                if (pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str()) == false
-                || pSocket->SetDHParameter(Item.second.m_strDhParam.c_str()) == false)
+                if (pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str()) == false)
                 {
                     return false;
                 }

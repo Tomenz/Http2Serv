@@ -41,7 +41,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
 {
     ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
 
-    static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"SSL_DH_ParaFile",5 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 } };
+    static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 } };
     static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },{L"ScriptOptionsHdl",10 },{L"AddHeader", 11 },{L"ReverseProxy", 12} };
 
     vector<wstring> vFileTypExt = move(conf.get(L"FileTyps"));
@@ -131,7 +131,6 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                     case 2: HostParam.m_strRootPath = strValue; break;
                     case 3: HostParam.m_strLogFile = strValue; break;
                     case 4: HostParam.m_strErrLog = strValue; break;
-                    case 5: HostParam.m_strDhParam = Utf8Converter.to_bytes(strValue); break;
                     case 6: HostParam.m_strHostKey = Utf8Converter.to_bytes(strValue); break;
                     case 7: HostParam.m_strHostCertificate = Utf8Converter.to_bytes(strValue); break;
                     case 8: HostParam.m_strCAcertificate = Utf8Converter.to_bytes(strValue); break;
