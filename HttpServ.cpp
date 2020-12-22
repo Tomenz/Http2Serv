@@ -229,17 +229,17 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
 
 void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
 {
-    const size_t nAvalible = pTcpSocket->GetBytesAvailible();
+    const size_t nAvailable = pTcpSocket->GetBytesAvailable();
 
-    if (nAvalible == 0)
+    if (nAvailable == 0)
     {
         pTcpSocket->Close();
         return;
     }
 
-    unique_ptr<char[]> spBuffer = make_unique<char[]>(nAvalible);
+    unique_ptr<char[]> spBuffer = make_unique<char[]>(nAvailable);
 
-    const size_t nRead = pTcpSocket->Read(&spBuffer[0], nAvalible);
+    const size_t nRead = pTcpSocket->Read(&spBuffer[0], nAvailable);
 
     if (nRead > 0)
     {
