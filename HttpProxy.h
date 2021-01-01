@@ -125,7 +125,7 @@ private:
         {
             if (pSocket != nullptr)
             {
-                pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket*)>>(bind(&CHttpProxy::OnDataRecieved, this, _1)));
+                pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket*)>>(bind(&CHttpProxy::OnDataReceived, this, _1)));
                 pSocket->BindErrorFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::OnSocketError, this, _1)));
                 pSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::OnSocketCloseing, this, _1)));
                 vCache.push_back(pSocket);
@@ -143,7 +143,7 @@ private:
         }
     }
 
-    void OnDataRecieved(TcpSocket* const pTcpSocket)
+    void OnDataReceived(TcpSocket* const pTcpSocket)
     {
         size_t nAvalible = pTcpSocket->GetBytesAvailible();
 
@@ -247,7 +247,7 @@ private:
                         OutputDebugString(L"Destination Socket besteht bereits\r\n");
                 }
                 else
-                    OutputDebugString(L"Zeitüberschneidung\r\n");
+                    OutputDebugString(L"Time overlap\r\n");
             }
             else
                 OutputDebugString(L"Socket nicht in ConectionList (1)\r\n");

@@ -209,7 +209,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     {
         if (pSocket != nullptr)
         {
-            pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket* const)>>(bind(&CHttpServ::OnDataRecieved, this, _1)));
+            pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket* const)>>(bind(&CHttpServ::OnDataReceived, this, _1)));
             pSocket->BindErrorFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketError, this, _1)));
             pSocket->BindCloseFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketCloseing, this, _1)));
             vCache.push_back(pSocket);
@@ -227,7 +227,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     }
 }
 
-void CHttpServ::OnDataRecieved(TcpSocket* const pTcpSocket)
+void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
 {
     const size_t nAvailable = pTcpSocket->GetBytesAvailable();
 
@@ -998,7 +998,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
         if (httpVers == 2)
         {
-            // Liste der reservierten Window Sizes für das nächste senden bereinigen
+            // Clean up the list of reserved window sizes for the next send
             lock_guard<mutex> lock(pmtxStream);
             const auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
@@ -1027,7 +1027,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             int64_t iTotaleWndSize = UINT16_MAX;
 
             lock_guard<mutex> lock(pmtxStream);
-            // Liste der reservierten Window Sizes für das nächste senden bereinigen
+            // Clean up the list of reserved window sizes for the next send
             const auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
             {
@@ -1039,12 +1039,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             if (StreamItem != end(StreamList))
                 iStreamWndSize = WINDOWSIZE(StreamItem);
             else
-                return false;  // Stream Item was removed, properly the stream was reseted
+                return false;  // Stream Item was removed, probably the stream was reset
             StreamItem = StreamList.find(0);
             if (StreamItem != end(StreamList))
                 iTotaleWndSize = WINDOWSIZE(StreamItem) - maResWndSizes[0];
             else
-                return false;  // Stream Item was removed, properly the stream was reseted
+                return false;  // Stream Item was removed, probably the stream was reset
             iStreamWndSize = min(iStreamWndSize, iTotaleWndSize);
 
             if (iStreamWndSize > 0)
@@ -1073,12 +1073,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             if (StreamItem != end(StreamList))
                 WINDOWSIZE(StreamItem) -= static_cast<uint32_t>(nSendBufLen);
             else
-                return -1;  // Stream Item was removed, properly the stream was reseted
+                return -1;  // Stream Item was removed, probably the stream was reset
             StreamItem = StreamList.find(0);
             if (StreamItem != end(StreamList))
                 WINDOWSIZE(StreamItem) -= static_cast<uint32_t>(nSendBufLen);
             else
-                return -1;  // Stream Item was removed, properly the stream was reseted
+                return -1;  // Stream Item was removed, probably the stream was reset
         }
         return 0;
     };
@@ -1088,7 +1088,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if (httpVers == 2)
         {
             lock_guard<mutex> lock(pmtxStream);
-            // Liste der reservierten Window Sizes für das nächste senden bereinigen
+            // Clean up the list of reserved window sizes for the next send
             const auto it = maResWndSizes.find(nStreamId);
             if (it != end(maResWndSizes))
             {
@@ -1229,7 +1229,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         strItemPath = regex_replace(strItemPath, wregex(strRule.first), strRule.second, regex_constants::format_first_only);
     }
 
-    // Falls der RewriteRile dem QueryString etwas hinzufügt
+    // In case the RewriteRule adds something to the Query_String
     const size_t nPos = strItemPath.find_first_of(L'?');
     if (nPos != string::npos)
     {
@@ -1243,13 +1243,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         wregex rx(get<1>(tuRedirect));
         if (regex_match(strItemPath, rx) == true)
         {
-            wstring strLokation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
+            wstring strLocation = regex_replace(strItemPath, rx, get<2>(tuRedirect), regex_constants::format_first_only);
             if (strHostRedirect == "")
-                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().from_bytes(soMetaDa.strIpInterface));
+                strLocation = regex_replace(strLocation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().from_bytes(soMetaDa.strIpInterface));
             else
-                strLokation = regex_replace(strLokation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring(begin(strHostRedirect), end(strHostRedirect)));
+                strLocation = regex_replace(strLocation, wregex(L"\\%\\{SERVER_NAME\\}"), wstring(begin(strHostRedirect), end(strHostRedirect)));
 
-            HeadList redHeader({ make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLokation)) });
+            HeadList redHeader({ make_pair("Location", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strLocation)) });
             redHeader.insert(end(redHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
             const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 307, redHeader, 0);
@@ -1407,10 +1407,10 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 return fnSendAuthRespons();
             if (itAuth->second.substr(0, nPosSpace) == "Basic" && get<1>(strAuth.second).find(L"BASIC") != string::npos)
             {
-                wstring strCredenial = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPosSpace + 1)));
-                if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredenial](const auto& strUser) noexcept { return strCredenial == strUser ? true : false; }) == end(get<2>(strAuth.second)))
+                wstring strCredential = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPosSpace + 1)));
+                if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredential](const auto& strUser) noexcept { return strCredential == strUser ? true : false; }) == end(get<2>(strAuth.second)))
                     return fnSendAuthRespons();
-                strRemoteUser = strCredenial.substr(0, strCredenial.find(L':'));
+                strRemoteUser = strCredential.substr(0, strCredential.find(L':'));
                 break;
             }
             else if (itAuth->second.substr(0, nPosSpace) == "Digest" && get<1>(strAuth.second).find(L"DIGEST") != string::npos)
@@ -1712,7 +1712,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             const size_t nPosEqual = strTmp.find("=");
             vCgiParam.emplace_back(make_pair(strTmp.substr(0, nPosEqual), nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : "1"));
         }
-        //AUTH_TYPE, 
+        //AUTH_TYPE,
 
         bool bEndOfHeader = false;
         HeadList umPhpHeaders;
@@ -1807,19 +1807,19 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 nBufLen -= nOffset;
             }
 
-            size_t nBytesTransfered = 0;
-            while (nBytesTransfered < nBufLen && patStop.load() == false)
+            size_t nBytesTransferred = 0;
+            while (nBytesTransferred < nBufLen && patStop.load() == false)
             {
                 int64_t nStreamWndSize = INT32_MAX;
                 if (fnGetStreamWindowSize(nStreamWndSize) == false)
-                    break;  // Stream Item was removed, properly the stream was reseted
+                    break;  // Stream Item was removed, probably the stream was reset
 
                 size_t nSendBufLen;
-                if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nBufLen - nBytesTransfered) == false)
+                if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nBufLen - nBytesTransferred) == false)
                     continue;
 
                 if (httpVers == 2)
-                    BuildHttp2Frame(szBuffer + nBytesTransfered, nSendBufLen, 0x0, 0x0, nStreamId);
+                    BuildHttp2Frame(szBuffer + nBytesTransferred, nSendBufLen, 0x0, 0x0, nStreamId);
                 else if (bChunkedTransfer == true)
                 {
                     stringstream ss;
@@ -1827,20 +1827,20 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
                 }
                 if (fnIsStreamReset(nStreamId) == false)
-                    soMetaDa.fSocketWrite(szBuffer + nBytesTransfered, nSendBufLen + nHttp2Offset);
+                    soMetaDa.fSocketWrite(szBuffer + nBytesTransferred, nSendBufLen + nHttp2Offset);
                 if (bChunkedTransfer == true && fnIsStreamReset(nStreamId) == false)
                     soMetaDa.fSocketWrite("\r\n", 2);
                 soMetaDa.fResetTimer();
 
-                nBytesTransfered += nSendBufLen;
+                nBytesTransferred += nSendBufLen;
 
                 if (fnUpdateStreamParam(nSendBufLen) == -1)
-                    break;  // Stream Item was removed, properly the stream was reseted
+                    break;  // Stream Item was removed, probably the stream was reset
             }
             fnResetReservierteWindowSize();
 
-            nTotal += nBytesTransfered;
-            copy(szBuffer + nHttp2Offset + nBytesTransfered, szBuffer + nHttp2Offset + nBytesTransfered + nOffset, szBuffer + nHttp2Offset);
+            nTotal += nBytesTransferred;
+            copy(szBuffer + nHttp2Offset + nBytesTransferred, szBuffer + nHttp2Offset + nBytesTransferred + nOffset, szBuffer + nHttp2Offset);
         };
 
         function<void(uint8_t*)> fnAfterCgi = [&](uint8_t* szBuffer)
@@ -2160,7 +2160,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             {
                 vecRanges.push_back(make_pair(match[1].length() == 0 ? 0 : stoull(match[1].str()), match[2].length() == 0 ? stFileInfo.st_size : stoull(match[2].str())));
             }
-            catch (const std::exception& /*ex*/) 
+            catch (const std::exception& /*ex*/)
             {
                 vecRanges.clear();
                 break;
@@ -2426,17 +2426,17 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 unique_ptr<unsigned char[]> srcBuf(new unsigned char[nSizeSendBuf]);
                 unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
 
-                uint64_t nBytesTransfered = 0;
+                uint64_t nBytesTransferred = 0;
                 int iResult = 0;
                 do
                 {
                     const streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
                     if (nBytesRead == 0)
                         break;
-                    nBytesTransfered += nBytesRead;
+                    nBytesTransferred += nBytesRead;
 
                     gzipEncoder.InitBuffer(srcBuf.get(), static_cast<uint32_t>(nBytesRead));
-                    const int nFlush = nBytesTransfered == nFSize ? Z_FINISH : Z_NO_FLUSH;
+                    const int nFlush = nBytesTransferred == nFSize ? Z_FINISH : Z_NO_FLUSH;
 
                     size_t nBytesConverted;
                     do
@@ -2449,7 +2449,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         {
                             int64_t nStreamWndSize = INT32_MAX;
                             if (fnGetStreamWindowSize(nStreamWndSize) == false)
-                                break;  // Stream Item was removed, properly the stream was reseted
+                                break;  // Stream Item was removed, probably the stream was reset
 
                             size_t nSendBufLen;
                             if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset)) == false)
@@ -2474,7 +2474,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             soMetaDa.fResetTimer();
 
                             if (fnUpdateStreamParam(nSendBufLen) == -1)
-                                break;  // Stream Item was removed, properly the stream was reseted
+                                break;  // Stream Item was removed, probably the stream was reset
 
                             //nBytesConverted += nSendBufLen;
                             nOffset += nSendBufLen;
@@ -2523,7 +2523,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             size_t nBytOut = nSizeSendBuf - nHttp2Offset;
             uint8_t* output = dstBuf.get() + nHttp2Offset;
 
-            uint64_t nBytesTransfered = 0;
+            uint64_t nBytesTransferred = 0;
             while (patStop.load() == false && fnIsStreamReset(nStreamId) == false)
             {
                 if (nBytIn == 0)
@@ -2531,7 +2531,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     const streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
                     nBytIn = static_cast<size_t>(nBytesRead);
                     input = srcBuf.get();
-                    nBytesTransfered += nBytIn;
+                    nBytesTransferred += nBytIn;
                 }
 
                 if (!BrotliEncoderCompressStream(s, nBytIn == 0 ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_PROCESS, &nBytIn, &input, &nBytOut, &output, nullptr))
@@ -2542,7 +2542,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 {
                     int64_t nStreamWndSize = INT32_MAX;
                     if (fnGetStreamWindowSize(nStreamWndSize) == false)
-                        break;  // Stream Item was removed, properly the stream was reseted
+                        break;  // Stream Item was removed, probably the stream was reset
 
                     size_t nSendBufLen;
                     if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), ((nSizeSendBuf - nHttp2Offset) - nBytOut)) == false)
@@ -2562,7 +2562,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     soMetaDa.fResetTimer();
 
                     if (fnUpdateStreamParam(nSendBufLen) == -1)
-                        break;  // Stream Item was removed, properly the stream was reseted
+                        break;  // Stream Item was removed, probably the stream was reset
 
                     nBytOut += nSendBufLen;
                     nOffset += nSendBufLen;
@@ -2596,27 +2596,27 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             auto apBuf = make_unique<uint8_t[]>(nSizeSendBuf + nHttp2Offset + 2);
 
-            uint64_t nBytesTransfered = 0;
-            while (nBytesTransfered < nFSize && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
+            uint64_t nBytesTransferred = 0;
+            while (nBytesTransferred < nFSize && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
             {
                 int64_t nStreamWndSize = INT32_MAX;
                 if (fnGetStreamWindowSize(nStreamWndSize) == false)
-                    break;  // Stream Item was removed, properly the stream was reseted
+                    break;  // Stream Item was removed, probably the stream was reset
 
                 size_t nSendBufLen;
-                if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransfered) == false)
+                if (fnSendCueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransferred) == false)
                     continue;
 
-                nBytesTransfered += nSendBufLen;
+                nBytesTransferred += nSendBufLen;
                 fin.read(reinterpret_cast<char*>(apBuf.get()) + nHttp2Offset, nSendBufLen);
 
                 if (httpVers == 2)
-                    BuildHttp2Frame(apBuf.get(), nSendBufLen, 0x0, (nFSize - nBytesTransfered == 0 ? 0x1 : 0x0), nStreamId);
+                    BuildHttp2Frame(apBuf.get(), nSendBufLen, 0x0, (nFSize - nBytesTransferred == 0 ? 0x1 : 0x0), nStreamId);
                 soMetaDa.fSocketWrite(apBuf.get(), nSendBufLen + nHttp2Offset);
                 soMetaDa.fResetTimer();
 
                 if (fnUpdateStreamParam(nSendBufLen) == -1)
-                    break;  // Stream Item was removed, properly the stream was reseted
+                    break;  // Stream Item was removed, probably the stream was reset
             }
             fnResetReservierteWindowSize();
         }

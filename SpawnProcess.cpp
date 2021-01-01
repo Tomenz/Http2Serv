@@ -17,7 +17,7 @@
 #if defined(_WIN32) || defined(_WIN64)
 #include <io.h>
 #include <process.h>
-#include <Stdlib.h>
+#include <stdlib.h>
 #include <Windows.h>
 #else
 #include <unistd.h>
@@ -104,14 +104,14 @@ int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = 
     stInfo.hStdOutput = reinterpret_cast<HANDLE>(_get_osfhandle(m_fdStdOutPipe[WRITE_FD]));
     stInfo.hStdError = reinterpret_cast<HANDLE>(_get_osfhandle(m_fdStdErrPipe[WRITE_FD]));
 
-    string strEntvirment;
+    string strEnvironment;
     for (auto& pstr : m_envp)
-        strEntvirment += string(pstr) + '\0';
+        strEnvironment += string(pstr) + '\0';
     for (auto& str : m_vstrEnvironment)
-        strEntvirment += str + '\0';
-    strEntvirment += '\0';
+        strEnvironment += str + '\0';
+    strEnvironment += '\0';
 
-    if (CreateProcessA(nullptr, &wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strCmd)[0], nullptr, nullptr, TRUE, CREATE_DEFAULT_ERROR_MODE | CREATE_NEW_PROCESS_GROUP | NORMAL_PRIORITY_CLASS, &strEntvirment[0], &wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strWorkingDir)[0], &stInfo, &ProcInfo) == TRUE)
+    if (CreateProcessA(nullptr, &wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strCmd)[0], nullptr, nullptr, TRUE, CREATE_DEFAULT_ERROR_MODE | CREATE_NEW_PROCESS_GROUP | NORMAL_PRIORITY_CLASS, &strEnvironment[0], &wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strWorkingDir)[0], &stInfo, &ProcInfo) == TRUE)
     {
         CloseHandle(ProcInfo.hThread);
         m_hProcess = ProcInfo.hProcess;

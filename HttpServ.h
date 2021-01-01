@@ -107,7 +107,7 @@ public:
 
 private:
     void OnNewConnection(const vector<TcpSocket*>& vNewConnections);
-    void OnDataRecieved(TcpSocket* const pTcpSocket);
+    void OnDataReceived(TcpSocket* const pTcpSocket);
     void OnSocketError(BaseSocket* const pBaseSocket);
     void OnSocketCloseing(BaseSocket* const pBaseSocket);
     void OnTimeout(const Timer* const pTimer, void*);
