@@ -1276,7 +1276,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         }
     }
 
-    vector<wstring> vStrEnvVariable;
+    vector<pair<string,string>> vStrEnvVariable;
     // Check for SetEnvIf
     for (auto& strEnvIf : m_vHostParam[szHost].m_vEnvIf)
     {
@@ -1298,10 +1298,16 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
             if (bFound == true)
             {
-                vStrEnvVariable.push_back(get<2>(strEnvIf));
-                wstring strTmp(get<2>(strEnvIf));
-                transform(begin(strTmp), end(strTmp), begin(strTmp), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
-                if (strTmp == L"DONTLOG")
+                string strTmp = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<2>(strEnvIf));
+                const size_t nPosEqual = strTmp.find("=");
+                auto& itFound = find_if(begin(vStrEnvVariable), end(vStrEnvVariable), [&strTmp, &nPosEqual](auto& itItem) { return itItem.first == strTmp.substr(0, nPosEqual); });
+                if (itFound == end(vStrEnvVariable))
+                    vStrEnvVariable.emplace_back(make_pair(strTmp.substr(0, nPosEqual), nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : ""));
+                else
+                    itFound->second = nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : "";
+
+                transform(begin(strTmp), end(strTmp), begin(strTmp), [](char c) noexcept { return ::toupper(c); });
+                if (strTmp == "DONTLOG")
                     CLogFile::SetDontLog();
             }
         }
@@ -1508,9 +1514,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             wstring strNewPath = regex_replace(strItemPath, reProxy, L".//Http2Fetch.exe/$1", regex_constants::format_first_only);
             if (strNewPath != strItemPath)
             {
-                vStrEnvVariable.push_back(L"PROXYURL=" + strProxyAlias.second);
+                vStrEnvVariable.emplace_back(make_pair("PROXYURL", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strProxyAlias.second)));
                 if (strTmp.empty() == false)
-                    vStrEnvVariable.push_back(L"PROXYMARK=" + strTmp);
+                    vStrEnvVariable.emplace_back(make_pair("PROXYMARK", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strTmp)));
                 strItemPath = strNewPath;
                 bNewRootSet = true;
                 bExecAsScript = true;
@@ -1706,11 +1712,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if (strQuery.empty() == false)
             vCgiParam.emplace_back(make_pair("QUERY_STRING", strQuery));
         vCgiParam.emplace_back(make_pair("SCRIPT_FILENAME", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath)));
-        for (const auto& strEnvVar : vStrEnvVariable)
+        for (const auto& ptEnvVar : vStrEnvVariable)
         {
-            string strTmp = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strEnvVar);
-            const size_t nPosEqual = strTmp.find("=");
-            vCgiParam.emplace_back(make_pair(strTmp.substr(0, nPosEqual), nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : "1"));
+            vCgiParam.emplace_back(make_pair(ptEnvVar.first, ptEnvVar.second.empty() == false ? ptEnvVar.second : "1"));
         }
         //AUTH_TYPE,
 
