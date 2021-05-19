@@ -275,7 +275,10 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                                 if (HostParam.m_mAuthenticate.find(token[0]) == end(HostParam.m_mAuthenticate))
                                     itNew = HostParam.m_mAuthenticate.emplace(token[0], make_tuple(token[1], token[2], vector<wstring>()));
                                 else
+                                {
                                     itNew = make_pair(HostParam.m_mAuthenticate.find(token[0]), true);
+                                    itNew.first->second = make_tuple(token[1], token[2], vector<wstring>());
+                                }
 
                                 if (itNew.second == true)
                                 {

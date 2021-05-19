@@ -1300,7 +1300,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             {
                 string strTmp = wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<2>(strEnvIf));
                 const size_t nPosEqual = strTmp.find("=");
-                auto& itFound = find_if(begin(vStrEnvVariable), end(vStrEnvVariable), [&strTmp, &nPosEqual](auto& itItem) { return itItem.first == strTmp.substr(0, nPosEqual); });
+                auto itFound = find_if(begin(vStrEnvVariable), end(vStrEnvVariable), [&strTmp, &nPosEqual](const auto& itItem) noexcept { return itItem.first == strTmp.substr(0, nPosEqual); });
                 if (itFound == end(vStrEnvVariable))
                     vStrEnvVariable.emplace_back(make_pair(strTmp.substr(0, nPosEqual), nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : ""));
                 else
@@ -1672,7 +1672,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         {
             if (itHeader.first != "content-length" || nSollLen > 0)
             {
-                auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) { return prItem.first == itHeader.first ? true : false; });
+                auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) noexcept { return prItem.first == itHeader.first ? true : false; });
                 if (itArray != end(caHeaders))
                     vCgiParam.emplace_back(make_pair(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itArray->second), itHeader.second));
                 else if (itHeader.first[0] != ':')
@@ -2203,7 +2203,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     // MimeType
     if (strMineType.empty() == true)    // if not empty we have a fixed mimetyp from the configuration
     {
-        auto it = find_if(begin(MimeListe), end(MimeListe), [strFileExtension](const MIMEENTRY & item) { return strFileExtension == MIMEEXTENSION(item); });
+        auto it = find_if(begin(MimeListe), end(MimeListe), [strFileExtension](const MIMEENTRY & item) noexcept { return strFileExtension == MIMEEXTENSION(item); });
         if (it != end(MimeListe))
             strMineType = MIMESTRING(*it);
         else
@@ -2653,7 +2653,7 @@ void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
     if (StreamPara != end(StreamList))
     {
         HeadList& lstHeaderFields = GETHEADERLIST(StreamPara);
-        if (find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HeadList::const_reference cIter) { return ":status" == cIter.first; }) != end(lstHeaderFields))
+        if (find_if(begin(lstHeaderFields), end(lstHeaderFields), [&](HeadList::const_reference cIter) noexcept { return ":status" == cIter.first; }) != end(lstHeaderFields))
             throw H2ProtoException(H2ProtoException::WRONG_HEADER);
     }
 
