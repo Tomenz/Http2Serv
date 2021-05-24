@@ -85,6 +85,7 @@ public:
         unordered_map<wstring, tuple<wstring, wstring, vector<wstring>>> m_mAuthenticate;   // Directory, (Realm, Methode, Liste mit Usern)
         vector<pair<string, string>> m_vHeader; // Header-Name, Header-Value
         unordered_map<wstring, wstring> m_mstrReverseProxy;
+        vector<wstring> m_vAuthHandler;
     } HOSTPARAM;
 
 public:

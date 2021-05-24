@@ -42,7 +42,8 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
     ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
 
     static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 } };
-    static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },{L"ScriptOptionsHdl",10 },{L"AddHeader", 11 },{L"ReverseProxy", 12} };
+    static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },
+                                                               { L"ScriptOptionsHdl",10 },{ L"AddHeader", 11 },{ L"ReverseProxy", 12},{ L"ScriptAuthHdl",13 } };
 
     vector<wstring> vFileTypExt = move(conf.get(L"FileTyps"));
 
@@ -289,9 +290,10 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 10:// ScriptOptionsHdl
+                    case 13:// ScriptAuthHdl
                         for (const auto& strValue : vValues)
                         {
-                            HostParam.m_vOptionsHandler.push_back(strValue);
+                            strKey.second == 10 ? HostParam.m_vOptionsHandler.push_back(strValue) : HostParam.m_vAuthHandler.push_back(strValue);
                         }
                         break;
                     case 11:// AddHeader

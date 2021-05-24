@@ -1276,7 +1276,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         }
     }
 
-    vector<pair<string,string>> vStrEnvVariable;
+    vector<pair<string, string>> vStrEnvVariable;
     // Check for SetEnvIf
     for (auto& strEnvIf : m_vHostParam[szHost].m_vEnvIf)
     {
@@ -1324,141 +1324,154 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         return;
     }
 
+    bool bAuthHandlerInScript = false;
+    for (auto& strAlias : m_vHostParam[szHost].m_vAuthHandler)
+    {
+        if (regex_match(strItemPath, wregex(strAlias)) == true)
+        {
+            bAuthHandlerInScript = true;
+            break;
+        }
+    }
+
     wstring strRemoteUser;
     // Check for Authentication
-    for (auto& strAuth : m_vHostParam[szHost].m_mAuthenticate)
+    if (bAuthHandlerInScript == false)
     {
-        match_results<wstring::const_iterator> mr;
-        if (regex_search(strItemPath, mr, wregex(strAuth.first), regex_constants::format_first_only) == true && strItemPath.substr(0, mr.str().size()) == mr.str())
+        for (auto& strAuth : m_vHostParam[szHost].m_mAuthenticate)
         {
-            const auto fnSendAuthRespons = [&]() -> void
+            match_results<wstring::const_iterator> mr;
+            if (regex_search(strItemPath, mr, wregex(strAuth.first), regex_constants::format_first_only) == true && strItemPath.substr(0, mr.str().size()) == mr.str())
             {
-                HeadList vHeader;
-                if (get<1>(strAuth.second).find(L"DIGEST") != string::npos)
+                const auto fnSendAuthRespons = [&]() -> void
                 {
-                    const auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
-                    auto duration = chrono::system_clock::now().time_since_epoch();
-                    auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-                    string strNonce = md5(to_string(in_time_t) + "." + to_string(millis) + ":" + soMetaDa.strIpClient + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath));
-                    strNonce = Base64::Encode(strNonce.c_str(), strNonce.size());
-                    if (httpVers < 2)
-                    {   // most browser to not suport rfc 7616
-                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=SHA-256,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
-                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=MD5,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
-                        vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                    HeadList vHeader;
+                    if (get<1>(strAuth.second).find(L"DIGEST") != string::npos)
+                    {
+                        const auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
+                        auto duration = chrono::system_clock::now().time_since_epoch();
+                        auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+                        string strNonce = md5(to_string(in_time_t) + "." + to_string(millis) + ":" + soMetaDa.strIpClient + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath));
+                        strNonce = Base64::Encode(strNonce.c_str(), strNonce.size());
+                        if (httpVers < 2)
+                        {   // most browser to not suport rfc 7616
+                            //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=SHA-256,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                            //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\talgorithm=MD5,\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                            vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",\r\n\tqop=\"auth,auth-int\",\r\n\tnonce=\"" + strNonce + "\",\r\n\topaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        }
+                        else
+                        {   // most browser to not suport rfc 7616
+                            //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=SHA-256,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                            //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=MD5,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                            vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
+                        }
                     }
-                    else
-                    {   // most browser to not suport rfc 7616
-                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=SHA-256,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
-                        //vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",algorithm=MD5,nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
-                        vHeader.push_back(make_pair("WWW-Authenticate", "Digest realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\",qop=\"auth,auth-int\",nonce=\"" + strNonce + "\",opaque=\"rc7tZXhKlemRvbW9wYXFGddjluZw\""));
-                    }
-                }
-                if (get<1>(strAuth.second).find(L"BASIC") != string::npos)
-                    vHeader.push_back(make_pair("WWW-Authenticate", "Basic realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\""));
+                    if (get<1>(strAuth.second).find(L"BASIC") != string::npos)
+                        vHeader.push_back(make_pair("WWW-Authenticate", "Basic realm=\"" + wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(get<0>(strAuth.second)) + "\""));
 
-                string strHtmlRespons = LoadErrorHtmlMessage(lstHeaderFields, 401, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
-                vHeader.insert(end(vHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
+                    string strHtmlRespons = LoadErrorHtmlMessage(lstHeaderFields, 401, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
+                    vHeader.insert(end(vHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-                const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONENTLENGTH/* | ADDCONNECTIONCLOSE*/, 401, vHeader, strHtmlRespons.size());
-                if (nHeaderLen < nBufSize)
-                {
-                    if (httpVers == 2)
-                        BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
-                    soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
-                    if (strHtmlRespons.size() > 0)
+                    const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONENTLENGTH/* | ADDCONNECTIONCLOSE*/, 401, vHeader, strHtmlRespons.size());
+                    if (nHeaderLen < nBufSize)
                     {
                         if (httpVers == 2)
+                            BuildHttp2Frame(caBuffer, nHeaderLen, 0x1, strHtmlRespons.size() == 0 ? 0x5 : 0x4, nStreamId);
+                        soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
+                        if (strHtmlRespons.size() > 0)
                         {
-                            BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
-                            soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+                            if (httpVers == 2)
+                            {
+                                BuildHttp2Frame(caBuffer, strHtmlRespons.size(), 0x0, 0x1, nStreamId);
+                                soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+                            }
+                            if (fnIsStreamReset(nStreamId) == false)
+                                soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
                         }
-                        if (fnIsStreamReset(nStreamId) == false)
-                            soMetaDa.fSocketWrite(strHtmlRespons.c_str(), strHtmlRespons.size());
                     }
-                }
-                soMetaDa.fResetTimer();
+                    soMetaDa.fResetTimer();
 
-                CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
-                    << itMethode->second << " " << lstHeaderFields.find(":path")->second
-                    << (httpVers == 2 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
-                    << "\" 401 " << "-" << " \""
-                    << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
-                    << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
-                    << CLogFile::LOGTYPES::END;
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+                        << itMethode->second << " " << lstHeaderFields.find(":path")->second
+                        << (httpVers == 2 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
+                        << "\" 401 " << "-" << " \""
+                        << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+                        << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+                        << CLogFile::LOGTYPES::END;
 
-                //if (httpVers < 2)
-                //    soMetaDa.fSocketClose();
-                fuExitDoAction();
-            };
+                    //if (httpVers < 2)
+                    //    soMetaDa.fSocketClose();
+                    fuExitDoAction();
+                };
 
-            const auto itAuth = lstHeaderFields.find("authorization");
-            if (itAuth == end(lstHeaderFields))
-            {
-                for (auto& itAuthInfo : lstAuthInfo)
+                const auto itAuth = lstHeaderFields.find("authorization");
+                if (itAuth == end(lstHeaderFields))
                 {
-                    if (itAuthInfo.strUrl == mr.str())
+                    for (auto& itAuthInfo : lstAuthInfo)
                     {
-                        strRemoteUser = itAuthInfo.strUser;
+                        if (itAuthInfo.strUrl == mr.str())
+                        {
+                            strRemoteUser = itAuthInfo.strUser;
+                            break;
+                        }
+                    }
+                    if (strRemoteUser.empty() == false)
                         break;
-                    }
-                }
-                if (strRemoteUser.empty() == false)
-                    break;
-                return fnSendAuthRespons();
-            }
-
-            string::size_type nPosSpace = itAuth->second.find(' ');
-            if (nPosSpace == string::npos)
-                return fnSendAuthRespons();
-            if (itAuth->second.substr(0, nPosSpace) == "Basic" && get<1>(strAuth.second).find(L"BASIC") != string::npos)
-            {
-                wstring strCredential = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPosSpace + 1)));
-                if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredential](const auto& strUser) noexcept { return strCredential == strUser ? true : false; }) == end(get<2>(strAuth.second)))
                     return fnSendAuthRespons();
-                strRemoteUser = strCredential.substr(0, strCredential.find(L':'));
-                break;
-            }
-            else if (itAuth->second.substr(0, nPosSpace) == "Digest" && get<1>(strAuth.second).find(L"DIGEST") != string::npos)
-            {   // username="Thomas", realm="Http-Utility Digest", nonce="cmFuZG9tbHlnZW5lcmF0ZWRub25jZQ", uri="/iso/", response="2254355340eede0649b9df7f0121dcca", opaque="c29tZXJhbmRvbW9wYXF1ZXN0cmluZw", qop=auth, nc=00000002, cnonce="78a4421707fa60bc"
-                const static regex spaceSeperator(",");
-                string strTmp = itAuth->second.substr(nPosSpace + 1);
-                sregex_token_iterator token(begin(strTmp), end(strTmp), spaceSeperator, -1);
-                map<string, string> maDigest;
-                while (token != sregex_token_iterator())
+                }
+
+                string::size_type nPosSpace = itAuth->second.find(' ');
+                if (nPosSpace == string::npos)
+                    return fnSendAuthRespons();
+                if (itAuth->second.substr(0, nPosSpace) == "Basic" && get<1>(strAuth.second).find(L"BASIC") != string::npos)
                 {
-                    if (nPosSpace = token->str().find("="), nPosSpace != string::npos)
-                    {
-                        string strKey = token->str().substr(0, nPosSpace);
-                        strKey.erase(strKey.find_last_not_of(" \t") + 1);
-                        strKey.erase(0, strKey.find_first_not_of(" \t"));
-                        const auto itInsert = maDigest.emplace(strKey, token->str().substr(nPosSpace + 1));
-                        if (itInsert.second == true)
-                        {
-                            itInsert.first->second.erase(itInsert.first->second.find_last_not_of("\" \t") + 1);
-                            itInsert.first->second.erase(0, itInsert.first->second.find_first_not_of("\" \t"));
-                        }
-                    }
-                    token++;
+                    wstring strCredential = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(Base64::Decode(itAuth->second.substr(nPosSpace + 1)));
+                    if (find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strCredential](const auto& strUser) noexcept { return strCredential == strUser ? true : false; }) == end(get<2>(strAuth.second)))
+                        return fnSendAuthRespons();
+                    strRemoteUser = strCredential.substr(0, strCredential.find(L':'));
+                    break;
                 }
+                else if (itAuth->second.substr(0, nPosSpace) == "Digest" && get<1>(strAuth.second).find(L"DIGEST") != string::npos)
+                {   // username="Thomas", realm="Http-Utility Digest", nonce="cmFuZG9tbHlnZW5lcmF0ZWRub25jZQ", uri="/iso/", response="2254355340eede0649b9df7f0121dcca", opaque="c29tZXJhbmRvbW9wYXF1ZXN0cmluZw", qop=auth, nc=00000002, cnonce="78a4421707fa60bc"
+                    const static regex spaceSeperator(",");
+                    string strTmp = itAuth->second.substr(nPosSpace + 1);
+                    sregex_token_iterator token(begin(strTmp), end(strTmp), spaceSeperator, -1);
+                    map<string, string> maDigest;
+                    while (token != sregex_token_iterator())
+                    {
+                        if (nPosSpace = token->str().find("="), nPosSpace != string::npos)
+                        {
+                            string strKey = token->str().substr(0, nPosSpace);
+                            strKey.erase(strKey.find_last_not_of(" \t") + 1);
+                            strKey.erase(0, strKey.find_first_not_of(" \t"));
+                            const auto itInsert = maDigest.emplace(strKey, token->str().substr(nPosSpace + 1));
+                            if (itInsert.second == true)
+                            {
+                                itInsert.first->second.erase(itInsert.first->second.find_last_not_of("\" \t") + 1);
+                                itInsert.first->second.erase(0, itInsert.first->second.find_first_not_of("\" \t"));
+                            }
+                        }
+                        token++;
+                    }
 
-                wstring strUserName = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(maDigest["username"]);
-                auto item = find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strUserName](const auto& strUser) { return strUser.substr(0, strUserName.size()) == strUserName && strUser[strUserName.size()] == ':' ? true : false; });
-                if (item == end(get<2>(strAuth.second)))
-                    return fnSendAuthRespons();
+                    wstring strUserName = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(maDigest["username"]);
+                    auto item = find_if(begin(get<2>(strAuth.second)), end(get<2>(strAuth.second)), [strUserName](const auto& strUser) { return strUser.substr(0, strUserName.size()) == strUserName && strUser[strUserName.size()] == ':' ? true : false; });
+                    if (item == end(get<2>(strAuth.second)))
+                        return fnSendAuthRespons();
 
-                string PassWord = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(item->substr(strUserName.size()));
-                string strM1 = md5(maDigest["username"] + ":" + maDigest["realm"] + PassWord);
-                string strM2 = md5(itMethode->second + ":" + maDigest["uri"]);
-                string strRe = md5(strM1 + ":" + maDigest["nonce"] + ":" + maDigest["nc"] + ":" + maDigest["cnonce"] + ":" + maDigest["qop"] + ":" + strM2);
-                if (strRe != maDigest["response"])
+                    string PassWord = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(item->substr(strUserName.size()));
+                    string strM1 = md5(maDigest["username"] + ":" + maDigest["realm"] + PassWord);
+                    string strM2 = md5(itMethode->second + ":" + maDigest["uri"]);
+                    string strRe = md5(strM1 + ":" + maDigest["nonce"] + ":" + maDigest["nc"] + ":" + maDigest["cnonce"] + ":" + maDigest["qop"] + ":" + strM2);
+                    if (strRe != maDigest["response"])
+                        return fnSendAuthRespons();
+                    strRemoteUser = strUserName;
+                    lstAuthInfo.push_back({ strUserName , get<0>(strAuth.second) , maDigest["nonce"], mr.str() });
+                    break;
+                }
+                else
                     return fnSendAuthRespons();
-                strRemoteUser = strUserName;
-                lstAuthInfo.push_back({ strUserName , get<0>(strAuth.second) , maDigest["nonce"], mr.str() });
-                break;
             }
-            else
-                return fnSendAuthRespons();
         }
     }
 
@@ -1942,13 +1955,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     bool bReConnect = false;
                     do
                     {
-                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [fnSendOutput, &pBuf, &nHttp2Offset, &nOffset](const unsigned char* pData, uint16_t nDataLen)
+                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [&fnSendOutput, &pBuf, &nHttp2Offset, &nOffset](const unsigned char* pData, uint16_t nDataLen)
                         {
                             if (nDataLen != 0)
                             {
                                 const size_t nRead = min(65536 + 10 - nOffset, static_cast<size_t>(nDataLen));
                                 copy(pData, pData + nRead, reinterpret_cast<unsigned char*>(&pBuf[nHttp2Offset + nOffset]));
-                                fnSendOutput(pBuf.get(), nRead + nOffset);  //OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pData, nDataLen).c_str()));
+                                fnSendOutput(pBuf.get(), nRead + nOffset);
                             }
                         });
                         if (nReqId == 0)

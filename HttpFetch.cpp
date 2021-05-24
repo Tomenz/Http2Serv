@@ -317,18 +317,18 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
     static atomic_bool atTmp;
     static deque<AUTHITEM> dqAuth;
 
-    size_t nAvalible = pTcpSocket->GetBytesAvailible();
+    size_t nAvailable = pTcpSocket->GetBytesAvailable();
 
-    if (nAvalible == 0)
+    if (nAvailable == 0)
     {
         pTcpSocket->Close();
         return;
     }
 
-    shared_ptr<char[]> spBuffer(new char[m_strBuffer.size() + nAvalible + 1]);
+    shared_ptr<char[]> spBuffer(new char[m_strBuffer.size() + nAvailable + 1]);
     copy(begin(m_strBuffer), begin(m_strBuffer) + m_strBuffer.size(), spBuffer.get());
 
-    size_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvalible);
+    size_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvailable);
 
     if (nRead > 0)
     {
