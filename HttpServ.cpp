@@ -1306,7 +1306,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 else
                     itFound->second = nPosEqual != string::npos ? strTmp.substr(nPosEqual + 1) : "";
 
-                transform(begin(strTmp), end(strTmp), begin(strTmp), [](char c) noexcept { return ::toupper(c); });
+                transform(begin(strTmp), end(strTmp), begin(strTmp), [](char c) noexcept { return static_cast<char>(::toupper(c)); });
                 if (strTmp == "DONTLOG")
                     CLogFile::SetDontLog();
             }
@@ -1680,22 +1680,23 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         }
 
         vector<pair<string, string>> vCgiParam;
-        const static array<pair<const char*, const wchar_t*>, 4> caHeaders = { { make_pair(":authority", L"HTTP_HOST") , make_pair(":scheme", L"REQUEST_SCHEME") , make_pair("content-type", L"CONTENT_TYPE"), make_pair("content-length", L"CONTENT_LENGTH") } };
+        const static array<pair<const char*, const char*>, 5> caHeaders = { { make_pair(":authority", "HTTP_HOST") , make_pair(":scheme", "REQUEST_SCHEME") , make_pair("content-type", "CONTENT_TYPE"), make_pair("content-length", "CONTENT_LENGTH"), make_pair("authorization", "HTTP_AUTHORIZATION") } };
         for (auto& itHeader : lstHeaderFields)
         {
-            if (itHeader.first != "content-length" || nSollLen > 0)
+            if ((bAuthHandlerInScript == false && itHeader.first == "authorization")
+            || (nSollLen <=  0 && itHeader.first == "content-length"))
+                continue;
+
+            auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) noexcept { return prItem.first == itHeader.first ? true : false; });
+            if (itArray != end(caHeaders))
+                vCgiParam.emplace_back(make_pair(itArray->second, itHeader.second));
+            else if (itHeader.first[0] != ':')
             {
-                auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) noexcept { return prItem.first == itHeader.first ? true : false; });
-                if (itArray != end(caHeaders))
-                    vCgiParam.emplace_back(make_pair(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itArray->second), itHeader.second));
-                else if (itHeader.first[0] != ':')
-                {
-                    wstring strHeader(wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(itHeader.first));
-                    //strHeader.erase(0, strHeader.find_first_not_of(L':'));
-                    transform(begin(strHeader), end(strHeader), begin(strHeader), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
-                    strHeader = regex_replace(strHeader, wregex(L"-"), wstring(L"_"));
-                    vCgiParam.emplace_back(make_pair("HTTP_" + wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strHeader), itHeader.second));
-                }
+                string strHeader(itHeader.first);
+                //strHeader.erase(0, strHeader.find_first_not_of(L':'));
+                transform(begin(strHeader), end(strHeader), begin(strHeader), [](char c) noexcept { return static_cast<char>(::toupper(c)); });
+                strHeader = regex_replace(strHeader, regex("-"), string("_"));
+                vCgiParam.emplace_back(make_pair("HTTP_" + strHeader, itHeader.second));
             }
         }
 
@@ -1961,6 +1962,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             {
                                 const size_t nRead = min(65536 + 10 - nOffset, static_cast<size_t>(nDataLen));
                                 copy(pData, pData + nRead, reinterpret_cast<unsigned char*>(&pBuf[nHttp2Offset + nOffset]));
+//                                OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pData + nHttp2Offset, nDataLen).c_str()));
                                 fnSendOutput(pBuf.get(), nRead + nOffset);
                             }
                         });
@@ -2080,6 +2082,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     while (data != nullptr && patStop.load() == false && fnIsStreamReset(nStreamId) == false)  // loop until we have nullptr packet
                     {
                         const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+//                        OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen).c_str()));
                         if (run.WriteToSpawn(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen) != nDataLen)
                         {
                             run.KillProcess();
@@ -2121,7 +2124,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         bHasRead = true;
                         nRead += nOffset;
                         nOffset = 0;
-
+//                        OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pBuf.get() + nHttp2Offset, nRead).c_str()));
                         fnSendOutput(pBuf.get(), nRead);
                     }
                     if (nRead = run.ReadErrFromSpawn(reinterpret_cast<unsigned char*>(pBuf.get()), 65536), nRead > 0)
