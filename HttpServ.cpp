@@ -1491,8 +1491,9 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     vector<wstring>* pveAlaisMatch = nullptr;
     for (auto& strAlias : m_vHostParam[szHost].m_mstrAliasMatch)
     {
-        wstring strNewPath = regex_replace(strItemPath, wregex(strAlias.first), get<0>(strAlias.second).back(), regex_constants::format_first_only);
-        if (strNewPath != strItemPath)
+        wregex re(strAlias.first);
+        wstring strNewPath = regex_replace(strItemPath, re, get<0>(strAlias.second).back(), regex_constants::format_first_only);
+        if (strNewPath != strItemPath || regex_match(strItemPath, re) == true)
         {
             strItemPath = strNewPath;
             bNewRootSet = true;

@@ -114,6 +114,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
             if (strSection == L"common")  // Default Parametersatz
                 HttpServer.ClearAllParameterBlocks();
             CHttpServ::HOSTPARAM& HostParam = HttpServer.GetParameterBlockRef(szHost);
+            bool bClearList = false;
 
             for (const auto& strKey : strKeyWordUniqueItems)
             {
@@ -124,9 +125,14 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                     {
                     case 1:
                     {
+                        HostParam.m_vstrDefaultItem.clear();
                         wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
                         while (token != wsregex_token_iterator())
+                        {
                             HostParam.m_vstrDefaultItem.push_back(token++->str());
+                            HostParam.m_vstrDefaultItem.back().erase(HostParam.m_vstrDefaultItem.back().find_last_not_of(L"\" \t\r\n") + 1);  // Trim Whitespace and " character on the right
+                            HostParam.m_vstrDefaultItem.back().erase(0, HostParam.m_vstrDefaultItem.back().find_first_not_of(L"\" \t"));      // Trim Whitespace and " character on the left
+                        }
                     }
                     break;
                     case 2: HostParam.m_strRootPath = strValue; break;
@@ -151,6 +157,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                     switch (strKey.second)
                     {
                     case 1: // RewriteRule
+                        HostParam.m_mstrRewriteRule.clear();
                         for (const auto& strValue : vValues)
                         {
                             wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
@@ -165,6 +172,8 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         break;
                     case 2: // AliasMatch
                     case 9: // ScriptAliasMatch
+                        if (bClearList == false)
+                            HostParam.m_mstrAliasMatch.clear(), bClearList = true;
                         for (const auto& strValue : vValues)
                         {
                             const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\\"");
@@ -187,6 +196,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 3: // ForceType
+                        HostParam.m_mstrForceTyp.clear();
                         for (const auto& strValue : vValues)
                         {
                             wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
@@ -200,6 +210,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 4: // FileTyps
+                        HostParam.m_mFileTypeAction.clear();
                         for (const auto& strValue : vValues)
                         {
                             const static wregex rx(L"([^\\s\\\"]+)|\\\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\\"");
@@ -222,6 +233,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 5: // SetEnvIf
+                        HostParam.m_vEnvIf.clear();
                         for (const auto& strValue : vValues)
                         {
                             const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
@@ -240,6 +252,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 6: // RedirectMatch
+                        HostParam.m_vRedirMatch.clear();
                         for (const auto& strValue : vValues)
                         {
                             wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
@@ -251,6 +264,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 7: // DeflateTyps
+                        HostParam.m_vDeflateTyps.clear();
                         for (const auto& strValue : vValues)
                         {
                             wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
@@ -259,6 +273,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 8: // Authenticate
+                        HostParam.m_mAuthenticate.clear();
                         for (const auto& strValue : vValues)
                         {
                             const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
@@ -291,12 +306,17 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         break;
                     case 10:// ScriptOptionsHdl
                     case 13:// ScriptAuthHdl
+                        if (strKey.second == 10)
+                            HostParam.m_vOptionsHandler.clear();
+                        else if (strKey.second == 13)
+                            HostParam.m_vAuthHandler.clear();
                         for (const auto& strValue : vValues)
                         {
                             strKey.second == 10 ? HostParam.m_vOptionsHandler.push_back(strValue) : HostParam.m_vAuthHandler.push_back(strValue);
                         }
                         break;
                     case 11:// AddHeader
+                        HostParam.m_vHeader.clear();
                         for (const auto& strValue : vValues)
                         {
                             const static wregex rx(L"([^\\s,\\\"]+)|\\\"([^\\\"]+)\\\"");
@@ -319,6 +339,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         }
                         break;
                     case 12:// ReverseProxy
+                        HostParam.m_mstrReverseProxy.clear();
                         for (const auto& strValue : vValues)
                         {
                             wsregex_token_iterator token(begin(strValue), end(strValue), s_rxSepSpace, -1);
