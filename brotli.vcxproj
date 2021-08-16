@@ -154,6 +154,7 @@
     <ClCompile Include="brotli\c\common\context.c" />
     <ClCompile Include="brotli\c\common\dictionary.c" />
     <ClCompile Include="brotli\c\common\platform.c" />
+    <ClCompile Include="brotli\c\common\shared_dictionary.c" />
     <ClCompile Include="brotli\c\common\transform.c" />
     <ClCompile Include="brotli\c\dec\bit_reader.c" />
     <ClCompile Include="brotli\c\dec\decode.c" />
@@ -166,6 +167,7 @@
     <ClCompile Include="brotli\c\enc\brotli_bit_stream.c" />
     <ClCompile Include="brotli\c\enc\cluster.c" />
     <ClCompile Include="brotli\c\enc\command.c" />
+    <ClCompile Include="brotli\c\enc\compound_dictionary.c" />
     <ClCompile Include="brotli\c\enc\compress_fragment.c" />
     <ClCompile Include="brotli\c\enc\compress_fragment_two_pass.c" />
     <ClCompile Include="brotli\c\enc\dictionary_hash.c" />
@@ -184,6 +186,7 @@
     <ClInclude Include="brotli\c\common\constants.h" />
     <ClInclude Include="brotli\c\common\dictionary.h" />
     <ClInclude Include="brotli\c\common\platform.h" />
+    <ClInclude Include="brotli\c\common\shared_dictionary_internal.h" />
     <ClInclude Include="brotli\c\common\transform.h" />
     <ClInclude Include="brotli\c\dec\bit_reader.h" />
     <ClInclude Include="brotli\c\dec\huffman.h" />
@@ -201,6 +204,7 @@
     <ClInclude Include="brotli\c\enc\cluster.h" />
     <ClInclude Include="brotli\c\enc\cluster_inc.h" />
     <ClInclude Include="brotli\c\enc\command.h" />
+    <ClInclude Include="brotli\c\enc\compound_dictionary.h" />
     <ClInclude Include="brotli\c\enc\compress_fragment.h" />
     <ClInclude Include="brotli\c\enc\compress_fragment_two_pass.h" />
     <ClInclude Include="brotli\c\enc\context.h" />

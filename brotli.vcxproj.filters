@@ -88,6 +88,12 @@
     <ClCompile Include="brotli\c\common\constants.c">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="brotli\c\enc\compound_dictionary.c">
+      <Filter>enc</Filter>
+    </ClCompile>
+    <ClCompile Include="brotli\c\common\shared_dictionary.c">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="brotli\c\dec\huffman.h">
@@ -226,6 +232,12 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="brotli\c\common\constants.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="brotli\c\enc\compound_dictionary.h">
+      <Filter>enc</Filter>
+    </ClInclude>
+    <ClInclude Include="brotli\c\common\shared_dictionary_internal.h">
       <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>
