@@ -43,7 +43,7 @@ public:
                 strRet += '=';
         }
 
-        return move(strRet);
+        return strRet;
     }
 
     static string Decode(string const& strInput, bool bUrlSave = false)
@@ -91,6 +91,6 @@ public:
                 strRet += ((c3 & 0x3) << 6) + c4;
         }
 
-        return move(strRet);
+        return strRet;
     }
 };
