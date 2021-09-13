@@ -145,7 +145,7 @@ private:
 
     void OnDataReceived(TcpSocket* const pTcpSocket)
     {
-        size_t nAvalible = pTcpSocket->GetBytesAvailible();
+        size_t nAvalible = pTcpSocket->GetBytesAvailable();
 
         if (nAvalible == 0)
         {
@@ -375,7 +375,7 @@ private:
 
     void OnDataRecievedClient(TcpSocket* const pTcpSocket)
     {
-        size_t nAvalible = pTcpSocket->GetBytesAvailible();
+        size_t nAvalible = pTcpSocket->GetBytesAvailable();
 
         if (nAvalible == 0)
         {
@@ -508,7 +508,7 @@ private:
 
     void OnDataRecievedDest(TcpSocket* const pTcpSocket)
     {
-        size_t nAvalible = pTcpSocket->GetBytesAvailible();
+        size_t nAvalible = pTcpSocket->GetBytesAvailable();
 
         if (nAvalible == 0)
         {
@@ -585,6 +585,7 @@ private:
         }
         else
             OutputDebugString(L"Socket nicht in ReferenceList (4)\r\n");
+        OutputDebugString(L"SocketErrorDest aufgerufen\r\n");
     }
 
     void SocketCloseingDest(BaseSocket* const pBaseSocket)
@@ -611,6 +612,7 @@ private:
         }
         else
             OutputDebugString(L"Socket nicht in ReferenceList (5)\r\n");
+        OutputDebugString(L"SocketCloseingDest aufgerufen\r\n");
     }
 
     void SocketCloseingDelete(BaseSocket* const pBaseSocket)

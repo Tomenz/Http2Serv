@@ -53,7 +53,7 @@ int main(int argc, const char* argv[])
             strTmpPath = ".";
         m_strModulePath = wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().from_bytes(strTmpPath) + L"/";
 #endif
-        const ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"proxy.cfg");
+        ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"proxy.cfg");
         vector<wstring>&& vListen = conf.get(L"Listen");
         if (vListen.empty() == true)
             vListen.push_back(L"127.0.0.1"), vListen.push_back(L"::1");
