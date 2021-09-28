@@ -311,7 +311,7 @@ if (nPos != string::npos)
 //    fetch.AddToHeader("Authorization", "Basic " + Base64::Encode("Tomenz@gmx.net:mazda123", 23));
 //    fetch.AddToHeader("Depth", "1");    // ("0" | "1" | "1,noroot" | "infinity" | "infinity,noroot")
 //    fetch.AddToHeader("Content-Length", "81612");
-    fetch.AddToHeader("Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarydNro4YJvDSiGw1qA");
+//    fetch.AddToHeader("Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarydNro4YJvDSiGw1qA");
 //    fetch.AddContent("Hallo Welt", 10);
 //    fetch.AddToHeader("Content-Length", "10");
 //    fetch.AddToHeader("Content-Type", "application/octet-stream");
@@ -333,7 +333,7 @@ if (nPos != string::npos)
 //    fetch.Fetch("http://192.168.161.5/");
     //fetch.Fetch("https://192.66.65.226/");
 //    fetch.Fetch("https://www.google.de/");
-    //fetch.Fetch("https://www.heise.de/");
+    fetch.Fetch("https://www.heise.de/");
     //fetch.Fetch("https://avm.de/");
     //fetch.Fetch("https://www.elumatec.com/de/start");
     //fetch.Fetch("https://http2.golang.org/gophertiles?latency=0");
@@ -342,7 +342,7 @@ if (nPos != string::npos)
     //fetch.Fetch("https://tools.keycdn.com/http2-test");
   //fetch.Fetch("https://fcm.googleapis.com/fcm/send", "POST");
     //fetch.Fetch("http://192.168.161.181:9981/extjs.html");
-    fetch.Fetch("https://192.168.161.1/upload.php", "POST");
+    //fetch.Fetch("https://192.168.161.1/upload.php", "POST");
 
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PUT");
 //    fetch.Fetch("https://webdav.magentacloud.de/hallowelt.txt", "PROPPATCH");

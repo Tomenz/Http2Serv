@@ -175,7 +175,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OutDir);$(OpenSSL_Home)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>x64\Release;$(OpenSSL_Home)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>CommonLib.lib;socketlib64.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)$(PlatForm)\$(Configuration)\$(ProjectName)\$(TargetFileName)" "$(SolutionDir)$(TargetFileName)"</Command>
