@@ -987,8 +987,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     auto fnSendCueReady = [&](int64_t& nStreamWndSize, size_t& nSendBufLen, uint64_t nBufSize, uint64_t nRestLenToSend) -> bool
     {
         bool bRet = true;
-        const size_t nInQue = soMetaDa.fSockGetOutBytesInQue();
-        if (nInQue >= 0x200000 || nStreamWndSize <= 0)
+        if (soMetaDa.fSockGetOutBytesInQue() >= 0x200000 || nStreamWndSize <= 0)
         {
             nSendBufLen = 0;
             bRet = false;
@@ -1015,7 +1014,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         }
 
         if (bRet == false)
-            this_thread::sleep_for(chrono::microseconds(10));
+            this_thread::sleep_for(chrono::microseconds(5));
 
         return bRet;
     };
@@ -1099,7 +1098,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     };
 
     const size_t nHttp2Offset = httpVers == 2 ? 9 : 0;
-    const uint32_t nSizeSendBuf = MAXFRAMESIZE(tuStreamSettings);// 0x4000;
+    const uint32_t nSizeSendBuf = httpVers == 2 ? MAXFRAMESIZE(tuStreamSettings) : 0x4000;
     constexpr uint32_t nBufSize = 4096;
     unique_ptr<uint8_t[]> pBuffer = make_unique<uint8_t[]>(nBufSize);
     uint8_t* caBuffer = pBuffer.get();
@@ -1922,7 +1921,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         if ((itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && itFileTyp->second.size() >= 2 && itFileTyp->second[0].compare(L"fcgi") == 0)
         || (pveAlaisMatch != nullptr && pveAlaisMatch->size() >= 2 && pveAlaisMatch->at(0).compare(L"fcgi") == 0))
         {
-            string strIpAdd(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) ? itFileTyp->second[1] : pveAlaisMatch->at(1)));
+            string strIpAdd(wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && bExecAsScript == false ? itFileTyp->second[1] : pveAlaisMatch->at(1)));
             uint16_t nPort = 0;
             const size_t nPosColon = strIpAdd.find_first_of(":");
 
@@ -2008,7 +2007,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                                 while (vecData.size() == 0 && patStop.load() == false && bStreamReset == false)
                                 {   // wait until we have a packet again
                                     pmtxReqdata.unlock();
-                                    this_thread::sleep_for(chrono::milliseconds(10));
+                                    this_thread::sleep_for(chrono::microseconds(1));
                                     bStreamReset = fnIsStreamReset(nStreamId);
                                     pmtxReqdata.lock();
                                 }
