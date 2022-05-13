@@ -11,6 +11,7 @@
 */
 
 #pragma once
+
 #include <vector>
 #include <string>
 #include <mutex>
@@ -54,4 +55,3 @@ private:
     vector<char*> m_envp;
     vector<string> m_vstrEnvironment;
 };
-

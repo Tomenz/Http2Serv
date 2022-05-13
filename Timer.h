@@ -19,23 +19,23 @@
 class Timer
 {
 public:
-    Timer(uint32_t tMilliSeconds, function<void(const Timer*, void*)> fTimeOut, void* pUserData = nullptr) : m_tMilliSeconds(tMilliSeconds), m_fTimeOut(fTimeOut), m_pUserData(pUserData)
+    Timer(uint32_t tMilliSeconds, std::function<void(const Timer*, void*)> fTimeOut, void* pUserData = nullptr) : m_tMilliSeconds(tMilliSeconds), m_fTimeOut(fTimeOut), m_pUserData(pUserData)
     {
         atomic_init(&m_bStop, false);
         atomic_init(&m_bIsStoped, false);
 
-        m_thWaitThread = thread([&]()
+        m_thWaitThread = std::thread([&]()
         {
-            m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
-            unique_lock<mutex> lock(m_mxCv);
+            m_tStart = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+            std::unique_lock<std::mutex> lock(m_mxCv);
             do
             {
-                const uint32_t nDifMilliSeconds = static_cast<uint32_t>((chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()) - m_tStart).count());
+                const uint32_t nDifMilliSeconds = static_cast<uint32_t>((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) - m_tStart).count());
                 uint32_t tRestMilliSeconds = 1;
                 if (nDifMilliSeconds < m_tMilliSeconds)
                     tRestMilliSeconds = m_tMilliSeconds - nDifMilliSeconds;
 
-                if (m_cv.wait_for(lock, chrono::milliseconds(tRestMilliSeconds)) == cv_status::timeout)
+                if (m_cv.wait_for(lock, std::chrono::milliseconds(tRestMilliSeconds)) == std::cv_status::timeout)
                 {
                     if (m_fTimeOut != 0 && m_bStop == false)
                         m_fTimeOut(this, m_pUserData);
@@ -51,7 +51,7 @@ public:
         Stop();
         while (m_bIsStoped == false)
         {
-            this_thread::sleep_for(chrono::microseconds(1));
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
             const bool bIsLocked = m_mxCv.try_lock();
             if (bIsLocked == true)  // if it is not looked, the timeout is right now
             {
@@ -65,7 +65,7 @@ public:
 
     void Reset() noexcept
     {
-        m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
+        m_tStart = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
         const bool bIsLocked = m_mxCv.try_lock();
         if (bIsLocked == true)  // if it is not looked, the timeout is right now
         {
@@ -93,7 +93,7 @@ public:
     void SetNewTimeout(uint32_t nNewTime)
     {
         m_tMilliSeconds = nNewTime;
-        m_tStart = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
+        m_tStart = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
         const bool bIsLocked = m_mxCv.try_lock();
         if (bIsLocked == true)  // if it is not looked, the timeout is right now
         {
@@ -104,12 +104,12 @@ public:
 
 private:
     uint32_t m_tMilliSeconds;
-    chrono::milliseconds m_tStart;
-    function<void(const Timer*, void*)> m_fTimeOut;
+    std::chrono::milliseconds m_tStart;
+    std::function<void(const Timer*, void*)> m_fTimeOut;
     void* m_pUserData;
-    atomic<bool> m_bStop;
-    atomic<bool> m_bIsStoped;
-    thread m_thWaitThread;
-    mutex m_mxCv;
-    condition_variable m_cv;
+    std::atomic<bool> m_bStop;
+    std::atomic<bool> m_bIsStoped;
+    std::thread m_thWaitThread;
+    std::mutex m_mxCv;
+    std::condition_variable m_cv;
 };
