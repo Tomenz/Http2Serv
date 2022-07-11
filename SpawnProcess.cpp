@@ -19,6 +19,7 @@
 #include <process.h>
 #include <stdlib.h>
 #include <Windows.h>
+static const std::vector<std::string> vEnvFilter{"COMPUTERNAME=","HOMEDRIVE=","HOMEPATH=","USERNAME=","USERPROFILE="};
 #else
 #include <unistd.h>
 #include <spawn.h>
@@ -28,6 +29,7 @@ extern char **environ;
 #define _close close
 #define _write write
 #define _read read
+static const std::vector<std::string> vEnvFilter{"USER=", "HOME="};
 #endif
 
 #include "SpawnProcess.h"
@@ -52,7 +54,8 @@ SpawnProcess::SpawnProcess()
     char** aszEnv = _environ;
     while (*aszEnv)
     {
-        m_envp.push_back(*aszEnv);
+        if (std::find_if(vEnvFilter.begin(), vEnvFilter.end(), [&](auto& strFilter) { return std::string(*aszEnv).find(strFilter) == 0 ? true : false; }) != vEnvFilter.end())
+            m_envp.push_back(*aszEnv);
         ++aszEnv;
     }
 }
