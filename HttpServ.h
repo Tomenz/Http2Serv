@@ -86,6 +86,7 @@ public:
         vector<pair<string, string>> m_vHeader; // Header-Name, Header-Value
         unordered_map<wstring, wstring> m_mstrReverseProxy;
         vector<wstring> m_vAuthHandler;
+        int32_t m_nMaxConnPerIp;
     } HOSTPARAM;
 
 public:
@@ -136,4 +137,7 @@ private:
 
     static const array<MIMEENTRY, 111> MimeListe;
     static const map<uint32_t, string> RespText;
+
+    static map<string, int32_t>       s_lstIpConnect;
+    static mutex                       s_mxIpConnect;
 };

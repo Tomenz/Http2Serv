@@ -41,7 +41,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
 {
     ConfFile& conf = ConfFile::GetInstance(m_strModulePath + L"server.cfg");
 
-    static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 } };
+    static const pair<wstring, int> strKeyWordUniqueItems[] = { { L"DefaultItem", 1 },{ L"RootDir", 2 },{ L"LogFile", 3 },{ L"ErrorLog",4 },{ L"KeyFile",6 },{ L"CertFile",7 },{ L"CaBundle",8 },{ L"SSL", 9 },{ L"MsgDir", 10 },{ L"SSLCipher", 11 },{ L"MaxConnPerIp", 12 } };
     static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },
                                                                { L"ScriptOptionsHdl",10 },{ L"AddHeader", 11 },{ L"ReverseProxy", 12},{ L"ScriptAuthHdl",13 } };
 
@@ -145,6 +145,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
                         HostParam.m_bSSL = strValue == L"TRUE" ? true : false; break;
                     case 10:HostParam.m_strMsgDir = strValue; break;
                     case 11:HostParam.m_strSslCipher = Utf8Converter.to_bytes(strValue); break;
+                    case 12:HostParam.m_nMaxConnPerIp = stoi(strValue); break;
                     }
                 }
             }

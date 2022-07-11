@@ -70,6 +70,8 @@ const char* CHttpServ::SERVERSIGNATUR = "Http2Serv/1.0.0";
 atomic_size_t s_nInstCount(0);
 map<string, FastCgiClient> s_mapFcgiConnections;
 mutex s_mxFcgi;
+map<string, int32_t>       CHttpServ::s_lstIpConnect;
+mutex                      CHttpServ::s_mxIpConnect;
 
 CHttpServ::CHttpServ(const wstring& strRootPath/* = wstring(L".")*/, const string& strBindIp/* = string("127.0.0.1")*/, uint16_t sPort/* = 80*/, bool bSSL/* = false*/) : m_pSocket(nullptr), m_strBindIp(strBindIp), m_sPort(sPort), m_cLocal(locale("C"))
 {
@@ -78,6 +80,7 @@ CHttpServ::CHttpServ(const wstring& strRootPath/* = wstring(L".")*/, const strin
     HOSTPARAM hp;
     hp.m_strRootPath = strRootPath;
     hp.m_bSSL = bSSL;
+    hp.m_nMaxConnPerIp = -1;
     m_vHostParam.emplace(string(), hp);
 }
 
@@ -209,6 +212,26 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
     {
         if (pSocket != nullptr)
         {
+            if (m_vHostParam[string()].m_nMaxConnPerIp > 0)
+            {
+                s_mxIpConnect.lock();
+                auto itIpItem = s_lstIpConnect.find(pSocket->GetClientAddr());
+                if (itIpItem != s_lstIpConnect.end())
+                {
+                    if (itIpItem->second > m_vHostParam[string()].m_nMaxConnPerIp)
+                    {
+                        s_mxIpConnect.unlock();
+                        CLogFile::GetInstance(m_vHostParam[string()].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] [client ", pSocket->GetClientAddr(), "] to many connections");
+                        pSocket->Close();
+                        continue;
+                    }
+                    itIpItem->second++;
+                }
+                else
+                    s_lstIpConnect.insert({ pSocket->GetClientAddr(), 1 });
+                s_mxIpConnect.unlock();
+            }
+
             pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket* const)>>(bind(&CHttpServ::OnDataReceived, this, _1)));
             pSocket->BindErrorFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketError, this, _1)));
             pSocket->BindCloseFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketCloseing, this, _1)));
@@ -643,6 +666,16 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
 
             if (item != end(m_vConnections))
                 m_vConnections.erase(item->first);
+
+            s_mxIpConnect.lock();
+            auto itIpItem = s_lstIpConnect.find(reinterpret_cast<TcpSocket* const>(pBaseSocket)->GetClientAddr());
+            if (itIpItem != s_lstIpConnect.end())
+            {
+                itIpItem->second--;
+                if (itIpItem->second == 0)
+                    s_lstIpConnect.erase(itIpItem);
+            }
+            s_mxIpConnect.unlock();
         }
     }
     m_mtxConnections.unlock();
