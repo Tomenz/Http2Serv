@@ -2077,7 +2077,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     soMetaDa.fSetNewTimeout(30000);   // back to 30 Seconds
                 }
                 else
+                {
                     fnSendError();
+                    s_mxFcgi.lock();
+                    s_mapFcgiConnections.erase(strIpAdd);
+                    s_mxFcgi.unlock();
+                    CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog).WriteToLog("[", CLogFile::LOGTYPES::PUTTIME, "] [error] ", "FastCgi Process not activ.");
+                }
             }
         }
 
