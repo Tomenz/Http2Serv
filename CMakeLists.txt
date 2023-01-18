@@ -16,6 +16,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(BROTLI_BUNDLED_MODE ON)
 set(BROTLI_DISABLE_TESTS TRUE)
+set(BROTLI_EMSCRIPTEN ON)
 
 set(SKIP_INSTALL_ALL TRUE)
 
@@ -55,7 +56,8 @@ target_link_libraries(${PROJECT_NAME} CommonLib)
 target_link_libraries(${PROJECT_NAME} srvlib)
 target_link_libraries(${PROJECT_NAME} socketlib)
 target_link_libraries(${PROJECT_NAME} FastCgi)
-target_link_libraries(${PROJECT_NAME} brotlienc-static)
+target_link_libraries(${PROJECT_NAME} brotlicommon)
+target_link_libraries(${PROJECT_NAME} brotlienc)
 target_link_libraries(${PROJECT_NAME} zlibstatic)
 if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC") OR WIN32)
 if(UA_ENABLE_ENCRYPTION_OPENSSL)

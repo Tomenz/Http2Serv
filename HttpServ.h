@@ -24,7 +24,7 @@ class CHttpServ : public Http2Protocol
 {
     typedef struct
     {
-        shared_ptr<Timer> pTimer;
+        shared_ptr<Timer<TcpSocket>> pTimer;
         string strBuffer;
         bool bIsH2Con;
         uint64_t nContentsSoll;
@@ -112,12 +112,12 @@ private:
     void OnDataReceived(TcpSocket* const pTcpSocket);
     void OnSocketError(BaseSocket* const pBaseSocket);
     void OnSocketCloseing(BaseSocket* const pBaseSocket);
-    void OnTimeout(const Timer* const pTimer, void*);
+    void OnTimeout(const Timer<TcpSocket>* const pTimer, TcpSocket*);
 
     size_t BuildH2ResponsHeader(uint8_t* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HeadList& umHeaderList, uint64_t nContentSize = 0);
     size_t BuildResponsHeader(uint8_t* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HeadList& umHeaderList, uint64_t nContentSize = 0);
     string LoadErrorHtmlMessage(HeadList& HeaderList, int iRespCode, const wstring& strMsgDir);
-    void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList = HeadList());
+    void SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer<TcpSocket>> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList = HeadList());
     void SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, function<size_t(uint8_t*, size_t, int, int, HeadList, uint64_t)> BuildRespHeader, int iRespCode, int iFlag, const string& strHttpVersion, HeadList& HeaderList, HeadList umHeaderList = HeadList());
 
     void DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, const uint32_t nStreamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, function<size_t(uint8_t*, size_t, int, int, const HeadList&, uint64_t)> BuildRespHeader, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo);

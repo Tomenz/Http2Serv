@@ -10,16 +10,18 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef TIMERCLASS
+#define TIMERCLASS
 
 #include <condition_variable>
 #include <atomic>
 #include <thread>
 
+template<class T>
 class Timer
 {
 public:
-    Timer(uint32_t tMilliSeconds, std::function<void(const Timer*, void*)> fTimeOut, void* pUserData = nullptr) : m_tMilliSeconds(tMilliSeconds), m_fTimeOut(fTimeOut), m_pUserData(pUserData)
+    Timer(uint32_t tMilliSeconds, std::function<void(const Timer*, T*)> fTimeOut, T* pUserData = nullptr) : m_tMilliSeconds(tMilliSeconds), m_fTimeOut(fTimeOut), m_pUserData(pUserData)
     {
         atomic_init(&m_bStop, false);
         atomic_init(&m_bIsStoped, false);
@@ -105,11 +107,13 @@ public:
 private:
     uint32_t m_tMilliSeconds;
     std::chrono::milliseconds m_tStart;
-    std::function<void(const Timer*, void*)> m_fTimeOut;
-    void* m_pUserData;
+    std::function<void(const Timer*, T*)> m_fTimeOut;
+    T* m_pUserData;
     std::atomic<bool> m_bStop;
     std::atomic<bool> m_bIsStoped;
     std::thread m_thWaitThread;
     std::mutex m_mxCv;
     std::condition_variable m_cv;
 };
+
+#endif  // TIMERCLASS

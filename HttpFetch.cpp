@@ -308,8 +308,8 @@ OutputDebugString(wstring(L"Daten gesendet:" + to_wstring(nSend) + L"\r\n").c_st
         }*/
     }
 
-    m_Timer = make_unique<Timer>(30000, bind(&HttpFetch::OnTimeout, this, _1, _2));
-    m_soMetaDa = { m_pcClientCon->GetClientAddr(), m_pcClientCon->GetClientPort(), m_pcClientCon->GetInterfaceAddr(), m_pcClientCon->GetInterfacePort(), m_pcClientCon->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, m_Timer.get()), bind(&Timer::SetNewTimeout, m_Timer.get(), _1) };
+    m_Timer = make_unique<Timer<TcpSocket>>(30000, bind(&HttpFetch::OnTimeout, this, _1, _2));
+    m_soMetaDa = { m_pcClientCon->GetClientAddr(), m_pcClientCon->GetClientPort(), m_pcClientCon->GetInterfaceAddr(), m_pcClientCon->GetInterfacePort(), m_pcClientCon->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer<TcpSocket>::Reset, m_Timer.get()), bind(&Timer<TcpSocket>::SetNewTimeout, m_Timer.get(), _1) };
 }
 
 void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
@@ -549,7 +549,7 @@ void HttpFetch::SocketCloseing(BaseSocket* const pBaseSocket)
         m_Timer.get()->Stop();
 }
 
-void HttpFetch::OnTimeout(const Timer* const pTimer, void* /*pUser*/)
+void HttpFetch::OnTimeout(const Timer<TcpSocket>* const pTimer, TcpSocket* /*pUser*/)
 {
     OutputDebugString(L"Http2Fetch::OnTimeout\r\n");
     m_pcClientCon->Close();

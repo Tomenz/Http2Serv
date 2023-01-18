@@ -19,7 +19,7 @@
 #include <process.h>
 #include <stdlib.h>
 #include <Windows.h>
-static const std::vector<std::string> vEnvFilter{"COMPUTERNAME=","HOMEDRIVE=","HOMEPATH=","USERNAME=","USERPROFILE=","SystemRoot=","TMP=","TEMP="};
+static const std::vector<std::string> vEnvFilter{"COMPUTERNAME=","HOMEDRIVE=","HOMEPATH=","USERNAME=","USERPROFILE=","SystemRoot=","TMP=","TEMP=","Path="};
 #else
 #include <unistd.h>
 #include <spawn.h>

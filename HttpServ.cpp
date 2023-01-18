@@ -243,7 +243,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
         m_mtxConnections.lock();
         for (auto& pSocket : vCache)
         {
-            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), pSocket), string(), false, 0, 0, {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false), make_shared<mutex>(), {} }));
+            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer<TcpSocket>>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), pSocket), string(), false, 0, 0, {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false), make_shared<mutex>(), {} }));
             pSocket->StartReceiving();
         }
         m_mtxConnections.unlock();
@@ -334,7 +334,7 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
                     return;
                 }
 
-                MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) };
+                MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer<TcpSocket>::Reset, pConDetails->pTimer), bind(&Timer<TcpSocket>::SetNewTimeout, pConDetails->pTimer, _1) };
 
                 size_t nRet;
                 if (nRet = Http2StreamProto(soMetaDa, &pConDetails->strBuffer[0], nLen, pConDetails->lstDynTable, pConDetails->StreamParam, pConDetails->H2Streams, ref(*pConDetails->mutStreams.get()), pConDetails->StreamResWndSizes, ref(*pConDetails->atStop.get()), ref(pConDetails->lstAuthInfo)), nRet != SIZE_MAX)
@@ -525,7 +525,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
                     string strHttp2Settings = Base64::Decode(http2SettingsHeader->second, true);
                     size_t nHeaderLen = strHttp2Settings.size();
 
-                    MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) };
+                    MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer<TcpSocket>::Reset, pConDetails->pTimer), bind(&Timer<TcpSocket>::SetNewTimeout, pConDetails->pTimer, _1) };
 
                     pTcpSocket->Write("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n", 71);
                     pTcpSocket->Write("\x0\x0\xc\x4\x0\x0\x0\x0\x0\x0\x4\x0\x10\x0\x0\x0\x5\x0\x0\x40\x0", 21);// SETTINGS frame (4) with ParaID(4) and 1048576 Value + ParaID(5) and 16384 Value
@@ -549,7 +549,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
             if (pConDetails->bIsH2Con == false)  // If we received or send no GOAWAY Frame in HTTP/2 we end up here, and send the response to the request how made the upgrade
             {
-                MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer::Reset, pConDetails->pTimer), bind(&Timer::SetNewTimeout, pConDetails->pTimer, _1) };
+                MetaSocketData soMetaDa { pTcpSocket->GetClientAddr(), pTcpSocket->GetClientPort(), pTcpSocket->GetInterfaceAddr(), pTcpSocket->GetInterfacePort(), pTcpSocket->IsSslConnection(), bind(&TcpSocket::Write, pTcpSocket, _1, _2), bind(&TcpSocket::Close, pTcpSocket), bind(&TcpSocket::GetOutBytesInQue, pTcpSocket), bind(&Timer<TcpSocket>::Reset, pConDetails->pTimer), bind(&Timer<TcpSocket>::SetNewTimeout, pConDetails->pTimer, _1) };
 
                 pConDetails->mutStreams->lock();
                 uint32_t nNextId = static_cast<uint32_t>(pConDetails->H2Streams.size());
@@ -629,7 +629,7 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
     auto item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
     if (item != end(m_vConnections))
     {
-        Timer* pTimer = item->second.pTimer.get();
+        Timer<TcpSocket>* pTimer = item->second.pTimer.get();
         m_mtxConnections.unlock();
         pTimer->Stop();
         while (pTimer->IsStopped() == false)
@@ -681,22 +681,20 @@ void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
     m_mtxConnections.unlock();
 }
 
-void CHttpServ::OnTimeout(const Timer* const /*pTimer*/, void* vpData)
+void CHttpServ::OnTimeout(const Timer<TcpSocket>* const /*pTimer*/, TcpSocket* vpData)
 {
-    TcpSocket* pSocket = reinterpret_cast<TcpSocket*>(vpData);
-
     lock_guard<mutex> lock(m_mtxConnections);
-    const auto item = m_vConnections.find(pSocket);
+    const auto item = m_vConnections.find(vpData);
     if (item != end(m_vConnections))
     {
         if (item->second.nContentsSoll != 0 && item->second.nContentRecv < item->second.nContentsSoll)  // File upload in progress HTTP/1.1
-            SendErrorRespons(pSocket, item->second.pTimer, 408, 0, item->second.HeaderList);
+            SendErrorRespons(vpData, item->second.pTimer, 408, 0, item->second.HeaderList);
 
         if (item->second.bIsH2Con == true)
-            Http2Goaway(bind(&TcpSocket::Write, pSocket, _1, _2), 0, 0, 0);    // 0 = Gracefull shutdown
+            Http2Goaway(bind(&TcpSocket::Write, vpData, _1, _2), 0, 0, 0);    // 0 = Gracefull shutdown
 
         *item->second.atStop.get() = true;
-        pSocket->Close();
+        vpData->Close();
     }
 }
 
@@ -891,7 +889,7 @@ string CHttpServ::LoadErrorHtmlMessage(HeadList& HeaderList, int iRespCode, cons
     return string();
 }
 
-void CHttpServ::SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList/* = HeadList()*/)
+void CHttpServ::SendErrorRespons(TcpSocket* const pTcpSocket, const shared_ptr<Timer<TcpSocket>> pTimer, int iRespCode, int iFlag, HeadList& HeaderList, HeadList umHeaderList/* = HeadList()*/)
 {
     if (HeaderList.find(":version") != end(HeaderList) && HeaderList.find(":version")->second == "1")
         iFlag |= HTTPVERSION11;

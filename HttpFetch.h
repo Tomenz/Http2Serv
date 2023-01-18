@@ -29,7 +29,7 @@ private:
     void DatenEmpfangen(TcpSocket* pTcpSocket);
     void SocketError(BaseSocket* pBaseSocket);
     void SocketCloseing(BaseSocket* pBaseSocket);
-    void OnTimeout(const Timer* const pTimer, void*);
+    void OnTimeout(const Timer<TcpSocket>* const pTimer, TcpSocket*);
     void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo) override;
 
 private:
@@ -50,7 +50,7 @@ private:
     RESERVEDWINDOWSIZE   m_mResWndSizes;
 //    shared_ptr<TempFile> m_pTmpFileRec;
 //    shared_ptr<TempFile> m_pTmpFileSend;
-    unique_ptr<Timer>    m_Timer;
+    unique_ptr<Timer<TcpSocket>>    m_Timer;
     MetaSocketData       m_soMetaDa;
     string               m_strBuffer;
     HeadList             m_umRespHeader;

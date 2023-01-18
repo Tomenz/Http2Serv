@@ -35,7 +35,7 @@ class CHttpProxy
 {
     typedef struct
     {
-        shared_ptr<Timer> pTimer;
+        shared_ptr<Timer<TcpSocket>> pTimer;
         string strBuffer;
         TcpSocket* pClientSocket;
         string strMethode;
@@ -136,7 +136,7 @@ private:
             m_mtxConnections.lock();
             for (auto& pSocket : vCache)
             {
-                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer>(600000, bind(&CHttpProxy::OnTimeout, this, _1, _2), nullptr), string(), nullptr, string(), string(), false, false, nullptr }));
+                m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer<TcpSocket>>(600000, bind(&CHttpProxy::OnTimeout, this, _1, _2), nullptr), string(), nullptr, string(), string(), false, false, nullptr }));
                 pSocket->StartReceiving();
             }
             m_mtxConnections.unlock();
@@ -281,7 +281,7 @@ private:
         if (item != end(m_vConnections))
         {
             item->second.pTimer->Stop();
-            Timer* pTimer = item->second.pTimer.get();
+            Timer<TcpSocket>* pTimer = item->second.pTimer.get();
             m_mtxConnections.unlock();
             while (pTimer->IsStopped() == false)
                 this_thread::sleep_for(chrono::microseconds(1));
@@ -314,7 +314,7 @@ private:
         m_mtxConnections.unlock();
     }
 
-    void OnTimeout(const Timer* const pTimer, void*)
+    void OnTimeout(const Timer<TcpSocket>* const pTimer, TcpSocket*)
     {
         lock_guard<mutex> lock(m_mtxConnections);
         for (auto it = begin(m_vConnections); it != end(m_vConnections); ++it)
