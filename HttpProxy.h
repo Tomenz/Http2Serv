@@ -7,29 +7,18 @@
 #include <regex>
 #include <fstream>
 
-#include "socketlib/SocketLib.h"
+#include "SocketLib/SocketLib.h"
 #include "Timer.h"
 
 using namespace std;
 using namespace std::placeholders;
 
+#if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
-#ifdef _DEBUG
-#ifdef _WIN64
-#pragma comment(lib, "x64/Debug/socketlib64d")
 #else
-#pragma comment(lib, "Debug/socketlib32d")
+extern void OutputDebugString(const wchar_t* pOut);
+extern void OutputDebugStringA(const char* pOut);
 #endif
-#else
-#ifdef _WIN64
-#pragma comment(lib, "x64/Release/socketlib64")
-#else
-#pragma comment(lib, "Release/socketlib32")
-#endif
-#endif
-
-#pragma comment(lib, "libcrypto.lib")
-#pragma comment(lib, "libssl.lib")
 
 class CHttpProxy
 {
@@ -335,7 +324,7 @@ private:
         REFERENCLIST::iterator item = m_vReferencList.find(pTcpSocket);
         if (item != end(m_vReferencList))
         {
-            auto& conn = m_vConnections.find(item->second);
+            auto conn = m_vConnections.find(item->second);
             if (conn != end(m_vConnections))
             {
                 conn->second.pTimer->Reset();
@@ -517,7 +506,7 @@ private:
             REFERENCLIST::iterator item = m_vReferencList.find(pTcpSocket);
             if (item != end(m_vReferencList))
             {
-                auto& conn = m_vConnections.find(item->second);
+                auto conn = m_vConnections.find(item->second);
                 if (conn != end(m_vConnections))
                 {
                     conn->second.pTimer->Stop();
@@ -541,7 +530,7 @@ private:
             REFERENCLIST::iterator item = m_vReferencList.find(pTcpSocket);
             if (item != end(m_vReferencList))
             {
-                auto& conn = m_vConnections.find(item->second);
+                auto conn = m_vConnections.find(item->second);
                 if (conn != end(m_vConnections))
                 {
                     conn->second.pTimer->Reset();
@@ -567,7 +556,7 @@ private:
         REFERENCLIST::iterator item = m_vReferencList.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
         if (item != end(m_vReferencList))
         {
-            auto& conn = m_vConnections.find(item->second);
+            auto conn = m_vConnections.find(item->second);
             if (conn != end(m_vConnections))
             {
                 conn->second.pTimer->Stop();
@@ -594,7 +583,7 @@ private:
         REFERENCLIST::iterator item = m_vReferencList.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
         if (item != end(m_vReferencList))
         {
-            auto& conn = m_vConnections.find(item->second);
+            auto conn = m_vConnections.find(item->second);
             if (conn != end(m_vConnections))
             {
                 conn->second.pTimer->Stop();

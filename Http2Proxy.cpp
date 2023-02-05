@@ -1,4 +1,4 @@
-// Http2Proxy.cpp : Definiert den Einstiegspunkt für die Konsolenanwendung.
+// Http2Proxy.cpp : Definiert den Einstiegspunkt fï¿½r die Konsolenanwendung.
 //
 #include <codecvt>
 #include <fcntl.h>
@@ -6,16 +6,12 @@
 #if defined(_WIN32) || defined(_WIN64)
 #include <io.h>
 #else
+#include <unistd.h>
 #endif
 
 #include "ConfFile.h"
 #include "HttpProxy.h"
 #include "SrvLib/Service.h"
-
-#if defined(_WIN32) || defined(_WIN64)
-#pragma comment(lib, "SrvLib.lib")
-#endif
-
 
 int main(int argc, const char* argv[])
 {
@@ -38,7 +34,7 @@ int main(int argc, const char* argv[])
         m_strModulePath = wstring(FILENAME_MAX, 0);
 #if defined(_WIN32) || defined(_WIN64)
         if (GetModuleFileName(NULL, &m_strModulePath[0], FILENAME_MAX) > 0)
-            m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
+            m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelÃ¶scht
 
         if (_wchdir(m_strModulePath.c_str()) != 0)
             m_strModulePath = L"./";
@@ -104,4 +100,3 @@ int main(int argc, const char* argv[])
 
     return ServiceMain(argc, argv, SrvPara);
 }
-

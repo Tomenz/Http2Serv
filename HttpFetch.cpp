@@ -5,30 +5,9 @@
 #include "HttpFetch.h"
 #include "GZip.h"
 #include "CommonLib/Base64.h"
-#include <brotli/decode.h>
+#include "brotli/decode.h"
 
-#if defined(_WIN32) || defined(_WIN64)
-#ifdef _DEBUG
-#ifdef _WIN64
-#pragma comment(lib, "x64/Debug/socketlib64d")
-#pragma comment(lib, "x64/Debug/brotli")
-#else
-#pragma comment(lib, "Debug/socketlib32d")
-#pragma comment(lib, "Debug/brotli")
-#endif
-#else
-#ifdef _WIN64
-#pragma comment(lib, "x64/Release/socketlib64")
-#pragma comment(lib, "x64/Release/brotli")
-#else
-#pragma comment(lib, "Release/socketlib32")
-#pragma comment(lib, "Release/brotli")
-#endif
-#endif
-
-#pragma comment(lib, "libcrypto.lib")
-#pragma comment(lib, "libssl.lib")
-#else
+#if !defined(_WIN32) && !defined(_WIN64)
 extern void OutputDebugString(const wchar_t* pOut);
 extern void OutputDebugStringA(const char* pOut);
 #endif

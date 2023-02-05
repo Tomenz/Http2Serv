@@ -16,7 +16,6 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <io.h>
-#pragma comment(lib, "SrvLib.lib")
 #else
 #include <unistd.h>
 #endif
@@ -45,9 +44,9 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
     static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },
                                                                { L"ScriptOptionsHdl",10 },{ L"AddHeader", 11 },{ L"ReverseProxy", 12},{ L"ScriptAuthHdl",13 } };
 
-    vector<wstring> vFileTypExt = move(conf.get(L"FileTyps"));
+    vector<wstring> vFileTypExt = conf.get(L"FileTyps");
 
-    vector<wstring> vListen = move(conf.get(L"Listen"));
+    vector<wstring> vListen = conf.get(L"Listen");
     if (vListen.empty() == true)
         vListen.push_back(L"127.0.0.1"), vListen.push_back(L"::1");
 
@@ -56,7 +55,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
     for (const auto& strListen : vListen)
     {
         string strIp = Utf8Converter.to_bytes(strListen);
-        vector<wstring> vPort = move(conf.get(L"Listen", strListen));
+        vector<wstring> vPort = conf.get(L"Listen", strListen);
         if (vPort.empty() == true)
             vPort.push_back(L"80");
         for (const auto& strPort : vPort)
@@ -405,7 +404,7 @@ int main(int argc, const char* argv[])
         m_strModulePath = wstring(FILENAME_MAX, 0);
 #if defined(_WIN32) || defined(_WIN64)
         if (GetModuleFileName(nullptr, &m_strModulePath[0], FILENAME_MAX) > 0)
-            m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
+            m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelï¿½scht
 
         if (_wchdir(m_strModulePath.c_str()) != 0)
             m_strModulePath = L"./";
@@ -422,7 +421,7 @@ int main(int argc, const char* argv[])
 #endif
         ReadConfiguration(m_strModulePath, m_vServers);
     };
-    
+
     SrvPara.fnStopCallBack = [&m_vServers]()
     {
         // Server stoppen
