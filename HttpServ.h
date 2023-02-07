@@ -111,7 +111,7 @@ private:
     void OnNewConnection(const vector<TcpSocket*>& vNewConnections);
     void OnDataReceived(TcpSocket* const pTcpSocket);
     void OnSocketError(BaseSocket* const pBaseSocket);
-    void OnSocketCloseing(BaseSocket* const pBaseSocket);
+    void OnSocketClosing(BaseSocket* const pBaseSocket);
     void OnTimeout(const Timer<TcpSocket>* const pTimer, TcpSocket*);
 
     size_t BuildH2ResponsHeader(uint8_t* const szBuffer, size_t nBufLen, int iFlag, int iRespCode, const HeadList& umHeaderList, uint64_t nContentSize = 0);

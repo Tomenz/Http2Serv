@@ -395,7 +395,7 @@ int main(int argc, const char* argv[])
     _setmode(_fileno(stdout), _O_U16TEXT);
 
     SrvPara.szDspName = L"HTTP/2 Server";
-    SrvPara.szDescrip = L"Http 2.0 Server by Thomas Hauck";
+    SrvPara.szDescribe = L"Http 2.0 Server by Thomas Hauck";
 #endif
 
     SrvPara.szSrvName = L"Http2Serv";
@@ -404,7 +404,7 @@ int main(int argc, const char* argv[])
         m_strModulePath = wstring(FILENAME_MAX, 0);
 #if defined(_WIN32) || defined(_WIN64)
         if (GetModuleFileName(nullptr, &m_strModulePath[0], FILENAME_MAX) > 0)
-            m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gel�scht
+            m_strModulePath.erase(m_strModulePath.find_last_of(L'\\') + 1); // Sollte der Backslash nicht gefunden werden wird der ganz String gelöscht
 
         if (_wchdir(m_strModulePath.c_str()) != 0)
             m_strModulePath = L"./";

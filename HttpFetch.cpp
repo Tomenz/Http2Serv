@@ -84,7 +84,7 @@ bool HttpFetch::Fetch(const string& strAdresse, const string& strMethode /*= str
     m_pcClientCon->BindFuncConEstablished(static_cast<function<void(TcpSocket*)>>(bind(&HttpFetch::Connected, this, _1)));
     m_pcClientCon->BindFuncBytesReceived(static_cast<function<void(TcpSocket*)>>(bind(&HttpFetch::DatenEmpfangen, this, _1)));
     m_pcClientCon->BindErrorFunction(static_cast<function<void(BaseSocket*)>>(bind(&HttpFetch::SocketError, this, _1)));
-    m_pcClientCon->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&HttpFetch::SocketCloseing, this, _1)));
+    m_pcClientCon->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&HttpFetch::SocketClosing, this, _1)));
 
     return m_pcClientCon->Connect(m_strServer.c_str(), m_sPort);
 }
@@ -518,9 +518,9 @@ void HttpFetch::SocketError(BaseSocket* const pBaseSocket)
     pBaseSocket->Close();
 }
 
-void HttpFetch::SocketCloseing(BaseSocket* const pBaseSocket)
+void HttpFetch::SocketClosing(BaseSocket* const pBaseSocket)
 {
-    OutputDebugString(L"Http2Fetch::SocketCloseing\r\n");
+    OutputDebugString(L"Http2Fetch::SocketClosing\r\n");
 
     if (m_fnNotify != nullptr)
         m_fnNotify(this, nullptr, 0);   // Signal end of data
