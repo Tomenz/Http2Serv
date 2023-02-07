@@ -234,7 +234,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
 
             pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket* const)>>(bind(&CHttpServ::OnDataReceived, this, _1)));
             pSocket->BindErrorFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketError, this, _1)));
-            pSocket->BindCloseFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketCloseing, this, _1)));
+            pSocket->BindCloseFunction(static_cast<function<void(BaseSocket* const)>>(bind(&CHttpServ::OnSocketClosing, this, _1)));
             vCache.push_back(pSocket);
         }
     }
@@ -622,9 +622,9 @@ void CHttpServ::OnSocketError(BaseSocket* const pBaseSocket)
     pBaseSocket->Close();
 }
 
-void CHttpServ::OnSocketCloseing(BaseSocket* const pBaseSocket)
+void CHttpServ::OnSocketClosing(BaseSocket* const pBaseSocket)
 {
-    //OutputDebugString(L"CHttpServ::OnSocketCloseing\r\n");
+    //OutputDebugString(L"CHttpServ::OnSocketClosing\r\n");
     m_mtxConnections.lock();
     auto item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
     if (item != end(m_vConnections))
@@ -691,7 +691,7 @@ void CHttpServ::OnTimeout(const Timer<TcpSocket>* const /*pTimer*/, TcpSocket* v
             SendErrorRespons(vpData, item->second.pTimer, 408, 0, item->second.HeaderList);
 
         if (item->second.bIsH2Con == true)
-            Http2Goaway(bind(&TcpSocket::Write, vpData, _1, _2), 0, 0, 0);    // 0 = Gracefull shutdown
+            Http2Goaway(bind(&TcpSocket::Write, vpData, _1, _2), 0, 0, 0);    // 0 = Graceful shutdown
 
         *item->second.atStop.get() = true;
         vpData->Close();
@@ -1968,7 +1968,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 auto itFcgi = s_mapFcgiConnections.find(strIpAdd);
                 if (itFcgi == s_mapFcgiConnections.end())
                 {
-                    s_mapFcgiConnections.emplace(strIpAdd, move(itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && itFileTyp->second.size() >= 3 ? FastCgiClient(itFileTyp->second[2]) : FastCgiClient()));
+                    s_mapFcgiConnections.emplace(strIpAdd, itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) && itFileTyp->second.size() >= 3 ? FastCgiClient(itFileTyp->second[2]) : FastCgiClient());
                     itFcgi = s_mapFcgiConnections.find(strIpAdd);
                 }
 

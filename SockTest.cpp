@@ -1,4 +1,4 @@
-// SockTest.cpp : Definiert den Einstiegspunkt für die Konsolenanwendung.
+// SockTest.cpp : Definiert den Einstiegspunkt fÃ¼r die Konsolen Anwendung.
 //
 
 #include "socketlib/SslSocket.h"
@@ -115,7 +115,7 @@ public:
             {
                 pSocket->BindFuncBytesReceived(bind(&EchoServer::DatenEmpfangen, this, _1));
                 pSocket->BindErrorFunction(bind(&EchoServer::SocketError, this, _1));
-                pSocket->BindCloseFunction(bind(&EchoServer::SocketCloseing, this, _1));
+                pSocket->BindCloseFunction(bind(&EchoServer::SocketClosing, this, _1));
                 lock_guard<mutex> lock(m_mtConnections);
                 m_vConnections.emplace(pSocket, make_tuple(new Timer(10000, bind(&EchoServer::Timeout, this, _1)), string()));
                 //m_vConnections.emplace(pSocket, make_tuple(nullptr, string()));
@@ -205,7 +205,7 @@ public:
         pBaseSocket->Close();
     }
 
-    void SocketCloseing(BaseSocket* pBaseSocket)
+    void SocketClosing(BaseSocket* pBaseSocket)
     {
         //cout << "Socket closing" << endl;
 
@@ -291,7 +291,7 @@ public:
             {
                 pSocket->BindFuncBytesReceived(bind(&EchoServer::DatenEmpfangen, this, _1));
                 pSocket->BindErrorFunction(bind(&EchoServer::SocketError, this, _1));
-                pSocket->BindCloseFunction(bind(&EchoServer::SocketCloseing, this, _1));
+                pSocket->BindCloseFunction(bind(&EchoServer::SocketClosing, this, _1));
                 lock_guard<mutex> lock(m_mtConnections);
                 //m_vSslConnections.emplace(pSocket, make_tuple(new Timer(10000, bind(&EchoServer::Timeout, this, _1)), string()));
                 m_vConnections.emplace(pSocket, make_tuple(new Timer(10000, bind(&EchoServer::Timeout, this, _1)), string()));
@@ -485,4 +485,3 @@ int main()
 
     return 0;
 }
-

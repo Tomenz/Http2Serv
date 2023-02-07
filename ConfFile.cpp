@@ -37,7 +37,7 @@ ConfFile& ConfFile::GetInstance(const wstring& strConfigFile)
     const auto& instance = s_lstConfFiles.find(strConfigFile);
     if (instance == end(s_lstConfFiles))
     {
-        s_lstConfFiles.emplace(strConfigFile, move(ConfFile(strConfigFile)));
+        s_lstConfFiles.emplace(strConfigFile, ConfFile(strConfigFile));
         return  s_lstConfFiles.find(strConfigFile)->second;
     }
 
@@ -110,7 +110,7 @@ const wstring& ConfFile::getUnique(const wstring& strSektion, const wstring& str
         if (item.first != item.second)
         {
             if (distance(item.first, item.second) > 1)
-                MyTrace("Warnung: Configfile has hidden entrys in section \'", strSektion, "\', key \'", strValue, "\' exist more than once");
+                MyTrace("Warnung: Configfile has hidden entry in section \'", strSektion, "\', key \'", strValue, "\' exist more than once");
             unordered_multimap<wstring, wstring>::const_iterator it = item.first, itNext = it;
             while (++itNext != item.second && it != item.second) ++it;
             return it->second;  // Letztes Element    //item.first->second;
@@ -125,7 +125,7 @@ void ConfFile::CheckFileLoaded()
 {
     lock_guard<mutex> lock(m_mtxLoad);
 
-    if (m_mSections.empty() == true || AreFilesModifyed() == true)
+    if (m_mSections.empty() == true || AreFilesModified() == true)
     {
         LoadFile(m_strFileName);
     }
@@ -135,7 +135,7 @@ void ConfFile::LoadFile(const wstring& strFilename)
 {
     m_mSections.clear();
 
-    function<void(const wstring&)> fnLoadFileRecrusive = [&](const wstring& strFilename)
+    function<void(const wstring&)> fnLoadFileRecursive = [&](const wstring& strFilename)
     {
         wifstream fin;
         fin.open(FN_STR(strFilename), ios::in | ios::binary);
@@ -186,7 +186,7 @@ void ConfFile::LoadFile(const wstring& strFilename)
                     }
                     else if (strLine[0] == L'@')
                     {
-                        fnLoadFileRecrusive(TrimString(strLine.substr(1)));
+                        fnLoadFileRecursive(TrimString(strLine.substr(1)));
                         LastSection = nullptr;
                     }
                 }
@@ -206,10 +206,10 @@ void ConfFile::LoadFile(const wstring& strFilename)
             MyTrace("Error: Configfile \'", strFilename, "\' could not be opened");
     };
 
-    fnLoadFileRecrusive(strFilename);
+    fnLoadFileRecursive(strFilename);
 }
 
-bool ConfFile::AreFilesModifyed() const noexcept
+bool ConfFile::AreFilesModified() const noexcept
 {
     if (m_tFileTime == 0)    // We have no files, we return true as if the file is modified
         return true;

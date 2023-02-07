@@ -42,7 +42,7 @@ private:
 
     void CheckFileLoaded();
     void LoadFile(const wstring& strFilename);
-    bool AreFilesModifyed() const noexcept;
+    bool AreFilesModified() const noexcept;
 
 private:
     wstring m_strFileName;

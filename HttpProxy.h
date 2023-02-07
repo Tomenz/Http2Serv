@@ -116,7 +116,7 @@ private:
             {
                 pSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket*)>>(bind(&CHttpProxy::OnDataReceived, this, _1)));
                 pSocket->BindErrorFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::OnSocketError, this, _1)));
-                pSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::OnSocketCloseing, this, _1)));
+                pSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::OnSocketClosing, this, _1)));
                 vCache.push_back(pSocket);
             }
         }
@@ -218,7 +218,7 @@ private:
                             pConDetails->pClientSocket->BindFuncConEstablished(static_cast<function<void(TcpSocket*)>>(bind(&CHttpProxy::Connected, this, _1)));
                             pConDetails->pClientSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket*)>>(bind(&CHttpProxy::OnDataRecievedDest, this, _1)));
                             pConDetails->pClientSocket->BindErrorFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketErrorDest, this, _1)));
-                            pConDetails->pClientSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketCloseingDest, this, _1)));
+                            pConDetails->pClientSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketClosingDest, this, _1)));
 
                             if (pConDetails->pClientSocket->Connect(pConDetails->strDestination.c_str(), sPort) == false)
                             {
@@ -262,9 +262,9 @@ private:
         pBaseSocket->Close();
     }
 
-    void OnSocketCloseing(BaseSocket* const pBaseSocket)
+    void OnSocketClosing(BaseSocket* const pBaseSocket)
     {
-        //OutputDebugString(wstring(L"CHttpProxy::OnSocketCloseing - " + to_wstring(reinterpret_cast<size_t>(pBaseSocket)) +  L"\r\n").c_str());
+        //OutputDebugString(wstring(L"CHttpProxy::OnSocketClosing - " + to_wstring(reinterpret_cast<size_t>(pBaseSocket)) +  L"\r\n").c_str());
         m_mtxConnections.lock();
         auto item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
         if (item != end(m_vConnections))
@@ -291,7 +291,7 @@ private:
                 if (pSock != nullptr)
                 {
 //                    m_vReferencList.erase(pSock);
-                    pSock->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketCloseingDelete, this, _1)));
+                    pSock->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketClosingDelete, this, _1)));
                     pSock->Close();// pSock->SelfDestroy();
                 }
             }
@@ -437,7 +437,7 @@ private:
                                 item->second.bConncted = false;
 
 //                                m_vReferencList.erase(item->second.pClientSocket);
-                                item->second.pClientSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketCloseingDelete, this, _1)));
+                                item->second.pClientSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketClosingDelete, this, _1)));
                                 item->second.pClientSocket->Close();// pSock->SelfDestroy();
 
                                 item->second.pClientSocket = new TcpSocket();
@@ -447,7 +447,7 @@ private:
                                 item->second.pClientSocket->BindFuncConEstablished(static_cast<function<void(TcpSocket*)>>(bind(&CHttpProxy::Connected, this, _1)));
                                 item->second.pClientSocket->BindFuncBytesReceived(static_cast<function<void(TcpSocket*)>>(bind(&CHttpProxy::OnDataRecievedDest, this, _1)));
                                 item->second.pClientSocket->BindErrorFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketErrorDest, this, _1)));
-                                item->second.pClientSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketCloseingDest, this, _1)));
+                                item->second.pClientSocket->BindCloseFunction(static_cast<function<void(BaseSocket*)>>(bind(&CHttpProxy::SocketClosingDest, this, _1)));
 
                                 if (item->second.pClientSocket->Connect(item->second.strDestination.c_str(), sPort) == false)
                                 {
@@ -577,7 +577,7 @@ private:
         OutputDebugString(L"SocketErrorDest aufgerufen\r\n");
     }
 
-    void SocketCloseingDest(BaseSocket* const pBaseSocket)
+    void SocketClosingDest(BaseSocket* const pBaseSocket)
     {
         lock_guard<mutex> lock(m_mtxConnections);
         REFERENCLIST::iterator item = m_vReferencList.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
@@ -601,10 +601,10 @@ private:
         }
         else
             OutputDebugString(L"Socket nicht in ReferenceList (5)\r\n");
-        OutputDebugString(L"SocketCloseingDest aufgerufen\r\n");
+        OutputDebugString(L"SocketClosingDest aufgerufen\r\n");
     }
 
-    void SocketCloseingDelete(BaseSocket* const pBaseSocket)
+    void SocketClosingDelete(BaseSocket* const pBaseSocket)
     {
         m_mtxConnections.lock();
         m_vReferencList.erase(reinterpret_cast<TcpSocket* const>(pBaseSocket));
