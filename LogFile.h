@@ -10,7 +10,8 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef LOGFILE_H
+#define LOGFILE_H
 
 #include <sstream>
 #include <map>
@@ -75,3 +76,4 @@ private:
     static map<wstring, CLogFile>       s_lstLogFiles;
 };
 
+#endif // !LOGFILE_H

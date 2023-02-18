@@ -9,7 +9,8 @@
  *
  */
 
-#pragma once
+#ifndef TEMPFILE_H
+#define TEMPFILE_H
 
 #include <fstream>
 #include <mutex>
@@ -44,3 +45,5 @@ private:
     static string s_strTempDir;
     static string s_strPreFix;
 };
+
+#endif // !TEMPFILE_H

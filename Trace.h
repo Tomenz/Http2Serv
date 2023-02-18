@@ -10,7 +10,9 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef TRACE_H
+#define TRACE_H
+
 #include <sstream>
 
 using namespace std;
@@ -36,7 +38,7 @@ void MyTrace(const T& value) noexcept
     TraceOutput();
     stringstream().swap(ssTrace);
 #elif defined(_WIN32) || defined(_WIN64)
-    value;
+    (void)value;
 #endif
 }
 
@@ -50,8 +52,9 @@ void MyTrace(const T& value, const Args&... rest) noexcept
     MyTraceAdd(value);
     MyTrace(rest...);
 #elif defined(_WIN32) || defined(_WIN64)
-    value;
+    (void)value;
     MyTrace(rest...);
 #endif
 }
 
+#endif // !TRACE_H

@@ -10,12 +10,14 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef HPACK_H
+#define HPACK_H
 
 #include <array>
 #include <tuple>
 #include <vector>
 #include <deque>
+#include <algorithm>
 
 #include "Trace.h"
 
@@ -111,8 +113,8 @@ public:
         const char* what() const throw() {
             return m_strError.c_str();
         }
-        const HPACKEXCODE GetCode() noexcept { return m_eCode; }
-        const uint32_t GetStreamId() noexcept { return m_nStreamId; }
+        HPACKEXCODE GetCode() const noexcept { return m_eCode; }
+        uint32_t GetStreamId() const noexcept { return m_nStreamId; }
 
     private:
         string      m_strError;
@@ -136,3 +138,4 @@ private:
     static const array<HEADERENTRY, 61>  StaticHeaderListe;
 };
 
+#endif // !HPACK

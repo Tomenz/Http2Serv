@@ -10,12 +10,13 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#ifndef TIMERCLASS
-#define TIMERCLASS
+#ifndef TIMER_H
+#define TIMER_H
 
 #include <condition_variable>
 #include <atomic>
 #include <thread>
+#include <functional>
 
 template<class T>
 class Timer
@@ -116,4 +117,4 @@ private:
     std::condition_variable m_cv;
 };
 
-#endif  // TIMERCLASS
+#endif  // TIMER_H

@@ -1,8 +1,6 @@
 // SockTest.cpp : Definiert den Einstiegspunkt für die Konsolen Anwendung.
 //
 
-#include "socketlib/SslSocket.h"
-
 #include <unordered_map>
 #include <iostream>
 #include <fstream>
@@ -14,15 +12,10 @@
 #include <fcntl.h>
 #endif
 
-#include <ConfFile.h>
-#include <HttpServ.h>
-#include <Timer.h>
-
-#ifdef _DEBUG
-#pragma comment(lib, "Debug/socketlib.lib")
-#else
-#pragma comment(lib, "Release/socketlib.lib")
-#endif
+#include "ConfFile.h"
+#include "HttpServ.h"
+#include "Timer.h"
+#include "SocketLib/SocketLib.h"
 
 using namespace std::placeholders;
 
@@ -412,7 +405,7 @@ int main()
                         if (strParamKey == L"ErrorLog")
                             vServers.back().SetErrorLogFile(*vParaValue.begin(), IsVHost == true ? strListenAddr.c_str() : nullptr);
 
-                        if (strParamKey == L"SSL" && vParaValue.begin() == L"true")
+                        if (strParamKey == L"SSL" && *vParaValue.begin() == L"true")
                             get<0>(tuSSLParam) = true;
                         if (strParamKey == L"KeyFile")
                             get<1>(tuSSLParam) = Utf8Converter.to_bytes(*vParaValue.begin());

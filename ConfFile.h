@@ -10,7 +10,8 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef CONFFILE_H
+#define CONFFILE_H
 
 #include <map>
 #include <unordered_map>
@@ -52,3 +53,5 @@ private:
     unordered_map<wstring, unordered_multimap<wstring, wstring>> m_mSections;
     static map<wstring, ConfFile> s_lstConfFiles;
 };
+
+#endif // !CONFFILE_H

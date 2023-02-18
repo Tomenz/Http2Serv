@@ -10,17 +10,16 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef GZIP_H
+#define GZIP_H
 
-#ifndef GZIP
-#define GZIP
-
+#include <cstdint>
 #include "zlib/zlib.h"
 
 class GZipUnpack
 {
 public:
-    GZipUnpack() : m_strm({ 0 })
+    GZipUnpack() : m_strm({nullptr,0,0,nullptr,0,0,nullptr,nullptr,nullptr,nullptr,nullptr,0,0,0})
     {
     }
 
@@ -62,7 +61,7 @@ private:
 class GZipPack
 {
 public:
-    GZipPack() : m_strm({ 0 })
+    GZipPack() : m_strm({nullptr,0,0,nullptr,0,0,nullptr,nullptr,nullptr,nullptr,nullptr,0,0,0})
     {
     }
 
@@ -86,7 +85,7 @@ public:
         m_strm.next_in = pIn;
     }
 
-    int Enflate(unsigned char* pOut, size_t* pnOutCount, int nFlush)
+    int Inflate(unsigned char* pOut, size_t* pnOutCount, int nFlush)
     {
         m_strm.avail_out = static_cast<uint32_t>(*pnOutCount);
         m_strm.next_out = pOut;
@@ -102,4 +101,4 @@ private:
     z_stream m_strm;
 };
 
-#endif // GZIP
+#endif // GZIP_H

@@ -1,4 +1,6 @@
-#pragma once
+
+#ifndef BASE64_H
+#define BASE64_H
 
 #include <string>
 
@@ -94,3 +96,5 @@ public:
         return strRet;
     }
 };
+
+#endif // !BASE64_H

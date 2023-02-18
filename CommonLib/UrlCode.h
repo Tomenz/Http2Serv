@@ -1,6 +1,9 @@
-#pragma once
+
+#ifndef URLENCODE_H
+#define URLENCODE_H
+
 #include <string>
 
-using namespace std;
+std::string url_encode(const std::string& value);
 
-string url_encode(const string& value);
+#endif // !URLENCODE_H

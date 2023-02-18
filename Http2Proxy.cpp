@@ -25,7 +25,7 @@ int main(int argc, const char* argv[])
     _setmode(_fileno(stdout), _O_U16TEXT);
 
     SrvPara.szDspName = L"HTTP/2 Proxy";
-    SrvPara.szDescrip = L"Http 2.0 Proxy by Thomas Hauck";
+    SrvPara.szDescribe = L"Http 2.0 Proxy by Thomas Hauck";
 #endif
 
     SrvPara.szSrvName = L"Http2Proxy";

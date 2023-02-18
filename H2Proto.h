@@ -10,10 +10,15 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef H2PROTO_H
+#define H2PROTO_H
 
+#include <memory>
+#include <functional>
 #include <algorithm>
 #include <map>
+#include <mutex>
+
 #if defined (_WIN32) || defined (_WIN64)
  // https://support.microsoft.com/de-de/kb/257460
  //#include <winsock2.h>
@@ -187,8 +192,8 @@ public:
 
             while (nLen >= 9)   // Settings ACK Frame is 9 Bytes long
             {
-                H2FRAME h2f = { 0 };
-                ::memcpy(((char*)&h2f.size) + 1, szBuf, 3);
+                H2FRAME h2f{0,0,0,0,false};
+                std::copy_n(szBuf, 3, reinterpret_cast<char*>(&h2f.size) + 1);  //::memcpy(((char*)&h2f.size) + 1, szBuf, 3);
                 h2f.size = ntohl(h2f.size) & 0x00ffffff;
                 h2f.typ = *(szBuf + 3);
                 h2f.flag = *(szBuf + 4);
@@ -748,3 +753,5 @@ public:
 private:
     virtual void EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo) = 0;
 };
+
+#endif // !H2PROTO_H

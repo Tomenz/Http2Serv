@@ -10,7 +10,8 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef SPAWNPROCESS_H
+#define SPAWNPROCESS_H
 
 #include <vector>
 #include <string>
@@ -55,3 +56,5 @@ private:
     vector<char*> m_envp;
     vector<string> m_vstrEnvironment;
 };
+
+#endif // !SPAWNPROCESS_H

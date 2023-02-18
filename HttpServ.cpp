@@ -2499,7 +2499,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     do
                     {
                         nBytesConverted = nSizeSendBuf - nHttp2Offset;
-                        iResult = gzipEncoder.Enflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, nFlush);
+                        iResult = gzipEncoder.Inflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, nFlush);
 
                         size_t nOffset = 0;
                         while ((iResult == Z_OK || iResult == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false)

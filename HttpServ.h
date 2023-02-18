@@ -10,7 +10,8 @@
    Email:   Thomas@fam-hauck.de
 */
 
-#pragma once
+#ifndef HTTPSERV_H
+#define HTTPSERV_H
 
 #include <unordered_map>
 
@@ -141,3 +142,5 @@ private:
     static map<string, int32_t>       s_lstIpConnect;
     static mutex                       s_mxIpConnect;
 };
+
+#endif // !HTTPSERV_H

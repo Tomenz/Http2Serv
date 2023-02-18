@@ -1,4 +1,6 @@
-#pragma once
+
+#ifndef HTTPFETCH_H
+#define HTTPFETCH_H
 
 #include "SocketLib/SocketLib.h"
 #include "Timer.h"
@@ -68,3 +70,5 @@ private:
 
     function<void(HttpFetch*, void*, uint32_t)> m_fnNotify;
 };
+
+#endif // !HTTPFETCH_H
