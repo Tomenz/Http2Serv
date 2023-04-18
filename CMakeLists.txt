@@ -86,6 +86,17 @@ if(NOT MSVC AND UA_ENABLE_ENCRYPTION_OPENSSL)
   target_link_libraries(Http2Fetch pthread)
 endif()
 
+file(READ SrvLib/init.d/examplesrv FILE_CONTENTS)
+string(REPLACE "ExampleSrv" ${PROJECT_NAME} FILE_CONTENTS ${FILE_CONTENTS})
+string(REPLACE "~" ${CMAKE_CURRENT_BINARY_DIR} FILE_CONTENTS ${FILE_CONTENTS})
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/init.d/http2servsrv ${FILE_CONTENTS})
+
+file(READ SrvLib/example.service FILE_CONTENTS)
+string(REPLACE "ExampleSrv" ${PROJECT_NAME} FILE_CONTENTS ${FILE_CONTENTS})
+string(REPLACE "~" ${CMAKE_CURRENT_BINARY_DIR} FILE_CONTENTS ${FILE_CONTENTS})
+string(REPLACE "Some Example server" "MQTT Broker" FILE_CONTENTS ${FILE_CONTENTS})
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/http2serv.service ${FILE_CONTENTS})
+
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(DIRECTORY msg certs DESTINATION bin)
 install(FILES server-dist.cfg DESTINATION bin RENAME server.cfg)
