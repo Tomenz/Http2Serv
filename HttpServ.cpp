@@ -43,6 +43,7 @@ using namespace tr1;
 
 #define FN_CA(x) x.c_str()
 #define FN_STR(x) x
+constexpr wchar_t* g_szHttpFetch{L".//Http2Fetch.exe/$1"};
 #else
 #ifndef __USE_LARGEFILE64
 #define __USE_LARGEFILE64
@@ -61,6 +62,7 @@ using namespace tr1;
 #define _S_IFREG S_IFREG
 #define FN_CA(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
 #define FN_STR(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
+constexpr wchar_t* g_szHttpFetch{L".//Http2Fetch/$1"};
 extern void OutputDebugString(const wchar_t* pOut);
 extern void OutputDebugStringA(const char* pOut);
 #endif
@@ -1555,7 +1557,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             wstring strTmp = strReferer.substr(0, nPosScriptRef);
             if (strTmp.empty() == false && strTmp.back() == L'/') strTmp.erase(strTmp.size() - 1);
 
-            wstring strNewPath = regex_replace(strItemPath, reProxy, L".//Http2Fetch.exe/$1", regex_constants::format_first_only);
+            wstring strNewPath = regex_replace(strItemPath, reProxy, g_szHttpFetch, regex_constants::format_first_only);
             if (strNewPath != strItemPath)
             {
                 vStrEnvVariable.emplace_back(make_pair("PROXYURL", wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strProxyAlias.second)));
