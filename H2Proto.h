@@ -81,7 +81,7 @@ typedef struct
 class Http2Protocol : public HPack
 {
 protected:
-    enum HTTP2FLAGS : int
+    enum HTTP2FLAGS : uint32_t
     {
         END_OF_STREAM = 0x1,
         END_OF_HEADER = 0x4,
