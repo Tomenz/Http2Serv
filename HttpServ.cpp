@@ -1635,7 +1635,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     }
 
     // supplement default item
-    struct _stat64 stFileInfo = { 0 };
+    struct _stat64 stFileInfo = { 0,0,0,0,0,0,0,0,0 };
     int iRet = ::_wstat64(FN_CA(regex_replace(strItemPath, wregex(L"\""), L"")), &stFileInfo);
     if (iRet == 0 && (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
     {
@@ -1982,23 +1982,32 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 {
                     soMetaDa.fSetNewTimeout(60000 * 10);   // 10 Min = 60.000 Millisekunden * 10
 
-                    bool l_bReqEnde = false;
+                    typedef struct
+                    {
+                        std::mutex mxOutData;
+                        std::deque<std::tuple<std::unique_ptr<uint8_t[]>, size_t>> dqOutData;
+                        size_t nHttp2Offset;
+                    }SENDPARAM;
+                    SENDPARAM stSendParam;
+                    stSendParam.nHttp2Offset = nHttp2Offset;
+
+                    bool l_bReqEnde{false};
                     condition_variable l_cvReqEnd;
-                    unique_ptr<uint8_t[]> pBuf = make_unique<uint8_t[]>(65536 + nHttp2Offset + 10);
-                    uint16_t nReqId = 0;
-                    bool bReConnect = false;
+                    uint16_t nReqId{0};
+                    bool bReConnect{false};
                     do
                     {
-                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [&fnSendOutput, &pBuf, &nHttp2Offset, &nOffset](const unsigned char* pData, uint16_t nDataLen)
+                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [](const uint16_t nRequestId, const unsigned char* pData, uint16_t nDataLen, void* vpCbParam)
                         {
                             if (nDataLen != 0)
                             {
-                                const size_t nRead = min(65536 + 10 - nOffset, static_cast<size_t>(nDataLen));
-                                copy(pData, pData + nRead, reinterpret_cast<unsigned char*>(&pBuf[nHttp2Offset + nOffset]));
-//                                OutputDebugStringA(reinterpret_cast<const char*>(basic_string<unsigned char>(pData + nHttp2Offset, nDataLen).c_str()));
-                                fnSendOutput(pBuf.get(), nRead + nOffset);
+                                SENDPARAM* pstSendParam = reinterpret_cast<SENDPARAM*>(vpCbParam);
+                                auto tmp = make_unique<uint8_t[]>(nDataLen + pstSendParam->nHttp2Offset);
+                                std::copy_n(&static_cast<const uint8_t*>(pData)[0], nDataLen, &tmp[pstSendParam->nHttp2Offset]);
+                                std::lock_guard<std::mutex> lock(pstSendParam->mxOutData);
+                                pstSendParam->dqOutData.emplace_back(move(tmp), nDataLen);
                             }
-                        });
+                        }, &stSendParam);
                         if (nReqId == 0)
                         {
                             s_mxFcgi.lock();
@@ -2058,6 +2067,30 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         bool bReqDone = false, bAbort = false;
                         do
                         {
+                            stSendParam.mxOutData.lock();
+                            while(stSendParam.dqOutData.size() > 1)
+                            {
+                                auto data1 = move(stSendParam.dqOutData.front());
+                                stSendParam.dqOutData.pop_front();
+                                auto data2 = move(stSendParam.dqOutData.front());
+                                stSendParam.dqOutData.pop_front();
+                                stSendParam.mxOutData.unlock();
+
+                                auto tmp = make_unique<uint8_t[]>(nHttp2Offset + std::get<1>(data1) + std::get<1>(data2));
+                                std::copy_n(&std::get<0>(data1).get()[nHttp2Offset], std::get<1>(data1), &tmp[nHttp2Offset]);
+                                std::copy_n(&std::get<0>(data2).get()[nHttp2Offset], std::get<1>(data2), &tmp[nHttp2Offset + std::get<1>(data1)]);
+
+                                fnSendOutput(tmp.get(), std::get<1>(data1) + std::get<1>(data2));
+                                stSendParam.mxOutData.lock();
+                                if (nOffset != 0)
+                                {
+                                    stSendParam.dqOutData.emplace_front(move(tmp), nOffset);
+                                    nOffset = 0;
+                                    break;
+                                }
+                            }
+                            stSendParam.mxOutData.unlock();
+
                             mutex mxReqEnde;
                             unique_lock<mutex> lock(mxReqEnde);
                             bReqDone = l_cvReqEnd.wait_for(lock, chrono::milliseconds(10), [&]() noexcept { return l_bReqEnde; });
@@ -2070,7 +2103,23 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         } while (bReqDone == false);
 
                         if (bAbort == false)
-                            fnAfterCgi(pBuf.get());
+                        {
+                            size_t nRestLen{nHttp2Offset};
+                            for (size_t n = 0; n < stSendParam.dqOutData.size(); ++n)
+                                nRestLen += std::get<1>(stSendParam.dqOutData[n]);
+                            auto tmp = make_unique<uint8_t[]>(nRestLen);
+                            nRestLen = 0;
+                            while(stSendParam.dqOutData.size())
+                            {
+                                auto data = move(stSendParam.dqOutData.front());
+                                stSendParam.dqOutData.pop_front();
+                                std::copy_n(&std::get<0>(data).get()[nHttp2Offset], std::get<1>(data), &tmp[nHttp2Offset + nRestLen]);
+                                nRestLen += std::get<1>(data);
+                            }
+                            if (nRestLen > 0)
+                                fnSendOutput(tmp.get(), nRestLen);
+                            fnAfterCgi(tmp.get());
+                        }
                     }
                     else if (patStop.load() == false)
                         fnSendError();
