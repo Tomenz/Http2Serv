@@ -349,10 +349,12 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
                 // After a GOAWAY we terminate the connection
                 // we wait, until all action thread's are finished, otherwise we remove the connection while the action thread is still using it = crash
                 *pConDetails->atStop.get() = true;
+                auto patStop = pConDetails->atStop.get();
                 m_ActThrMutex.lock();
+                m_mtxConnections.unlock();
                 for (unordered_multimap<thread::id, atomic<bool>&>::iterator iter = begin(m_umActionThreads); iter != end(m_umActionThreads);)
                 {
-                    if (&iter->second == pConDetails->atStop.get())
+                    if (&iter->second == patStop)
                     {
                         m_ActThrMutex.unlock();
                         this_thread::sleep_for(chrono::milliseconds(1));
@@ -364,7 +366,6 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
                 }
                 m_ActThrMutex.unlock();
                 soMetaDa.fSocketClose();
-                m_mtxConnections.unlock();
                 return;
             }
 
@@ -2065,6 +2066,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             itFcgi->second.SendRequestData(nReqId, "", 0);
 
                         bool bReqDone = false, bAbort = false;
+                        std::unique_ptr<Timer<bool>> pAbortWatchDog;
                         do
                         {
                             stSendParam.mxOutData.lock();
@@ -2098,9 +2100,12 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             {
                                 itFcgi->second.AbortRequest(nReqId);
                                 bAbort = true;
+                                pAbortWatchDog = make_unique<Timer<bool>>(5000, [](const Timer<bool>* pThis, bool* pUerData) { *pUerData = true;}, &l_bReqEnde);
 //OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
                             }
                         } while (bReqDone == false);
+                        itFcgi->second.RemoveRequest(nReqId);
+                        pAbortWatchDog.reset();
 
                         if (bAbort == false)
                         {
