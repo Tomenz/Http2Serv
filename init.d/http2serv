@@ -10,6 +10,7 @@
 
 NAME=Http2Serv
 DAEMON=/home/pi/c++/SockTest/$NAME
+#RUNAS=root
 RUNAS=www-data:www-data
 
 PIDDIR=/var/run/$NAME
@@ -21,6 +22,7 @@ test -x $DAEMON || exit 0
 start() {
   setcap cap_net_bind_service=+eip $DAEMON
   echo -n 'starting service…' >&2
+  setcap cap_net_bind_service=+eip $DAEMON
   if ! start-stop-daemon --start --quiet --oknodo --exec $DAEMON --chuid $RUNAS
   then
     echo ' …service not started' >&2
