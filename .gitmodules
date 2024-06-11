@@ -1,20 +1,20 @@
 [submodule "SocketLib"]
 	path = SocketLib
 	url = https://github.com/Tomenz/SocketLib
-	ignore = untracked
+	branch = master
 [submodule "brotli"]
 	path = brotli
 	url = https://github.com/google/brotli.git
-	ignore = untracked
+	branch = master
 [submodule "zlib"]
 	path = zlib
 	url = https://github.com/madler/zlib.git
-	ignore = untracked
+	branch = master
 [submodule "FastCgi"]
 	path = FastCgi
 	url = https://github.com/Tomenz/FastCgi
-	ignore = untracked
+	branch = master
 [submodule "SrvLib"]
 	path = SrvLib
 	url = https://github.com/Tomenz/SrvLib.git
-	ignore = untracked
+	branch = master
