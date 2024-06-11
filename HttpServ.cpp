@@ -62,7 +62,7 @@ constexpr wchar_t* g_szHttpFetch{L".//Http2Fetch.exe/$1"};
 #define _S_IFREG S_IFREG
 #define FN_CA(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
 #define FN_STR(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
-constexpr wchar_t* g_szHttpFetch{L".//Http2Fetch/$1"};
+const wchar_t* g_szHttpFetch{L".//Http2Fetch/$1"};
 extern void OutputDebugString(const wchar_t* pOut);
 extern void OutputDebugStringA(const char* pOut);
 #endif
@@ -245,7 +245,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
         m_mtxConnections.lock();
         for (auto& pSocket : vCache)
         {
-            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer<TcpSocket>>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), pSocket), string(), false, 0, 0, {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false), make_shared<mutex>(), {} }));
+            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer<TcpSocket>>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), pSocket), string(), false, 0, 0, {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false), make_shared<mutex>(), {}, {} }));
             pSocket->StartReceiving();
         }
         m_mtxConnections.unlock();
@@ -556,7 +556,7 @@ MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milli
 
                 pConDetails->mutStreams->lock();
                 uint32_t nNextId = static_cast<uint32_t>(pConDetails->H2Streams.size());
-                pConDetails->H2Streams.emplace(nNextId, STREAMITEM({ 0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam) }));
+                pConDetails->H2Streams.emplace(nNextId, STREAMITEM({ 0, deque<DATAITEM>(), move(pConDetails->HeaderList), 0, 0, INITWINDOWSIZE(pConDetails->StreamParam), make_shared<mutex>(), {} }));
                 pConDetails->mutStreams->unlock();
                 //m_mtxConnections.unlock();
                 //DoAction(soMetaDa, nStreamId, pConDetails->H2Streams, pConDetails->StreamParam, pConDetails->mutStreams.get(), pConDetails->StreamResWndSizes, bind(nStreamId != 0 ? &CHttpServ::BuildH2ResponsHeader : &CHttpServ::BuildResponsHeader, this, _1, _2, _3, _4, _5, _6), pConDetails->atStop.get());
@@ -1636,7 +1636,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     }
 
     // supplement default item
-    struct _stat64 stFileInfo = { 0,0,0,0,0,0,0,0,0 };
+    struct _stat64 stFileInfo;
     int iRet = ::_wstat64(FN_CA(regex_replace(strItemPath, wregex(L"\""), L"")), &stFileInfo);
     if (iRet == 0 && (stFileInfo.st_mode & _S_IFDIR) == _S_IFDIR)
     {
@@ -1998,7 +1998,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     bool bReConnect{false};
                     do
                     {
-                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [](const uint16_t nRequestId, const unsigned char* pData, uint16_t nDataLen, void* vpCbParam)
+                        nReqId = itFcgi->second.SendRequest(vCgiParam, &l_cvReqEnd, &l_bReqEnde, [](const uint16_t /*nRequestId*/, const unsigned char* pData, uint16_t nDataLen, void* vpCbParam)
                         {
                             if (nDataLen != 0)
                             {
@@ -2100,7 +2100,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             {
                                 itFcgi->second.AbortRequest(nReqId);
                                 bAbort = true;
-                                pAbortWatchDog = make_unique<Timer<bool>>(5000, [](const Timer<bool>* pThis, bool* pUerData) { *pUerData = true;}, &l_bReqEnde);
+                                pAbortWatchDog = make_unique<Timer<bool>>(5000, [](const Timer<bool>* /*pThis*/, bool* pUerData) { *pUerData = true;}, &l_bReqEnde);
 //OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
                             }
                         } while (bReqDone == false);

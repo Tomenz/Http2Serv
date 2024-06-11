@@ -16,7 +16,7 @@ if (MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     add_compile_options("/EHa")
 else()
-    SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb")
+    SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -D_DEBUG")
     add_compile_options("-Wall" "-Wpedantic" "-Wextra" "-fexceptions")
 endif()
 

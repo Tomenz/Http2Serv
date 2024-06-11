@@ -30,9 +30,9 @@ void MyTraceAdd(const T& value) {
 }
 
 template<typename T>
-void MyTrace(const T& value) noexcept
+void MyTrace([[maybe_unused]] const T& value) noexcept
 {
-#ifdef _DEBUG
+#if defined(_DEBUG) || defined(DEBUG)
     MyTraceAdd(value);
     ssTrace << endl;
     TraceOutput();
@@ -43,9 +43,9 @@ void MyTrace(const T& value) noexcept
 }
 
 template<typename T, typename ...Args>
-void MyTrace(const T& value, const Args&... rest) noexcept
+void MyTrace([[maybe_unused]] const T& value, [[maybe_unused]] const Args&... rest) noexcept
 {
-#ifdef _DEBUG
+#if defined(_DEBUG) || defined(DEBUG) || defined(Debug)
     if (ssTrace.getloc().name() != "C")
         ssTrace.imbue(locale("C"));
 
@@ -57,4 +57,4 @@ void MyTrace(const T& value, const Args&... rest) noexcept
 #endif
 }
 
-#endif // !TRACE_H
+#endif // TRACE_H
