@@ -2360,7 +2360,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     const auto ifmodifiedsince = lstHeaderFields.find("if-modified-since");
     if (ifmodifiedsince != end(lstHeaderFields))
     {
-        tm tmIfModified = { 0 };
+        tm tmIfModified;
         stringstream ss(ifmodifiedsince->second);
         ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
         const double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
@@ -2397,7 +2397,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     {
         if (ifrange->second.find_first_of(",:") != string::npos)    // Datum
         {
-            tm tmIfModified = { 0 };
+            tm tmIfModified;
             stringstream ss(ifrange->second);
             ss >> get_time(&tmIfModified, "%a, %d %b %Y %H:%M:%S GMT");
             const double dTimeDif = difftime(mktime(&tmIfModified), mktime(::gmtime(&stFileInfo.st_mtime)));
