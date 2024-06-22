@@ -253,7 +253,7 @@ public:
                             Http2WindowUpdate(soMetaDa.fSocketWrite, h2f.streamId, h2f.size + ((h2f.flag & PADDED) == PADDED ? 1 : 0)/* - PadLen*/);
                         }
 
-                        size_t nBytesToWrite = min(static_cast<size_t>(h2f.size) - PadLen, nLen);
+                        const size_t nBytesToWrite = min(static_cast<size_t>(h2f.size) - PadLen, nLen);
 
                         streamData->second.mutReqData.get()->lock();
                         streamData->second.vecReqData.emplace_back(make_unique<char[]>(nBytesToWrite + 4));
@@ -413,9 +413,9 @@ public:
                         unsigned long lStremId;
                         ::memcpy(&lStremId, szBuf, 4);
                         lStremId = ntohl(lStremId);
-                        bool E = (lStremId & 0x80000000) == 0x80000000 ? true : false;
+                        const bool E = (lStremId & 0x80000000) == 0x80000000 ? true : false;
                         lStremId &= 0x7fffffff;
-                        uint8_t Weight = szBuf[4];
+                        const uint8_t Weight = szBuf[4];
                         MyTrace("    StreamId = 0x", hex, lStremId, " E = ", E, " Weight = ", dec, static_cast<unsigned long>(Weight));
 
                         if (h2f.streamId == lStremId)
@@ -487,7 +487,7 @@ public:
                             case 4: // SETTINGS_INITIAL_WINDOW_SIZE
                                 if (lValue < 2147483647)
                                 {
-                                    unsigned long ulOldSize = INITWINDOWSIZE(tuStreamSettings);
+                                    const unsigned long ulOldSize = INITWINDOWSIZE(tuStreamSettings);
                                     INITWINDOWSIZE(tuStreamSettings) = lValue;
                                     for (auto itStreams = begin(umStreamCache); itStreams != end(umStreamCache); ++itStreams)
                                     {
@@ -553,7 +553,7 @@ public:
                         ::memcpy(&lError, &szBuf[4], 4);
                         lLastStrId = ::ntohl(lLastStrId);
                         lError = ::ntohl(lError);
-                        bool R = (lLastStrId & 0x80000000) == 0x80000000 ? true : false;
+                        const bool R = (lLastStrId & 0x80000000) == 0x80000000 ? true : false;
                         lLastStrId &= 0x7fffffff;
                         MyTrace("    LastStreamId = 0x", hex, lLastStrId, " Error = 0x", lError, " R = ", R);
                         nReturn = SIZE_MAX;
@@ -572,7 +572,7 @@ public:
                         long lValue;
                         ::memcpy(&lValue, szBuf, 4);
                         lValue = ntohl(lValue);
-                        bool R = (lValue & 0x80000000) == 0x80000000 ? true : false;
+                        const bool R = (lValue & 0x80000000) == 0x80000000 ? true : false;
                         lValue &= 0x7fffffff;
                         MyTrace("    Value = ", lValue, " R = ", R);
 
