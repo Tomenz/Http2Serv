@@ -136,7 +136,7 @@ private:
     unordered_multimap<thread::id, atomic<bool>&> m_umActionThreads;
     mutex                  m_ActThrMutex;
 
-    static const array<MIMEENTRY, 111> MimeListe;
+    static const array<MIMEENTRY, 112> MimeListe;
     static const map<uint32_t, string> RespText;
 
     static map<string, int32_t>       s_lstIpConnect;

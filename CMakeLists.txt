@@ -49,6 +49,8 @@ add_subdirectory(zlib EXCLUDE_FROM_ALL)
 
 if(UA_ENABLE_ENCRYPTION_OPENSSL)
   link_directories(${OPENSSL_LIB_DIR})
+
+  include_directories(${OPENSSL_INCLUDE_DIR})
 endif()
 
 if(UA_ENABLE_ENCRYPTION_OPENSSL)

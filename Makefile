@@ -10,7 +10,7 @@
 CC = g++
 #CC = clang++
 ifeq ($(DEBUG), yes)
-CFLAGS = -ggdb -Wno-psabi -D ZLIB_CONST -pthread
+CFLAGS = -ggdb -Wno-psabi -O1 -D ZLIB_CONST -pthread
 else
 CFLAGS = -Wall -Wno-psabi -O3 -D ZLIB_CONST -pthread -ffunction-sections -fdata-sections
 endif

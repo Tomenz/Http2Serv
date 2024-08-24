@@ -2773,7 +2773,7 @@ void CHttpServ::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t 
     thTemp.detach();
 }
 
-const array<CHttpServ::MIMEENTRY, 111>  CHttpServ::MimeListe = { {
+const array<CHttpServ::MIMEENTRY, 112>  CHttpServ::MimeListe = { {
     MIMEENTRY(L"txt", "text/plain"),
     MIMEENTRY(L"rtx", "text/richtext"),
     MIMEENTRY(L"css", "text/css"),
@@ -2784,6 +2784,7 @@ const array<CHttpServ::MIMEENTRY, 111>  CHttpServ::MimeListe = { {
     MIMEENTRY(L"shtml", "text/html"),
     MIMEENTRY(L"rtf", "text/rtf"),
     MIMEENTRY(L"js", "application/javascript"),
+    MIMEENTRY(L"json", "application/json"),
     MIMEENTRY(L"tsv", "text/tab-separated-values"),
     MIMEENTRY(L"etx", "text/x-setext"),
     MIMEENTRY(L"sgm", "text/x-sgml"),

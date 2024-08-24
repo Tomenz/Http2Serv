@@ -33,7 +33,13 @@ public:
             std::unique_lock<std::mutex> lock(m_mxCv);
             do
             {
-                const uint32_t nDifMilliSeconds = static_cast<uint32_t>((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) - m_tStart).count());
+                std::chrono::milliseconds tNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+                uint32_t nDifMilliSeconds = static_cast<uint32_t>((tNow - m_tStart).count());
+                if (tNow < m_tStart)
+                {
+                    tNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+                    nDifMilliSeconds = static_cast<uint32_t>((tNow - m_tStart).count());
+                }
                 uint32_t tRestMilliSeconds = 1;
                 if (nDifMilliSeconds < m_tMilliSeconds)
                     tRestMilliSeconds = m_tMilliSeconds - nDifMilliSeconds;
