@@ -122,7 +122,7 @@ bool CHttpServ::Start()
 
         if (m_vHostParam[""].m_strCAcertificate.empty() == false && m_vHostParam[""].m_strHostCertificate.empty() == false && m_vHostParam[""].m_strHostKey.empty() == false)
         {
-            if (pSocket->AddCertificat(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str()) == false)
+            if (pSocket->AddCertificate(m_vHostParam[""].m_strCAcertificate.c_str(), m_vHostParam[""].m_strHostCertificate.c_str(), m_vHostParam[""].m_strHostKey.c_str()) == false)
             {
                 return false;
             }
@@ -134,7 +134,7 @@ bool CHttpServ::Start()
         {
             if (Item.first != "" && Item.second.m_bSSL == true)
             {
-                if (pSocket->AddCertificat(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str()) == false)
+                if (pSocket->AddCertificate(Item.second.m_strCAcertificate.c_str(), Item.second.m_strHostCertificate.c_str(), Item.second.m_strHostKey.c_str()) == false)
                 {
                     return false;
                 }
