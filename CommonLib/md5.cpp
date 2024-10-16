@@ -347,7 +347,7 @@ std::string MD5::hexdigest() const
 
     return std::string(buf);
 */
-    std::basic_string<uint8_t> s(digest, 16);
+    std::basic_string<unsigned char> s(digest, 16);
     const static char bin2hex_lookup[] = "0123456789abcdef";
     std::stringstream r;
     for (size_t i = 0; i<s.length(); i++)
