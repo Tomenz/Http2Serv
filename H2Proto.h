@@ -25,6 +25,7 @@
 #include <Ws2tcpip.h>
 #else
 #include <arpa/inet.h>
+#include <cstring>
 #endif
 #include "HPack.h"
 
@@ -92,6 +93,7 @@ protected:
 
     enum STREAMFLAGS : uint32_t
     {
+        CLEAR_FLAG      = 0x0,
         HEADER_RECEIVED = 0x1,
         STREAM_END      = 0x2,
         HEADER_END      = 0x4,
@@ -626,7 +628,7 @@ public:
                             // We reset in Stream 0 that we are in the middle of receiving a Header
                             fnResetStream0Flag();
 
-                            STREAMSTATE(streamData) |= (h2f.flag & END_OF_STREAM) == END_OF_STREAM ? STREAM_END : 0; // END_STREAM
+                            STREAMSTATE(streamData) |= (h2f.flag & END_OF_STREAM) == END_OF_STREAM ? STREAM_END : CLEAR_FLAG; // END_STREAM
                             STREAMSTATE(streamData) |= HEADER_END;
 
                             if ((STREAMSTATE(streamData) & STREAM_END) == STREAM_END)

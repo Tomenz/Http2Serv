@@ -629,7 +629,7 @@ void CHttpServ::OnSocketClosing(BaseSocket* const pBaseSocket)
 {
     //OutputDebugString(L"CHttpServ::OnSocketClosing\r\n");
     m_mtxConnections.lock();
-    auto item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
+    auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
     if (item != end(m_vConnections))
     {
         Timer<TcpSocket>* pTimer = item->second.pTimer.get();
@@ -642,7 +642,7 @@ void CHttpServ::OnSocketClosing(BaseSocket* const pBaseSocket)
         }
 
         m_mtxConnections.lock();
-        item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
+        item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
         if (item != end(m_vConnections))
         {
             // we wait, until all action thread's are finished for this connection, otherwise we remove the connection while the action thread is still using it = crash
@@ -657,7 +657,7 @@ void CHttpServ::OnSocketClosing(BaseSocket* const pBaseSocket)
                     this_thread::sleep_for(chrono::milliseconds(1));
                     m_mtxConnections.lock();
                     m_ActThrMutex.lock();
-                    item = m_vConnections.find(reinterpret_cast<TcpSocket* const>(pBaseSocket));
+                    item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
                     if (item == end(m_vConnections))
                         break;
                     iter = begin(m_umActionThreads);
@@ -671,7 +671,7 @@ void CHttpServ::OnSocketClosing(BaseSocket* const pBaseSocket)
                 m_vConnections.erase(item->first);
 
             s_mxIpConnect.lock();
-            auto itIpItem = s_lstIpConnect.find(reinterpret_cast<TcpSocket* const>(pBaseSocket)->GetClientAddr());
+            auto itIpItem = s_lstIpConnect.find(reinterpret_cast<TcpSocket*>(pBaseSocket)->GetClientAddr());
             if (itIpItem != s_lstIpConnect.end())
             {
                 itIpItem->second--;
@@ -1705,7 +1705,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     const auto itFileTyp = m_vHostParam[szHost].m_mFileTypeAction.find(strFileExtension);
     if ((itFileTyp != end(m_vHostParam[szHost].m_mFileTypeAction) || bExecAsScript == true) && (itMethode->second != "OPTIONS" || bOptionsHandlerInScript == true))
     {
-        uint64_t nSollLen = 0, nPostLen = 0;
+        uint64_t nSollLen = 0;
         const auto itContLen = lstHeaderFields.find("content-length");
         if (itContLen != end(lstHeaderFields))
         {
@@ -2044,7 +2044,6 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             {
                                 const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                                 itFcgi->second.SendRequestData(nReqId, reinterpret_cast<char*>(data.get() + 4), nDataLen);
-                                nPostLen += nDataLen;
 
                                 pmtxReqdata.lock();
                                 while (vecData.size() == 0 && patStop.load() == false && bStreamReset == false)
@@ -2184,7 +2183,6 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             bStillRunning = false;
                             break;
                         }
-                        nPostLen += nDataLen;
 
                         pmtxReqdata.lock();
                         //OutputDebugString(wstring(L"CGI Datentransfer: " + to_wstring(nDataLen) + L" Bytes\r\n").c_str());

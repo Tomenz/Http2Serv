@@ -10,6 +10,10 @@
    Email:   Thomas@fam-hauck.de
 */
 
+#if defined(_WIN32) || defined(_WIN64)
+#define _HAS_STD_BYTE 0
+#endif
+
 #include <regex>
 #include <codecvt>
 #include <fcntl.h>

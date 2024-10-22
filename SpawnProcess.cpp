@@ -97,7 +97,7 @@ int SpawnProcess::Spawn(const wstring& strCmd, const wstring& strWorkingDir/* = 
     SetNamedPipeHandleState(reinterpret_cast<HANDLE>(_get_osfhandle(m_fdStdErrPipe[READ_FD])), &dwMode, nullptr, nullptr);
     SetHandleInformation(reinterpret_cast<HANDLE>(_get_osfhandle(m_fdStdErrPipe[WRITE_FD])), HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 
-    STARTUPINFOA stInfo = { 0 };
+    STARTUPINFOA stInfo{};
     PROCESS_INFORMATION ProcInfo = { nullptr, nullptr, 0, 0 };
 
     stInfo.cb = sizeof(STARTUPINFO);
