@@ -53,7 +53,7 @@ private:
 //    shared_ptr<TempFile> m_pTmpFileRec;
 //    shared_ptr<TempFile> m_pTmpFileSend;
     unique_ptr<Timer<TcpSocket>>    m_Timer;
-    MetaSocketData       m_soMetaDa;
+    MetaSocketData       m_soMetaDa{};
     string               m_strBuffer;
     HeadList             m_umRespHeader;
     HeadList             m_umAddHeader;

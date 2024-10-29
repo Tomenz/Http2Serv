@@ -1718,7 +1718,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         for (auto& itHeader : lstHeaderFields)
         {
             if ((bAuthHandlerInScript == false && itHeader.first == "authorization")
-            || (nSollLen <=  0 && itHeader.first == "content-length"))
+            || (nSollLen == 0 && itHeader.first == "content-length"))
                 continue;
 
             auto itArray = find_if(begin(caHeaders), end(caHeaders), [&](auto& prItem) noexcept { return prItem.first == itHeader.first ? true : false; });

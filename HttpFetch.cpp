@@ -16,7 +16,7 @@ using namespace std::placeholders;
 
 vector<string> vecProtokolls = { {"h2"}, {"http/1.1"} };
 
-HttpFetch::HttpFetch(function<void(HttpFetch*, void*, uint32_t)> fnNotify, void* vpUserData) : m_pcClientCon(nullptr), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bIsHttp2(false), m_bOutpHeader(false), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nContentReceived(0), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0), m_fnNotify(fnNotify)
+HttpFetch::HttpFetch(function<void(HttpFetch*, void*, uint32_t)> fnNotify, void* /*vpUserData*/) : m_pcClientCon(nullptr), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bIsHttp2(false), m_bOutpHeader(false), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nContentReceived(0), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0), m_fnNotify(fnNotify)
 {
 }
 
@@ -197,7 +197,7 @@ nSend += nDataLen;
                 this_thread::sleep_for(chrono::milliseconds(10));
                 m_mxVecData.lock();
             }
-            if (m_vecData.size() > 0)
+            //if (m_vecData.size() > 0)
             {
                 data = move(m_vecData.front());
                 m_vecData.pop_front();
@@ -265,7 +265,7 @@ nSend += nDataLen;
                 this_thread::sleep_for(chrono::milliseconds(10));
                 m_mxVecData.lock();
             }
-            if (m_vecData.size() > 0)
+            //if (m_vecData.size() > 0)
             {
                 data = move(m_vecData.front());
                 m_vecData.pop_front();
@@ -368,7 +368,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
 
                     //if ((m_nContentLength == SIZE_MAX || m_nContentLength == 0) && m_nChuncked != 0)    // Server send a content-length from 0 to signal end of header we are done, and we do not have a chunked transfer encoding!
                     //{
-                        m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings) })));
+                        m_umStreamCache.insert(make_pair(0, STREAMITEM({ 0, deque<DATAITEM>(), move(m_umRespHeader), 0, 0, INITWINDOWSIZE(m_tuStreamSettings), {}, {} })));
                         EndOfStreamAction(m_soMetaDa, 0, m_umStreamCache, m_tuStreamSettings, m_mtxStreams, m_mResWndSizes, atTmp, m_mxVecData, m_vecData, dqAuth);
                     //    return;
                     //}
@@ -483,7 +483,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                 m_nNextChunk -= nAnzahlDatenBytes;
 
                 if (nRead == 0 && m_nNextChunk == 0)    // we expect the \r\n after the chunk, the next Data we receive should be a \r\n
-                    ;
+                {}
                 if (nRead >= 2 && string(spBuffer.get() + nWriteOffset).substr(0, 2) == "\r\n")
                     nRead -= 2, nWriteOffset += 2, m_nChunkFooter = 0;
 
@@ -518,7 +518,7 @@ void HttpFetch::SocketError(BaseSocket* const pBaseSocket)
     pBaseSocket->Close();
 }
 
-void HttpFetch::SocketClosing(BaseSocket* const pBaseSocket)
+void HttpFetch::SocketClosing(BaseSocket* const /*pBaseSocket*/)
 {
     OutputDebugString(L"Http2Fetch::SocketClosing\r\n");
 
@@ -528,13 +528,13 @@ void HttpFetch::SocketClosing(BaseSocket* const pBaseSocket)
         m_Timer.get()->Stop();
 }
 
-void HttpFetch::OnTimeout(const Timer<TcpSocket>* const pTimer, TcpSocket* /*pUser*/)
+void HttpFetch::OnTimeout(const Timer<TcpSocket>* const /*pTimer*/, TcpSocket* /*pUser*/)
 {
     OutputDebugString(L"Http2Fetch::OnTimeout\r\n");
     m_pcClientCon->Close();
 }
 
-void HttpFetch::EndOfStreamAction(const MetaSocketData soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& tuStreamSettings, mutex& pmtxStream, RESERVEDWINDOWSIZE& maResWndSizes, atomic<bool>& patStop, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& lstAuthInfo)
+void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t streamId, STREAMLIST& StreamList, STREAMSETTINGS& /*tuStreamSettings*/, mutex& /*pmtxStream*/, RESERVEDWINDOWSIZE& /*maResWndSizes*/, atomic<bool>& /*patStop*/, mutex& pmtxReqdata, deque<unique_ptr<char[]>>& vecData, deque<AUTHITEM>& /*lstAuthInfo*/)
 {
     m_umRespHeader = move(GETHEADERLIST(StreamList.find(streamId)));
 

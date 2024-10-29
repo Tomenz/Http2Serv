@@ -39,19 +39,13 @@ static const std::vector<std::string> vEnvFilter{"USER=", "HOME="};
 
 mutex SpawnProcess::s_mtxIOstreams;
 
-SpawnProcess::SpawnProcess()
+SpawnProcess::SpawnProcess() : m_fdStdOutPipe{-1,-1}, m_fdStdInPipe{-1,-1}, m_fdStdErrPipe{-1,-1}
 {
-    m_fdStdOutPipe[0] = -1;
-    m_fdStdOutPipe[1] = -1;
-    m_fdStdInPipe[0] = -1;
-    m_fdStdInPipe[1] = -1;
-    m_fdStdErrPipe[0] = -1;
-    m_fdStdErrPipe[1] = -1;
 #if defined(_WIN32) || defined(_WIN64)
-    m_hProcess = INVALID_HANDLE_VALUE;
+    m_hProcess{INVALID_HANDLE_VALUE};
 #endif
 
-    char** aszEnv = _environ;
+    char** aszEnv {_environ};
     while (*aszEnv)
     {
         if (std::find_if(vEnvFilter.begin(), vEnvFilter.end(), [&](auto& strFilter) { return std::string(*aszEnv).find(strFilter) == 0 ? true : false; }) != vEnvFilter.end())
