@@ -42,7 +42,7 @@ mutex SpawnProcess::s_mtxIOstreams;
 SpawnProcess::SpawnProcess() : m_fdStdOutPipe{-1,-1}, m_fdStdInPipe{-1,-1}, m_fdStdErrPipe{-1,-1}
 {
 #if defined(_WIN32) || defined(_WIN64)
-    m_hProcess{INVALID_HANDLE_VALUE};
+    m_hProcess = INVALID_HANDLE_VALUE;
 #endif
 
     char** aszEnv {_environ};

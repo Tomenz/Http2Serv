@@ -172,6 +172,7 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(SolutionDir);brotli\c\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp14</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -179,7 +180,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>x64\Release;$(OpenSSL_Home)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>CommonLib.lib;socketlib64.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>CommonLib.lib;socketlib64.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)$(PlatForm)\$(Configuration)\$(ProjectName)\$(TargetFileName)" "$(SolutionDir)$(TargetFileName)"</Command>
