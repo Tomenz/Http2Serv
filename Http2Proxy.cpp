@@ -1,5 +1,10 @@
 // Http2Proxy.cpp : Definiert den Einstiegspunkt f�r die Konsolenanwendung.
 //
+
+#if defined(_WIN32) || defined(_WIN64)
+#define _HAS_STD_BYTE 0
+#endif
+
 #include <codecvt>
 #include <fcntl.h>
 

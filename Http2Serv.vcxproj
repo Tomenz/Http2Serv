@@ -127,7 +127,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>x64\Debug;$(OpenSSL_Home)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>CommonLib.lib;socketlib64d.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>CommonLib.lib;socketlib64d.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)$(PlatForm)\$(Configuration)\$(ProjectName)\$(TargetFileName)" "$(SolutionDir)$(TargetFileName)"</Command>

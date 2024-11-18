@@ -116,6 +116,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>x64\Debug;$(OpenSSL_Home)</AdditionalLibraryDirectories>
       <OutputFile>$(SolutionDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalDependencies>socketlib64d.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -158,6 +159,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>x64\Release;$(OpenSSL_Home)</AdditionalLibraryDirectories>
       <OutputFile>$(SolutionDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalDependencies>socketlib64.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
