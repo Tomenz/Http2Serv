@@ -45,6 +45,9 @@ jobs:
 
     - name: Search for openss library
       run: dir -Path 'C:\Program Files\OpenSSL\' -Filter libcrypto.lib -Recurse | %{$_.FullName}
+
+    - name: Copy openssl librarys
+      run: Copy-Item "C:\Program Files\OpenSSL\lib\VC\x64\MT\*.lib" -Destination "C:\Program Files\OpenSSL\"
       
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
