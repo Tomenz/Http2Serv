@@ -11,5 +11,5 @@ install:
 # - cmd: dir C:\OpenSSL-v33-Win64\lib\VC\x64\MT\
 - cmd: copy /Y C:\OpenSSL-v33-Win64\lib\VC\x64\MT\*.* C:\OpenSSL-v33-Win64\
 build:
-  project: Http2Serv.vcxproj
+  project: SockTest.sln
   verbosity: minimal

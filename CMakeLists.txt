@@ -30,7 +30,8 @@ set(BROTLI_BUNDLED_MODE ON)
 set(BROTLI_DISABLE_TESTS TRUE)
 set(BUILD_SHARED_LIBS OFF)
 mark_as_advanced(BUILD_SHARED_LIBS)
-
+option(ZLIB_BUILD_EXAMPLES "Enable Zlib Examples" OFF)
+option(RENAME_ZCONF "Rename the zconf when building out of source" OFF)
 
 set(SKIP_INSTALL_ALL TRUE)
 
