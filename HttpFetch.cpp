@@ -1,4 +1,8 @@
 
+#if defined(_WIN32) || defined(_WIN64)
+#define _HAS_STD_BYTE 0
+#endif
+
 #include <regex>
 #include <unordered_map>
 
@@ -14,7 +18,7 @@ extern void OutputDebugStringA(const char* pOut);
 
 using namespace std::placeholders;
 
-vector<string> vecProtokolls = { {"h2"}, {"http/1.1"} };
+static const vector<string> vecProtokolls = { {"h2"}, {"http/1.1"} };
 
 HttpFetch::HttpFetch(function<void(HttpFetch*, void*, uint32_t)> fnNotify, void* /*vpUserData*/) : m_pcClientCon(nullptr), m_sPort(80), m_UseSSL(false), m_uiStatus(0), m_bIsHttp2(false), m_bOutpHeader(false), m_bEndOfHeader(false), m_nContentLength(SIZE_MAX), m_nContentReceived(0), m_nChuncked(-1), m_nNextChunk(0), m_nChunkFooter(0), m_fnNotify(fnNotify)
 {
@@ -123,7 +127,7 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
     string Protocoll;
     if (m_UseSSL == true)
     {
-        long nResult = reinterpret_cast<SslTcpSocket*>(m_pcClientCon)->CheckServerCertificate(m_strServer.c_str());
+        const long nResult = reinterpret_cast<SslTcpSocket*>(m_pcClientCon)->CheckServerCertificate(m_strServer.c_str());
         if (nResult != 0)
             OutputDebugString(L"Http2Fetch::Connected Zertifikat not verifyd\r\n");
 
@@ -157,6 +161,7 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
 
         for (auto& itPair : m_umAddHeader)
         {
+            if (itPair.first == "Content-Length") continue;
             transform(begin(itPair.first), end(itPair.first), begin(itPair.first), ::tolower);
             nReturn = HPackEncode(caBuffer + 9 + nHeaderLen, 2048 - 9 - nHeaderLen, itPair.first.c_str(), itPair.second.c_str());
             if (nReturn == SIZE_MAX)
@@ -184,7 +189,7 @@ uint32_t nSend = 0;
 
         while (data != nullptr)  // loop until we have nullptr packet
         {
-            uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+            const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
 
             auto apBuf = make_unique<uint8_t[]>(nDataLen + 9);
             copy(reinterpret_cast<unsigned char*>(data.get() + 4), reinterpret_cast<unsigned char*>(data.get() + 4 + nDataLen), apBuf.get() + 9);
@@ -255,7 +260,7 @@ uint32_t nSend = 0;
         m_mxVecData.unlock();
         while (data != nullptr)  // loop until we have nullptr packet
         {
-            uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+            const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
             pTcpSocket->Write(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
 nSend += nDataLen;
             m_mxVecData.lock();
@@ -296,7 +301,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
     static atomic_bool atTmp;
     static deque<AUTHITEM> dqAuth;
 
-    size_t nAvailable = pTcpSocket->GetBytesAvailable();
+    const size_t nAvailable = pTcpSocket->GetBytesAvailable();
 
     if (nAvailable == 0)
     {
@@ -304,7 +309,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
         return;
     }
 
-    shared_ptr<char[]> spBuffer(new char[m_strBuffer.size() + nAvailable + 1]);
+    const shared_ptr<char[]> spBuffer(new char[m_strBuffer.size() + nAvailable + 1]);
     copy(begin(m_strBuffer), begin(m_strBuffer) + m_strBuffer.size(), spBuffer.get());
 
     size_t nRead = pTcpSocket->Read(spBuffer.get() + m_strBuffer.size(), nAvailable);
@@ -320,8 +325,8 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
 
         if (m_bIsHttp2 == true)
         {
-            size_t nRet, nReadSave = nRead;
-            if (nRet = Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atTmp, dqAuth), nRet != SIZE_MAX)
+            const size_t nReadSave = nRead;
+            if (Http2StreamProto(m_soMetaDa, spBuffer.get(), nRead, m_qDynTable, m_tuStreamSettings, m_umStreamCache, m_mtxStreams, m_mResWndSizes, atTmp, dqAuth) != SIZE_MAX)
             {
                 // no GOAWAY frame
                 if (nRead > 0)
@@ -389,8 +394,8 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                             pSecondSpace = strchr(pFirstSpace + 1, ' ');
                         if (pSecondSpace != nullptr && pSecondSpace < pEndOfLine)
                         {
-                            string strStatus(pFirstSpace + 1, pSecondSpace - pFirstSpace - 1);
-                            int iStatus = stoi(strStatus);
+                            const string strStatus(pFirstSpace + 1, pSecondSpace - pFirstSpace - 1);
+                            const int iStatus = stoi(strStatus);
                             if (iStatus >= 200)
                                 m_umRespHeader.emplace_back(make_pair(":status", strStatus));
                             else // 1xx Statuscode
@@ -449,11 +454,11 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
             bool bLastChunk = false;
             if (m_nChuncked == 0 && m_nNextChunk == 0 && m_nChunkFooter == 0)
             {
-                static regex rx("^([0-9a-fA-F]+)[\\r]?\\n"); //rx("^[\\r]?\\n([0-9a-fA-F]+)[\\r]?\\n");
+                static const regex rx("^([0-9a-fA-F]+)[\\r]?\\n"); //rx("^[\\r]?\\n([0-9a-fA-F]+)[\\r]?\\n");
                 match_results<const char*> mr;
                 if (regex_search(spBuffer.get() + nWriteOffset, mr, rx, regex_constants::format_first_only) == true && mr[0].matched == true && mr[1].matched == true)
                 {
-                    m_nNextChunk = strtol(mr[1].str().c_str(), 0, 16);
+                    m_nNextChunk = strtol(mr[1].str().c_str(), nullptr, 16);
                     nWriteOffset += mr.length();
                     nRead -= mr.length();
                     m_nChunkFooter = 2;
@@ -464,7 +469,7 @@ void HttpFetch::DatenEmpfangen(TcpSocket* const pTcpSocket)
                     OutputDebugString(L"Buffer Fehler\r\n");
             }
 
-            size_t nAnzahlDatenBytes = m_nNextChunk != 0 || m_nChunkFooter != 0 ? min(nRead, m_nNextChunk) : nRead;
+            const size_t nAnzahlDatenBytes = m_nNextChunk != 0 || m_nChunkFooter != 0 ? min(nRead, m_nNextChunk) : nRead;
             //m_pTmpFileRec.get()->Write(spBuffer.get() + nWriteOffset, nAnzahlDatenBytes);
             if (nAnzahlDatenBytes > 0)
             {
@@ -556,7 +561,7 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t
                 GZipUnpack gzipDecoder;
                 if (gzipDecoder.Init() == Z_OK)
                 {
-                    unique_ptr<unsigned char[]> dstBuf(new unsigned char[4096]);
+                    const unique_ptr<unsigned char[]> dstBuf(new unsigned char[4096]);
 
                     //shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
                     //pDestFile->Open();
@@ -578,7 +583,7 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t
                         pmtxReqdata.unlock();
                         if (data == nullptr)
                             break;
-                        uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                        const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                         gzipDecoder.InitBuffer(reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
 
                         uint32_t nBytesConverted;
@@ -597,7 +602,7 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t
             }
             else if (encoding->second.find("br") != string::npos)
             {
-                BrotliDecoderState* s = BrotliDecoderCreateInstance(NULL, NULL, NULL);
+                BrotliDecoderState* s = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
 
                 //if (dictionary_path != NULL) {
                 //    size_t dictionary_size = 0;
@@ -605,8 +610,8 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t
                 //    BrotliDecoderSetCustomDictionary(s, dictionary_size, dictionary);
                 //}
 
-                unique_ptr<unsigned char[]> srcBuf(new unsigned char[4096]);
-                unique_ptr<unsigned char[]> dstBuf(new unsigned char[4096]);
+                const unique_ptr<unsigned char[]> srcBuf(new unsigned char[4096]);
+                const unique_ptr<unsigned char[]> dstBuf(new unsigned char[4096]);
 
                 //shared_ptr<TempFile> pDestFile = make_shared<TempFile>();
                 //pDestFile->Open();
@@ -635,7 +640,7 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t
                         pmtxReqdata.unlock();
                         if (data == nullptr)
                             break;
-                        uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                        const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                         nBytesRead = min(nDataLen, static_cast<uint32_t>(4096));
                         copy(data.get() + 4, data.get() + 4 + nBytesRead, srcBuf.get());
                         if (nBytesRead < nDataLen)
@@ -654,7 +659,7 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t
                     else
                         break; /* Error or success. */
 
-                    result = BrotliDecoderDecompressStream(s, &nBytesRead, &input, &nBytesOut, &next_out, 0);
+                    result = BrotliDecoderDecompressStream(s, &nBytesRead, &input, &nBytesOut, &next_out, nullptr);
                 }
                 if (next_out != dstBuf.get())
                     m_fnNotify(this, reinterpret_cast<unsigned char*>(dstBuf.get()), static_cast<uint32_t>(next_out - dstBuf.get())); //pDestFile->Write(reinterpret_cast<char*>(dstBuf.get()), (next_out - dstBuf.get()));
@@ -689,7 +694,7 @@ void HttpFetch::EndOfStreamAction(const MetaSocketData& soMetaDa, const uint32_t
                 pmtxReqdata.unlock();
                 if (data == nullptr)
                     break;
-                uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
+                const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                 m_fnNotify(this, reinterpret_cast<unsigned char*>(data.get() + 4), nDataLen);
             }
         }

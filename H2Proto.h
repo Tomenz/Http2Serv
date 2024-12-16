@@ -154,7 +154,7 @@ public:
     {
         size_t nReturn = 0;
 
-        function<void()> fnResetStream0Flag = [&]()
+        const function<void()> fnResetStream0Flag = [&]()
         {
             // We reset in Stream 0 that we are in the middle of receiving a Header
             auto itStream0 = umStreamCache.find(0);
@@ -162,7 +162,7 @@ public:
                 STREAMSTATE(itStream0) &= ~HEADER_RECEIVED;
         };
 
-        function<void(STREAMLIST::iterator&, const H2FRAME&)> fnHasExpectHeader = [&](STREAMLIST::iterator& streamData, const H2FRAME& h2f)
+        const function<void(STREAMLIST::iterator&, const H2FRAME&)> fnHasExpectHeader = [&](STREAMLIST::iterator& streamData, const H2FRAME& h2f)
         {
             auto itExpect = GETHEADERLIST(streamData).find("expect");
             if (itExpect != end(GETHEADERLIST(streamData)))
