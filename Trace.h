@@ -14,6 +14,7 @@
 #define TRACE_H
 
 #include <sstream>
+#include <cstdint>
 
 using namespace std;
 
