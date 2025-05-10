@@ -373,7 +373,7 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
             const size_t nPosEndOfHeader =  pConDetails->strBuffer.find("\r\n\r\n");
             if (nPosEndOfHeader != string::npos)
             {
-auto dwStart = chrono::high_resolution_clock::now();
+//auto dwStart = chrono::high_resolution_clock::now();
                 // If we get here we should have a HTTP request in strPuffer
 
                 HeadList::iterator parLastHeader = end(pConDetails->HeaderList);
@@ -509,8 +509,8 @@ auto dwStart = chrono::high_resolution_clock::now();
                         pConDetails->mutReqData->unlock();
                     }
                 }
-auto dwDif = chrono::high_resolution_clock::now();
-MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milliseconds::period>(dwDif - dwStart).count()));
+//auto dwDif = chrono::high_resolution_clock::now();
+//MyTrace("Time in ms for Header parsing ", (chrono::duration<float, chrono::milliseconds::period>(dwDif - dwStart).count()));
             }
             else if (pConDetails->nContentsSoll == 0) // Noch kein End of Header, und kein Content empfangen
             {
