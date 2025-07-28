@@ -129,7 +129,7 @@ void HttpFetch::Connected(TcpSocket* const pTcpSocket)
     {
         const long nResult = reinterpret_cast<SslTcpSocket*>(m_pcClientCon)->CheckServerCertificate(m_strServer.c_str());
         if (nResult != 0)
-            OutputDebugString(L"Http2Fetch::Connected Zertifikat not verifyd\r\n");
+            OutputDebugString(L"Http2Fetch::Connected Zertifikat not verified\r\n");
 
         Protocoll = reinterpret_cast<SslTcpSocket*>(m_pcClientCon)->GetSelAlpnProtocol();
     }

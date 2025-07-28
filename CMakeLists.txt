@@ -30,8 +30,11 @@ set(BROTLI_BUNDLED_MODE ON)
 set(BROTLI_DISABLE_TESTS TRUE)
 set(BUILD_SHARED_LIBS OFF)
 mark_as_advanced(BUILD_SHARED_LIBS)
-option(ZLIB_BUILD_EXAMPLES "Enable Zlib Examples" OFF)
-option(RENAME_ZCONF "Rename the zconf when building out of source" OFF)
+option(ZLIB_INSTALL "Enable installation of zlib" OFF)
+option(ZLIB_BUILD_TESTING "Enable Zlib Examples as tests" OFF)
+option(ZLIB_BUILD_SHARED "Enable building zlib shared library" OFF)
+option(ZLIB_BUILD_STATIC "Enable building zlib static library" ON)
+option(ZLIB_BUILD_MINIZIP "Enable building libminizip contrib library" OFF)
 
 set(SKIP_INSTALL_ALL TRUE)
 
@@ -48,6 +51,8 @@ add_subdirectory(FastCgi EXCLUDE_FROM_ALL)
 add_subdirectory(SocketLib EXCLUDE_FROM_ALL)
 add_subdirectory(SrvLib EXCLUDE_FROM_ALL)
 add_subdirectory(zlib EXCLUDE_FROM_ALL)
+# zconf.h wieder herstellen
+file(RENAME ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zconf.h.included ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zconf.h)
 
 if(UA_ENABLE_ENCRYPTION_OPENSSL)
   link_directories(${OPENSSL_LIB_DIR})
