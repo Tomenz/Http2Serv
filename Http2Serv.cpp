@@ -387,7 +387,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
 }
 
 
-int main(int argc, const char* argv[])
+int main(int argc, char* argv[])
 {
     SrvParam SrvPara;
     wstring m_strModulePath;
