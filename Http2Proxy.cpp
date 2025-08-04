@@ -18,7 +18,7 @@
 #include "HttpProxy.h"
 #include "SrvLib/Service.h"
 
-int main(int argc, const char* argv[])
+int main(int argc, char* argv[])
 {
     SrvParam SrvPara;
     wstring m_strModulePath;
