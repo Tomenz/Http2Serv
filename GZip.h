@@ -79,7 +79,7 @@ public:
         return iRet;
     }
 
-    void InitBuffer(unsigned char* const pIn, uint32_t nInCount)
+    void InitBuffer(const uint8_t* pIn, uint32_t nInCount)
     {
         m_strm.avail_in = nInCount;
         m_strm.next_in = pIn;
