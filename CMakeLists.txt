@@ -81,6 +81,7 @@ set(targetSrc
         LogFile.cpp
         SpawnProcess.cpp
         Trace.cpp
+        MappedFile.cpp
 )
 
 add_executable(${PROJECT_NAME} ${targetSrc})
