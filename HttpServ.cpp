@@ -68,6 +68,8 @@ extern void OutputDebugString(const wchar_t* pOut);
 extern void OutputDebugStringA(const char* pOut);
 #endif
 
+#include <openssl/evp.h>
+
 const char* CHttpServ::SERVERSIGNATUR = "Http2Serv/1.0.0";
 
 atomic_size_t s_nInstCount(0);
@@ -1774,6 +1776,14 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         size_t nOffset = 0;
         bool bChunkedTransfer = false;
 
+        EVP_MD_CTX* mdctx{nullptr};
+        if (/*itMethode->second == "PUT" ||*/ itMethode->second == "GET")
+        {
+            mdctx = EVP_MD_CTX_new();
+            const EVP_MD* md = EVP_get_digestbyname("SHA1");
+            EVP_DigestInit_ex(mdctx, md, NULL);
+        }
+
         function<void(uint8_t*, size_t)> fnSendOutput = [&](uint8_t* szBuffer, size_t nBufLen)
         {
             if (bEndOfHeader == false)
@@ -1880,7 +1890,11 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
                 }
                 if (fnIsStreamReset(nStreamId) == false)
+                {
                     soMetaDa.fSocketWrite(szBuffer + nBytesTransferred, nSendBufLen + nHttp2Offset);
+                    if (mdctx != nullptr)
+                        EVP_DigestUpdate(mdctx, szBuffer + nBytesTransferred + nHttp2Offset, nSendBufLen);
+                }
                 if (bChunkedTransfer == true && fnIsStreamReset(nStreamId) == false)
                     soMetaDa.fSocketWrite("\r\n", 2);
                 soMetaDa.fResetTimer();
@@ -1896,8 +1910,51 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             copy(szBuffer + nHttp2Offset + nBytesTransferred, szBuffer + nHttp2Offset + nBytesTransferred + nOffset, szBuffer + nHttp2Offset);
         };
 
+        function<void()> fnWriteSha = [&]()
+        {
+            if (mdctx != nullptr)
+            {
+                unsigned char md_value[EVP_MAX_MD_SIZE];
+                unsigned int md_len{0};
+                if (EVP_DigestFinal_ex(mdctx, md_value, &md_len))
+                {
+                    std::stringstream ss;
+                    const auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
+                    const struct tm* stTime = ::localtime(&in_time_t);
+                    const static string pattern = "%d/%b/%Y:%H:%M:%S %z";
+                    use_facet <time_put <char> >(locale("C")).put(ss.rdbuf(), ss, ' ', stTime, pattern.c_str(), pattern.c_str() + pattern.size());
+
+                    ss << " - Digest is: " << std::hex;
+                    for (unsigned int i = 0; i < md_len; i++)
+                        ss << std::setfill ('0') << std::setw(2) << static_cast<uint32_t>(md_value[i]);
+                    ss << std::dec << " - Datei: " << wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath);
+                    ss << std::endl;
+
+                    std::ofstream fsha;
+                    fsha.open(string("/home/pi/c++/sha_http_out.out").c_str(), ios::app);
+                    if (fsha.is_open() == true)
+                    {
+                        fsha.write(ss.str().c_str(), ss.str().size());
+                        fsha.flush();
+                        fsha.close();
+                    }
+                    else
+                    {
+                        std::cerr << "Error open sha1 file" << std::endl;
+                    }
+                }
+                else
+                {
+                    std::cerr << "Error EVP_DigestFinal_ex" << std::endl;
+                }
+                EVP_MD_CTX_free(mdctx);
+            }
+        };
+
         function<void(uint8_t*)> fnAfterCgi = [&](uint8_t* szBuffer)
         {
+            fnWriteSha();
+
             if (bEndOfHeader == true && httpVers == 2)
             {
                 BuildHttp2Frame(szBuffer, nOffset, 0x0, 0x1, nStreamId);
@@ -1935,6 +1992,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
 
         function<void()> fnSendError = [&]()
         {
+            fnWriteSha();
+
             HeadList tmpHeader;
             tmpHeader.insert(end(tmpHeader), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
             const size_t nHeaderLen = BuildRespHeader(caBuffer + nHttp2Offset, nBufSize - nHttp2Offset, iHeaderFlag | ADDNOCACHE | TERMINATEHEADER | ADDCONNECTIONCLOSE, 500, tmpHeader, 0);
@@ -2036,6 +2095,14 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         pmtxReqdata.unlock();
                         if (patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                         {
+                            EVP_MD_CTX* mdctx{nullptr};
+                            if (itMethode->second == "PUT"/* || itMethode->second == "GET"*/)
+                            {
+                                mdctx = EVP_MD_CTX_new();
+                                const EVP_MD* md = EVP_get_digestbyname("SHA1");
+                                EVP_DigestInit_ex(mdctx, md, NULL);
+                            }
+
                             // get the first packet
                             pmtxReqdata.lock();
                             auto data = move(vecData.front());
@@ -2045,6 +2112,8 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             {
                                 const uint32_t nDataLen = *(reinterpret_cast<uint32_t*>(data.get()));
                                 itFcgi->second.SendRequestData(nReqId, reinterpret_cast<char*>(data.get() + 4), nDataLen);
+                                if (mdctx != nullptr)
+                                    EVP_DigestUpdate(mdctx, reinterpret_cast<char*>(data.get() + 4), nDataLen);
 
                                 pmtxReqdata.lock();
                                 while (vecData.size() == 0 && patStop.load() == false && bStreamReset == false)
@@ -2060,6 +2129,44 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                                     vecData.pop_front();
                                 }
                                 pmtxReqdata.unlock();
+                            }
+
+                            if (mdctx != nullptr)
+                            {
+                                unsigned char md_value[EVP_MAX_MD_SIZE];
+                                unsigned int md_len{0};
+                                if (EVP_DigestFinal_ex(mdctx, md_value, &md_len))
+                                {
+                                    std::stringstream ss;
+                                    const auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
+                                    const struct tm* stTime = ::localtime(&in_time_t);
+                                    const static string pattern = "%d/%b/%Y:%H:%M:%S %z";
+                                    use_facet <time_put <char> >(locale("C")).put(ss.rdbuf(), ss, ' ', stTime, pattern.c_str(), pattern.c_str() + pattern.size());
+
+                                    ss << " - Digest is: " << std::hex;
+                                    for (unsigned int i = 0; i < md_len; i++)
+                                        ss << std::setfill ('0') << std::setw(2) << static_cast<uint32_t>(md_value[i]);
+                                    ss << std::dec << " - Datei: " << wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItemPath);
+                                    ss << std::endl;
+
+                                    std::ofstream fsha;
+                                    fsha.open(string("/home/pi/c++/sha_http_rec.out").c_str(), ios::app);
+                                    if (fsha.is_open() == true)
+                                    {
+                                        fsha.write(ss.str().c_str(), ss.str().size());
+                                        fsha.flush();
+                                        fsha.close();
+                                    }
+                                    else
+                                    {
+                                        std::cerr << "Error open sha1 file" << std::endl;
+                                    }
+                                }
+                                else
+                                {
+                                    std::cerr << "Error EVP_DigestFinal_ex" << std::endl;
+                                }
+                                EVP_MD_CTX_free(mdctx);
                             }
                         }
                         if (patStop.load() == false)
