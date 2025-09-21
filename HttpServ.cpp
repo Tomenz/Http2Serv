@@ -2079,7 +2079,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             s_mxFcgi.unlock();
                         }
                     } while (nReqId == 0 && itFcgi->second.IsFcgiProcessActiv() == true && patStop.load() == false);
-
+OutputDebugString(L"Request send to FastCGI-Server\r\n");
                     if (nReqId != 0)    // We have a request send to the app server
                     {
                         bool bStreamReset = false;
@@ -2171,7 +2171,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                         }
                         if (patStop.load() == false)
                             itFcgi->second.SendRequestData(nReqId, "", 0);
-
+OutputDebugString(L"Request DATA send to FastCGI-Server\r\n");
                         bool bReqDone = false, bAbort = false;
                         std::unique_ptr<Timer<bool>> pAbortWatchDog;
                         do
@@ -2207,13 +2207,13 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                             {
                                 itFcgi->second.AbortRequest(nReqId);
                                 bAbort = true;
-                                pAbortWatchDog = make_unique<Timer<bool>>(5000, [](const Timer<bool>* /*pThis*/, bool* pUerData) { *pUerData = true;}, &l_bReqEnde);
-//OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
+                                pAbortWatchDog = make_unique<Timer<bool>>(5000, [](const Timer<bool>* /*pThis*/, bool* pUerData) { *pUerData = true; OutputDebugString(L"AbortWatchDog triggert\r\n"); }, &l_bReqEnde);
+OutputDebugString(wstring(L"FastCGI Abort gesendet\r\n").c_str());
                             }
                         } while (bReqDone == false);
                         itFcgi->second.RemoveRequest(nReqId);
                         pAbortWatchDog.reset();
-
+OutputDebugString(wstring(L"FastCGI Request beendet, bAbort = " + to_wstring(bAbort) + L", patStop.load() = " + to_wstring(patStop.load()) + L"\r\n").c_str());
                         if (bAbort == false)
                         {
                             size_t nRestLen{nHttp2Offset};
