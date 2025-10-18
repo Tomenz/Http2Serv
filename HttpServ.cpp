@@ -2743,6 +2743,15 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     }
     else
     {
+        CLogFile::GetInstance(m_vHostParam[szHost].m_strErrLog) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
+            << itMethode->second << " " << lstHeaderFields.find(":path")->second
+            << (httpVers == 2 ? " HTTP/2." : " HTTP/1.") << strHttpVersion
+            << "\" " << to_string(500) << " \""
+            << strerror(errno) << "\" \""
+            << (lstHeaderFields.find("referer") != end(lstHeaderFields) ? lstHeaderFields.find("referer")->second : "-") << "\" \""
+            << (lstHeaderFields.find("user-agent") != end(lstHeaderFields) ? lstHeaderFields.find("user-agent")->second : "-") << "\""
+            << CLogFile::LOGTYPES::END;
+
         SendErrorRespons(soMetaDa, httpVers, nStreamId, BuildRespHeader, 500, iHeaderFlag, strHttpVersion, lstHeaderFields);
         if (httpVers < 2)
             bCloseConnection = true;
