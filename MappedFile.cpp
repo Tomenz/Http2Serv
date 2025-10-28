@@ -76,6 +76,7 @@ bool MappedFile::open(const std::wstring& fileName)
     fileSize = lseek64(fd, 0, SEEK_END);
     if (fileSize > INT64_MAX) {
         close(fd);
+        fileSize = 0;
         return false;
     }
 

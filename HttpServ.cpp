@@ -330,7 +330,7 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
             if (pConDetails->bIsH2Con == true)   // bool is http2
             {
                 size_t nLen =  pConDetails->strBuffer.size();
-                if (nLen < 9)
+                if (nLen < H2HEADERLEN)
                 {
                     m_mtxConnections.unlock();
                     return;
@@ -952,7 +952,7 @@ void CHttpServ::SendErrorRespons(const MetaSocketData& soMetaDa, const uint8_t h
     const string strHtmlRespons = LoadErrorHtmlMessage(HeaderList, iRespCode, m_vHostParam[szHost].m_strMsgDir.empty() == false ? m_vHostParam[szHost].m_strMsgDir : L"./msg/");
     umHeaderList.insert(end(umHeaderList), begin(m_vHostParam[szHost].m_vHeader), end(m_vHostParam[szHost].m_vHeader));
 
-    const uint32_t nHttp2Offset = httpVers == 2 ? 9 : 0;
+    const uint32_t nHttp2Offset = httpVers == 2 ? H2HEADERLEN : 0;
     constexpr uint32_t nBufSize = 1024;
     const unique_ptr<uint8_t[]> pBuffer = make_unique<uint8_t[]>(nBufSize);
     uint8_t* caBuffer = pBuffer.get();
@@ -1131,7 +1131,7 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         }
     };
 
-    const size_t nHttp2Offset = httpVers == 2 ? 9 : 0;
+    const size_t nHttp2Offset = httpVers == 2 ? H2HEADERLEN : 0;
     const uint32_t nSizeSendBuf = httpVers == 2 ? MAXFRAMESIZE(tuStreamSettings) : 0x4000;
     constexpr uint32_t nBufSize = 4096;
     unique_ptr<uint8_t[]> pBuffer = make_unique<uint8_t[]>(nBufSize);

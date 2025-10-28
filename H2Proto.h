@@ -79,6 +79,8 @@ typedef struct
     function<void(uint32_t)> fSetNewTimeout;
 }MetaSocketData;
 
+constexpr size_t H2HEADERLEN{9};
+
 class Http2Protocol : public HPack
 {
 protected:
@@ -121,8 +123,8 @@ public:
         uint8_t caBuffer[20];
         const unsigned long ulSizeStream = htonl(ulStreamSize);
         BuildHttp2Frame(caBuffer, 4, 8, 0, ulStreamID); // 8 = WINDOW_UPDATE
-        ::memcpy(&caBuffer[9], &ulSizeStream, 4);
-        Write(caBuffer, 9 + 4);
+        ::memcpy(&caBuffer[H2HEADERLEN], &ulSizeStream, 4);
+        Write(caBuffer, H2HEADERLEN + 4);
     }
 
     void Http2StreamError(function<size_t(const void*, size_t)> Write, unsigned long ulStreamID, unsigned long ulErrorCode) const
@@ -130,8 +132,8 @@ public:
         uint8_t caBuffer[20];
         unsigned long ulErrCode = htonl(ulErrorCode);
         BuildHttp2Frame(caBuffer, 4, 3, 0, ulStreamID); // 3 = RST_STREAM
-        ::memcpy(&caBuffer[9], &ulErrCode, 4);
-        Write(caBuffer, 9 + 4);
+        ::memcpy(&caBuffer[H2HEADERLEN], &ulErrCode, 4);
+        Write(caBuffer, H2HEADERLEN + 4);
 
         MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
     }
@@ -142,9 +144,9 @@ public:
         unsigned long ulLastStream = htonl(ulLastStreamID);
         unsigned long ulErrCode = htonl(ulErrorCode);
         BuildHttp2Frame(caBuffer, 8, 7, 0, ulStreamID); // GOAWAY frame (7) streamID = 0, LastStreamId, error
-        ::memcpy(&caBuffer[9], &ulLastStream, 4);
-        ::memcpy(&caBuffer[13], &ulErrCode, 4);
-        Write(caBuffer, 9 + 8);
+        ::memcpy(&caBuffer[H2HEADERLEN], &ulLastStream, 4);
+        ::memcpy(&caBuffer[H2HEADERLEN + 4], &ulErrCode, 4);
+        Write(caBuffer, H2HEADERLEN + 8);
 
         if (ulErrorCode != 0)
             MyTrace("HTTP/2 Error, Code: ", ulErrorCode, ", StreamID = 0x", hex, ulStreamID);
@@ -171,19 +173,19 @@ public:
                 size_t nResult = 0;
                 if (itExpect->second == "100-continue")
                 {
-                    nResult = HPackEncode(caBuffer + 9, sizeof(caBuffer) - 9, ":status", to_string(100).c_str());
+                    nResult = HPackEncode(caBuffer + H2HEADERLEN, sizeof(caBuffer) - H2HEADERLEN, ":status", to_string(100).c_str());
                     if (nResult == SIZE_MAX)
                         return;
                     BuildHttp2Frame(caBuffer, nResult, 0x1, END_OF_HEADER, h2f.streamId);
                 }
                 else
                 {
-                    nResult = HPackEncode(caBuffer + 9, sizeof(caBuffer) - 9, ":status", to_string(400).c_str());
+                    nResult = HPackEncode(caBuffer + H2HEADERLEN, sizeof(caBuffer) - H2HEADERLEN, ":status", to_string(400).c_str());
                     if (nResult == SIZE_MAX)
                         return;
                     BuildHttp2Frame(caBuffer, nResult, 0x1, END_OF_HEADER | END_OF_STREAM, h2f.streamId);
                 }
-                soMetaDa.fSocketWrite(caBuffer, nResult + 9);
+                soMetaDa.fSocketWrite(caBuffer, nResult + H2HEADERLEN);
             }
         };
 
@@ -192,7 +194,7 @@ public:
             //char* szBufStart = szBuf;
             vector<uint32_t> CallAction;
 
-            while (nLen >= 9)   // Settings ACK Frame is 9 Bytes long
+            while (nLen >= H2HEADERLEN)   // Settings ACK Frame is 9 Bytes long
             {
                 H2FRAME h2f{0,0,0,0,false};
                 std::copy_n(szBuf, 3, reinterpret_cast<char*>(&h2f.size) + 1);  //::memcpy(((char*)&h2f.size) + 1, szBuf, 3);
@@ -204,14 +206,14 @@ public:
                 h2f.R = (h2f.streamId & 0x80000000) == 0x80000000 ? true : false;
                 h2f.streamId &= 0x7fffffff;
 
-                if (h2f.size > nLen - 9)
+                if (h2f.size > nLen - H2HEADERLEN)
                 {   // We have less Data in the buffer than the next frame needs to be processed, we put it back into the revive Que
                     //::memmove(szBufStart, szBuf, nLen);
                     break;
                 }
 
-                nLen -= 9;
-                szBuf += 9;
+                nLen -= H2HEADERLEN;
+                szBuf += H2HEADERLEN;
 
                 pmtxStream.lock();
                 if (h2f.streamId > 0 && (h2f.streamId % 2) == 0)    // Stream ID must by a odd number
@@ -511,7 +513,7 @@ public:
                                 break;
                             }
                         }
-                        soMetaDa.fSocketWrite("\x0\x0\x0\x4\x1\x0\x0\x0\x0", 9);    // ACK SETTINGS
+                        soMetaDa.fSocketWrite("\x0\x0\x0\x4\x1\x0\x0\x0\x0", H2HEADERLEN);    // ACK SETTINGS
                     }
                     pmtxStream.unlock();
                     break;
@@ -537,10 +539,10 @@ public:
                         if (h2f.size != 8)
                             throw H2ProtoException(H2ProtoException::FRAME_SIZE_ERROR);
 
-                        szBuf -= 9;
+                        szBuf -= H2HEADERLEN;
                         szBuf[4] |= 0x1;
-                        soMetaDa.fSocketWrite(szBuf, 9 + h2f.size);
-                        szBuf += 9;
+                        soMetaDa.fSocketWrite(szBuf, H2HEADERLEN + h2f.size);
+                        szBuf += H2HEADERLEN;
                     }
                     pmtxStream.unlock();
                     break;
