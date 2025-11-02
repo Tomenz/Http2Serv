@@ -25,6 +25,8 @@ public:
     const uint8_t* data() const;
     uint64_t size() const;
     void setOffset(const uint64_t offset);
+    void addOffset(const uint64_t offset);
+    uint64_t getOffset() const { return offset; }
 
 private:
     std::wstring filePath;

@@ -31,6 +31,7 @@
 #include "CommonLib/UrlCode.h"
 #include "SpawnProcess.h"
 #include "FastCgi/FastCgi.h"
+#include "MappedFile.h"
 
 using namespace std;
 using namespace std::placeholders;
@@ -2489,16 +2490,25 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
     }
 
     // Load file
-    fstream fin(FN_CA(strItemPath), ios_base::in | ios_base::binary);
-    if (fin.is_open() == true)
+    MappedFile map;
+    if (map.open(strItemPath) == true)
     {
-        uint64_t nFSize = stFileInfo.st_size;
+        //std::deque<std::tuple<uint8_t, uint8_t*, uint64_t>> queMem2Send;
+        //queMem2Send.emplace_back(0, map.data(), map.size()); // Dummy packet to indicate the start of the data stream
+
+        uint64_t nFSize = map.size();
         if (vecRanges.size() == 1)  // Momentan nur 1 Range
         {
-            nFSize = vecRanges[0].second - vecRanges[0].first;
-            fin.seekg(vecRanges[0].first, ios_base::beg);
-            umPhpHeaders.emplace_back(make_pair("Content-Range", "bytes " + to_string(vecRanges[0].first) + "-" + to_string(vecRanges[0].second) + "/" + to_string(stFileInfo.st_size)));
-            iStatus = 206;
+            //OutputDebugStringA(std::string("Range requested, nFSize=" + std::to_string(nFSize) + ", Range from: " + std::to_string(vecRanges[0].first) + " bis " + std::to_string(vecRanges[0].second) + "\r\n").c_str());
+            if (vecRanges[0].first < nFSize && vecRanges[0].second <= nFSize && vecRanges[0].second >= vecRanges[0].first)
+            {
+                nFSize = vecRanges[0].second - vecRanges[0].first;
+                map.setOffset(vecRanges[0].first);
+                umPhpHeaders.emplace_back(make_pair("Content-Range", "bytes " + to_string(vecRanges[0].first) + "-" + to_string(vecRanges[0].second) + "/" + to_string(stFileInfo.st_size)));
+                iStatus = 206;
+            }
+            else
+                OutputDebugStringA(std::string("Invalid Range requested, nFSize=" + std::to_string(nFSize) + ", Range from: " + std::to_string(vecRanges[0].first) + " bis " + std::to_string(vecRanges[0].second) + "\r\n").c_str());
         }
         else
             umPhpHeaders.emplace_back(make_pair("Accept-Ranges", "bytes"));
@@ -2506,16 +2516,31 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
         const auto acceptencoding = lstHeaderFields.find("accept-encoding");
         if (acceptencoding != end(lstHeaderFields))
         {
+            //OutputDebugStringA(string("accept-encoding: " + lstHeaderFields.find("accept-encoding")->second + "\r\n").c_str());
             // http://www.filesignatures.net/index.php?page=all
             if (find_if(begin(m_vHostParam[szHost].m_vDeflateTyps), end(m_vHostParam[szHost].m_vDeflateTyps), [&](const string& strType) noexcept { return strType == strMineType ? true : false; }) != end(m_vHostParam[szHost].m_vDeflateTyps))
             {
                 if (acceptencoding->second.find("br") != string::npos) iHeaderFlag |= BROTLICODING;
                 else if (acceptencoding->second.find("gzip") != string::npos) iHeaderFlag |= GZIPENCODING;
                 else if (acceptencoding->second.find("deflate") != string::npos) iHeaderFlag |= DEFLATEENCODING;
+
+                const auto xPrefCompAlgo = lstHeaderFields.find("x-prefcompalgo");
+                if (xPrefCompAlgo != end(lstHeaderFields))
+                {
+                    //OutputDebugStringA(string("x-prefcompalgo: " + xPrefCompAlgo->second + "\r\n").c_str());
+                    iHeaderFlag &= ~BROTLICODING;
+                    iHeaderFlag &= ~DEFLATEENCODING;
+                    iHeaderFlag &= ~GZIPENCODING;
+                    if (xPrefCompAlgo->second == "gzip")
+                        iHeaderFlag |= GZIPENCODING;
+                    else if (xPrefCompAlgo->second == "deflate")
+                        iHeaderFlag |= DEFLATEENCODING;
+                    else if (xPrefCompAlgo->second == "br")
+                        iHeaderFlag |= BROTLICODING;
+                }
             }
         }
 
-        //iHeaderFlag &= ~(GZIPENCODING | DEFLATEENCODING);
         if (iHeaderFlag & GZIPENCODING || iHeaderFlag & DEFLATEENCODING)
         {
             if (httpVers < 2)
@@ -2534,68 +2559,55 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             GZipPack gzipEncoder;
             if (gzipEncoder.Init((iHeaderFlag & DEFLATEENCODING) ? true : false) == Z_OK)
             {
-                unique_ptr<unsigned char[]> srcBuf(new unsigned char[nSizeSendBuf]);
-                unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
-
-                uint64_t nBytesTransferred = 0;
                 int iResult = 0;
+                gzipEncoder.InitBuffer(map.data(), static_cast<uint32_t>(nFSize));
+
+                unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
+                size_t nBytesConverted;
                 do
-                {
-                    const streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
-                    if (nBytesRead == 0)
-                        break;
-                    nBytesTransferred += nBytesRead;
+                {   // Get next compressed chunk
+                    nBytesConverted = nSizeSendBuf - nHttp2Offset;
+                    iResult = gzipEncoder.Inflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, Z_FINISH);
 
-                    gzipEncoder.InitBuffer(srcBuf.get(), static_cast<uint32_t>(nBytesRead));
-                    const int nFlush = nBytesTransferred == nFSize ? Z_FINISH : Z_NO_FLUSH;
-
-                    size_t nBytesConverted;
-                    do
+                    // Send compressed chunk
+                    size_t nOffset = 0;
+                    while ((iResult == Z_OK || iResult == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                     {
-                        nBytesConverted = nSizeSendBuf - nHttp2Offset;
-                        iResult = gzipEncoder.Inflate(dstBuf.get() + nHttp2Offset, &nBytesConverted, nFlush);
+                        int64_t nStreamWndSize = INT32_MAX;
+                        if (fnGetStreamWindowSize(nStreamWndSize) == false)
+                            break;  // Stream Item was removed, probably the stream was reset
 
-                        size_t nOffset = 0;
-                        while ((iResult == Z_OK || iResult == Z_STREAM_END) && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) != 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
+                        size_t nSendBufLen;
+                        if (fnSendQueueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset)) == false)
+                            continue;
+
+                        if (httpVers == 2)
                         {
-                            int64_t nStreamWndSize = INT32_MAX;
-                            if (fnGetStreamWindowSize(nStreamWndSize) == false)
-                                break;  // Stream Item was removed, probably the stream was reset
-
-                            size_t nSendBufLen;
-                            if (fnSendQueueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset)) == false)
-                                continue;
-
-                            if (httpVers == 2)
-                            {
-                                bool bLastPaket = false;
-                                if (iResult == Z_STREAM_END && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) == nSendBufLen) // Letztes Paket
-                                    bLastPaket = true;
-                                BuildHttp2Frame(dstBuf.get() + nOffset, nSendBufLen, 0x0, bLastPaket == true ? 0x1 : 0x0, nStreamId);
-                            }
-                            else
-                            {
-                                stringstream ss;
-                                ss << hex << ::uppercase << nSendBufLen << "\r\n";
-                                soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
-                            }
-                            soMetaDa.fSocketWrite(dstBuf.get() + nOffset, nSendBufLen + nHttp2Offset);
-                            if (httpVers < 2)
-                                soMetaDa.fSocketWrite("\r\n", 2);
-                            soMetaDa.fResetTimer();
-
-                            if (fnUpdateStreamParam(nSendBufLen) == -1)
-                                break;  // Stream Item was removed, probably the stream was reset
-
-                            //nBytesConverted += nSendBufLen;
-                            nOffset += nSendBufLen;
+                            bool bLastPaket = false;
+                            if (iResult == Z_STREAM_END && ((nSizeSendBuf - nHttp2Offset) - nBytesConverted - nOffset) == nSendBufLen) // Letztes Paket
+                                bLastPaket = true;
+                            BuildHttp2Frame(dstBuf.get() + nOffset, nSendBufLen, 0x0, bLastPaket == true ? 0x1 : 0x0, nStreamId);
                         }
+                        else
+                        {
+                            stringstream ss;
+                            ss << hex << ::uppercase << nSendBufLen << "\r\n";
+                            soMetaDa.fSocketWrite(ss.str().c_str(), ss.str().size());
+                        }
+                        soMetaDa.fSocketWrite(dstBuf.get() + nOffset, nSendBufLen + nHttp2Offset);
+                        if (httpVers < 2)
+                            soMetaDa.fSocketWrite("\r\n", 2);
+                        soMetaDa.fResetTimer();
 
-                        fnResetReservierteWindowSize();
+                        if (fnUpdateStreamParam(nSendBufLen) == -1)
+                            break;  // Stream Item was removed, probably the stream was reset
 
-                    } while (iResult == Z_OK && nBytesConverted == 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
+                        nOffset += nSendBufLen;
+                    }
 
-                } while (iResult == Z_OK && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
+                    fnResetReservierteWindowSize();
+
+                } while (iResult == Z_OK && nBytesConverted == 0 && patStop.load() == false && fnIsStreamReset(nStreamId) == false);
 
                 if (httpVers < 2 && patStop.load() == false)
                     soMetaDa.fSocketWrite("0\r\n\r\n", 5);
@@ -2619,35 +2631,21 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
             BrotliEncoderState* s = BrotliEncoderCreateInstance(nullptr, nullptr, nullptr);
             BrotliEncoderSetParameter(s, BROTLI_PARAM_QUALITY, (uint32_t)9);
             BrotliEncoderSetParameter(s, BROTLI_PARAM_LGWIN, (uint32_t)0);
-/*                if (dictionary_path != NULL) {
-                size_t dictionary_size = 0;
-                uint8_t* dictionary = ReadDictionary(dictionary_path, &dictionary_size);
-                BrotliEncoderSetCustomDictionary(s, dictionary_size, dictionary);
-                free(dictionary);
-            }
-*/
-            unique_ptr<unsigned char[]> srcBuf(new unsigned char[nSizeSendBuf]);
+
             unique_ptr<unsigned char[]> dstBuf(new unsigned char[nSizeSendBuf]);
 
-            size_t nBytIn = 0;
-            const uint8_t* input = nullptr;
+            size_t nBytIn = nFSize;
+            const uint8_t* input = map.data();
             size_t nBytOut = nSizeSendBuf - nHttp2Offset;
             uint8_t* output = dstBuf.get() + nHttp2Offset;
 
-            uint64_t nBytesTransferred = 0;
             while (patStop.load() == false && fnIsStreamReset(nStreamId) == false)
             {
-                if (nBytIn == 0)
-                {
-                    const streamsize nBytesRead = fin.read(reinterpret_cast<char*>(srcBuf.get()), nSizeSendBuf).gcount();
-                    nBytIn = static_cast<size_t>(nBytesRead);
-                    input = srcBuf.get();
-                    nBytesTransferred += nBytIn;
-                }
-
+                // Nächsten Chunk komprimieren
                 if (!BrotliEncoderCompressStream(s, nBytIn == 0 ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_PROCESS, &nBytIn, &input, &nBytOut, &output, nullptr))
                     break;
 
+                // Senden des komprimierten Chunks
                 size_t nOffset = 0;
                 while (nBytOut != nSizeSendBuf - nHttp2Offset && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
                 {
@@ -2704,9 +2702,6 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                     soMetaDa.fSocketWrite(caBuffer, nHeaderLen + nHttp2Offset);
             }
             soMetaDa.fResetTimer();
-
-            auto apBuf = make_unique<uint8_t[]>(nSizeSendBuf + nHttp2Offset + 2);
-
             uint64_t nBytesTransferred = 0;
             while (nBytesTransferred < nFSize && patStop.load() == false && fnIsStreamReset(nStreamId) == false)
             {
@@ -2718,20 +2713,22 @@ void CHttpServ::DoAction(const MetaSocketData soMetaDa, const uint8_t httpVers, 
                 if (fnSendQueueReady(nStreamWndSize, nSendBufLen, static_cast<uint64_t>(nSizeSendBuf - nHttp2Offset), nFSize - nBytesTransferred) == false)
                     continue;
 
-                nBytesTransferred += nSendBufLen;
-                fin.read(reinterpret_cast<char*>(apBuf.get()) + nHttp2Offset, nSendBufLen);
-
                 if (httpVers == 2)
-                    BuildHttp2Frame(apBuf.get(), nSendBufLen, 0x0, (nFSize - nBytesTransferred == 0 ? 0x1 : 0x0), nStreamId);
-                soMetaDa.fSocketWrite(apBuf.get(), nSendBufLen + nHttp2Offset);
+                {
+                    BuildHttp2Frame(caBuffer, nSendBufLen, 0x0, (nFSize - (nBytesTransferred + nSendBufLen) == 0 ? 0x1 : 0x0), nStreamId);
+                    soMetaDa.fSocketWrite(caBuffer, nHttp2Offset);
+                }
+                soMetaDa.fSocketWrite(map.data(), nSendBufLen);
                 soMetaDa.fResetTimer();
 
                 if (fnUpdateStreamParam(nSendBufLen) == -1)
                     break;  // Stream Item was removed, probably the stream was reset
+
+                nBytesTransferred += nSendBufLen;
+                map.addOffset(nSendBufLen);
             }
             fnResetReservierteWindowSize();
         }
-        fin.close();
 
         CLogFile::GetInstance(m_vHostParam[szHost].m_strLogFile) << soMetaDa.strIpClient << " - - [" << CLogFile::LOGTYPES::PUTTIME << "] \""
             << itMethode->second << " " << lstHeaderFields.find(":path")->second

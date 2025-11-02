@@ -110,3 +110,9 @@ void MappedFile::setOffset(const uint64_t off)
  {
     offset = off;
  }
+
+void MappedFile::addOffset(const uint64_t off)
+{
+    offset += off;
+}
+
