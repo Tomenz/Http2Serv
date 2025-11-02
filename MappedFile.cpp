@@ -7,11 +7,11 @@
 #   include <windows.h>
 #   define FN_CA(x) x.c_str()
 #else
-#ifndef __USE_LARGEFILE64
-#define __USE_LARGEFILE64
-#define _LARGEFILE_SOURCE
-#define _LARGEFILE64_SOURCE
-#endif
+#   ifndef __USE_LARGEFILE64
+#       define __USE_LARGEFILE64
+#       define _LARGEFILE_SOURCE
+#       define _LARGEFILE64_SOURCE
+#   endif
 #   include <sys/mman.h>
 #   include <fcntl.h>
 #   include <unistd.h>
