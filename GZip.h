@@ -82,7 +82,7 @@ public:
     void InitBuffer(const uint8_t* pIn, uint32_t nInCount)
     {
         m_strm.avail_in = nInCount;
-        m_strm.next_in = pIn;
+        m_strm.next_in = reinterpret_cast<const Bytef*>(pIn);
     }
 
     int Inflate(unsigned char* pOut, size_t* pnOutCount, int nFlush)
