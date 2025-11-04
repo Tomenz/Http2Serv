@@ -44,7 +44,7 @@ using namespace tr1;
 
 #define FN_CA(x) x.c_str()
 #define FN_STR(x) x
-constexpr wchar_t* g_szHttpFetch{L".//Http2Fetch.exe/$1"};
+constexpr wchar_t g_szHttpFetch[]{L".//Http2Fetch.exe/$1"};
 #else
 #ifndef __USE_LARGEFILE64
 #define __USE_LARGEFILE64

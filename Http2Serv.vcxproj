@@ -118,16 +118,17 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;%(PreprocessorDefinitions);NOGDICAPMASKS;NOVIRTUALKEYCODES;NOWINMESSAGES;NOWINSTYLES;NOSYSMETRICS;NOMENUS;NOICONS;NOKEYSTATES;NOSYSCOMMANDS;NORASTEROPS;NOSHOWWINDOW;OEMRESOURCE;NOATOM;NOCLIPBOARD;NOCOLOR;NOCTLMGR;NODRAWTEXT;NOGDI;NOKERNEL;NOUSER;NONLS;NOMB;NOMEMMGR;NOMETAFILE;NOMINMAX;NOMSG;NOOPENFILE;NOSCROLL;NOSOUND;NOTEXTMETRIC;NOWH;NOWINOFFSETS;NOCOMM;NOKANJI;NOHELP;NOPROFILER;NODEFERWINDOWPOS;NOMCX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;ZLIB_CONST;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;_SILENCE_CXX20_ATOMIC_INIT_DEPRECATION_WARNING;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;%(PreprocessorDefinitions);NOGDICAPMASKS;NOVIRTUALKEYCODES;NOWINMESSAGES;NOWINSTYLES;NOSYSMETRICS;NOMENUS;NOICONS;NOKEYSTATES;NOSYSCOMMANDS;NORASTEROPS;NOSHOWWINDOW;OEMRESOURCE;NOATOM;NOCLIPBOARD;NOCOLOR;NOCTLMGR;NODRAWTEXT;NOGDI;NOKERNEL;NOUSER;NONLS;NOMB;NOMEMMGR;NOMETAFILE;NOMINMAX;NOMSG;NOOPENFILE;NOSCROLL;NOSOUND;NOTEXTMETRIC;NOWH;NOWINOFFSETS;NOCOMM;NOKANJI;NOHELP;NOPROFILER;NODEFERWINDOWPOS;NOMCX</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(SolutionDir);brotli\c\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>x64\Debug;$(OpenSSL_Home)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>CommonLib.lib;socketlib64d.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>CommonLib.lib;socketlib64d.lib;brotli-com.lib;brotli-enc.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)$(PlatForm)\$(Configuration)\$(ProjectName)\$(TargetFileName)" "$(SolutionDir)$(TargetFileName)"</Command>
@@ -168,11 +169,11 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;%(PreprocessorDefinitions);NOGDICAPMASKS;NOVIRTUALKEYCODES;NOWINMESSAGES;NOWINSTYLES;NOSYSMETRICS;NOMENUS;NOICONS;NOKEYSTATES;NOSYSCOMMANDS;NORASTEROPS;NOSHOWWINDOW;OEMRESOURCE;NOATOM;NOCLIPBOARD;NOCOLOR;NOCTLMGR;NODRAWTEXT;NOGDI;NOKERNEL;NOUSER;NONLS;NOMB;NOMEMMGR;NOMETAFILE;NOMINMAX;NOMSG;NOOPENFILE;NOSCROLL;NOSOUND;NOTEXTMETRIC;NOWH;NOWINOFFSETS;NOCOMM;NOKANJI;NOHELP;NOPROFILER;NODEFERWINDOWPOS;NOMCX</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;ZLIB_CONST;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;_SILENCE_CXX20_ATOMIC_INIT_DEPRECATION_WARNING;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;%(PreprocessorDefinitions);NOGDICAPMASKS;NOVIRTUALKEYCODES;NOWINMESSAGES;NOWINSTYLES;NOSYSMETRICS;NOMENUS;NOICONS;NOKEYSTATES;NOSYSCOMMANDS;NORASTEROPS;NOSHOWWINDOW;OEMRESOURCE;NOATOM;NOCLIPBOARD;NOCOLOR;NOCTLMGR;NODRAWTEXT;NOGDI;NOKERNEL;NOUSER;NONLS;NOMB;NOMEMMGR;NOMETAFILE;NOMINMAX;NOMSG;NOOPENFILE;NOSCROLL;NOSOUND;NOTEXTMETRIC;NOWH;NOWINOFFSETS;NOCOMM;NOKANJI;NOHELP;NOPROFILER;NODEFERWINDOWPOS;NOMCX</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(SolutionDir);brotli\c\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <LanguageStandard>stdcpp14</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -180,7 +181,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>x64\Release;$(OpenSSL_Home)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>CommonLib.lib;socketlib64.lib;brotli.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>CommonLib.lib;socketlib64.lib;brotli-com.lib;brotli-enc.lib;zlib.lib;libcrypto.lib;libssl.lib;SrvLib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)$(PlatForm)\$(Configuration)\$(ProjectName)\$(TargetFileName)" "$(SolutionDir)$(TargetFileName)"</Command>
@@ -194,6 +195,7 @@
     <ClCompile Include="Http2Serv.cpp" />
     <ClCompile Include="HttpServ.cpp" />
     <ClCompile Include="LogFile.cpp" />
+    <ClCompile Include="MappedFile.cpp" />
     <ClCompile Include="SpawnProcess.cpp" />
     <ClCompile Include="Trace.cpp" />
   </ItemGroup>
@@ -205,6 +207,7 @@
     <ClInclude Include="HPack.h" />
     <ClInclude Include="HttpServ.h" />
     <ClInclude Include="LogFile.h" />
+    <ClInclude Include="MappedFile.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="SpawnProcess.h" />
     <ClInclude Include="Timer.h" />

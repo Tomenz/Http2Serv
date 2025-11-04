@@ -32,6 +32,9 @@
       <Filter>FastCgi</Filter>
     </ClInclude>
     <ClInclude Include="resource.h" />
+    <ClInclude Include="MappedFile.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Headerdateien">
@@ -68,6 +71,9 @@
     </ClCompile>
     <ClCompile Include="FastCgi\FastCgi.cpp">
       <Filter>FastCgi</Filter>
+    </ClCompile>
+    <ClCompile Include="MappedFile.cpp">
+      <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
