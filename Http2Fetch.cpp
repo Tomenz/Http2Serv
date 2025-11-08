@@ -1,4 +1,4 @@
-// SockTest.cpp : Definiert den Einstiegspunkt für die Konsolenanwendung.
+// SockTest.cpp : Definiert den Einstiegspunkt fï¿½r die Konsolenanwendung.
 //
 #include <iostream>
 #include <unordered_map>
@@ -120,17 +120,17 @@ int main(int argc, const char* argv[], char **envp)
         if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"CONTENT_TYPE") ? true : false;  })) != end(mapEnvList))
             strContentTyp = itFound->second;
 
-        wstring strHost;
-        if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"HTTP_HOST") ? true : false; })) != end(mapEnvList))
-            strHost = itFound->second;
+        //wstring strHost;
+        //if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"HTTP_HOST") ? true : false; })) != end(mapEnvList))
+        //    strHost = itFound->second;
 
-        wstring strHttps;
-        if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"HTTPS") ? true : false;  })) != end(mapEnvList))
-            strHttps = itFound->second;
+        //wstring strHttps;
+        //if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"HTTPS") ? true : false;  })) != end(mapEnvList))
+        //    strHttps = itFound->second;
 
-        wstring strQuery;
-        if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"QUERY_STRING") ? true : false;  })) != end(mapEnvList))
-            strQuery = itFound->second;
+        //wstring strQuery;
+        //if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"QUERY_STRING") ? true : false;  })) != end(mapEnvList))
+        //    strQuery = itFound->second;
 
         wstring strUrl;
         if ((itFound = find_if(begin(mapEnvList), end(mapEnvList), [](auto pr) { return (pr.first == L"PROXYURL") ? true : false;  })) != end(mapEnvList))
@@ -299,7 +299,7 @@ if (nPos != string::npos)
     fetch.AddToHeader("Accept-Encoding", "gzip, deflate, br");
     fetch.AddToHeader("Cache-Control", "no-cache");
 
-    fetch.AddToHeader("Accept-Language", "de,en-US;q=0.7,en;q=0.3");    // wird für elumatec.com benötigt
+    fetch.AddToHeader("Accept-Language", "de,en-US;q=0.7,en;q=0.3");    // wird fï¿½r elumatec.com benï¿½tigt
     //fetch.AddToHeader("DNT", "1");
     //fetch.AddToHeader("Connection", "keep-alive");
     //fetch.AddToHeader("Connection", "close");

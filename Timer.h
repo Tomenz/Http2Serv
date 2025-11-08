@@ -17,6 +17,7 @@
 #include <atomic>
 #include <thread>
 #include <functional>
+#include <chrono>
 
 template<class T>
 class Timer

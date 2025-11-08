@@ -48,7 +48,7 @@ void ReadConfiguration(const wstring& m_strModulePath, deque<CHttpServ>& m_vServ
     static const pair<wstring, int> strKeyWordMultiItems[] = { { L"RewriteRule",1 },{ L"AliasMatch",2 },{ L"ForceType",3 },{ L"FileTyps",4 },{ L"SetEnvIf",5 },{ L"RedirectMatch",6 },{ L"DeflateTyps",7 },{ L"Authenticate",8 },{ L"ScriptAliasMatch",9 },
                                                                { L"ScriptOptionsHdl",10 },{ L"AddHeader", 11 },{ L"ReverseProxy", 12},{ L"ScriptAuthHdl",13 } };
 
-    vector<wstring> vFileTypExt = conf.get(L"FileTyps");
+    //vector<wstring> vFileTypExt = conf.get(L"FileTyps");
 
     vector<wstring> vListen = conf.get(L"Listen");
     if (vListen.empty() == true)

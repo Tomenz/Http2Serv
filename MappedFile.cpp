@@ -61,7 +61,7 @@ bool MappedFile::open(const std::wstring& fileName)
         return false;
     }
 
-    mappedData = (const uint8_t *)MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, fileSize);
+    mappedData = static_cast<const uint8_t*>(MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, fileSize));
 
     /* We can call CloseHandle here, but it will not be closed until
      * we unmap the view */
