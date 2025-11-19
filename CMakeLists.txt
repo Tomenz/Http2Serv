@@ -53,7 +53,7 @@ add_subdirectory(SocketLib EXCLUDE_FROM_ALL)
 add_subdirectory(SrvLib EXCLUDE_FROM_ALL)
 add_subdirectory(zlib EXCLUDE_FROM_ALL)
 # zconf.h wieder herstellen
-file(RENAME ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zconf.h.included ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zconf.h)
+# file(RENAME ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zconf.h.included ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zconf.h)
 
 if(UA_ENABLE_ENCRYPTION_OPENSSL)
   link_directories(${OPENSSL_LIB_DIR})
@@ -92,10 +92,10 @@ target_link_libraries(${PROJECT_NAME} socketlib ${LIBCRYPTO} ${LIBSSL})
 target_link_libraries(${PROJECT_NAME} FastCgi)
 target_link_libraries(${PROJECT_NAME} brotlicommon brotlienc zlibstatic)
 
-add_executable(Http2Proxy Http2Proxy.cpp ConfFile.cpp)
+add_executable(Http2Proxy Http2Proxy.cpp ConfFile.cpp Trace.cpp)
 target_link_libraries(Http2Proxy socketlib srvlib ${LIBCRYPTO} ${LIBSSL})
 
-add_executable(Http2Fetch Http2Fetch.cpp HttpFetch.cpp HPack.cpp ConfFile.cpp)
+add_executable(Http2Fetch Http2Fetch.cpp HttpFetch.cpp HPack.cpp ConfFile.cpp Trace.cpp)
 target_link_libraries(Http2Fetch socketlib srvlib ${LIBCRYPTO} ${LIBSSL} zlibstatic brotlicommon brotlidec)
 
 if(NOT MSVC AND UA_ENABLE_ENCRYPTION_OPENSSL)
