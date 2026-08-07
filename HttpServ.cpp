@@ -248,7 +248,7 @@ void CHttpServ::OnNewConnection(const vector<TcpSocket*>& vNewConnections)
         m_mtxConnections.lock();
         for (auto& pSocket : vCache)
         {
-            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer<TcpSocket>>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), pSocket), string(), false, 0, 0, {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false), make_shared<mutex>(), {}, {} }));
+            m_vConnections.emplace(pSocket, CONNECTIONDETAILS({ make_shared<Timer<TcpSocket>>(30000, bind(&CHttpServ::OnTimeout, this, _1, _2), pSocket), string(), false, false, 0, 0, {}, {}, make_shared<mutex>(), {}, make_tuple(UINT32_MAX, 65535, 16384, UINT32_MAX, 4096), {}, make_shared<atomic_bool>(false), make_shared<mutex>(), {}, {}, nullptr }));
             pSocket->StartReceiving();
         }
         m_mtxConnections.unlock();
@@ -278,6 +278,15 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
             CONNECTIONDETAILS* pConDetails = &item->second;
             pConDetails->pTimer->Reset();
             pConDetails->strBuffer.append(&spBuffer[0], nRead);
+
+            if (pConDetails->bIsWebSocket == true)
+            {
+                pConDetails->pWebSocket->OnDataReceivedWebSocket(pTcpSocket, reinterpret_cast<uint8_t*>(&pConDetails->strBuffer[0]), pConDetails->strBuffer.size());
+                pConDetails->strBuffer.clear();
+                m_mtxConnections.unlock();
+                return;
+            }
+
 
             if (pConDetails->bIsH2Con == false)
             {
@@ -550,6 +559,59 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
                     else if (nHeaderLen != 0)
                         pConDetails->strBuffer.insert(0, strHttp2Settings.substr(strHttp2Settings.size() - nHeaderLen));
 
+                }
+            }
+
+            if (upgradeHeader != end(pConDetails->HeaderList) && upgradeHeader->second == "websocket")
+            {
+                std::string strWebSockKey;
+                if (std::find_if(std::begin(pConDetails->HeaderList), std::end(pConDetails->HeaderList), [&](std::pair<std::string, std::string> pr) { return (pr.first == "sec-websocket-key") ? strWebSockKey = pr.second, true : false; }) != std::end(pConDetails->HeaderList))
+                {
+                    strWebSockKey += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+                    EVP_MD_CTX* mdctx{nullptr};
+                    mdctx = EVP_MD_CTX_new();
+                    EVP_DigestInit_ex(mdctx, EVP_get_digestbyname("SHA1"), NULL);
+                    EVP_DigestUpdate(mdctx, &strWebSockKey[0], strWebSockKey.size());
+                    unsigned char md_value[EVP_MAX_MD_SIZE];
+                    unsigned int md_len{0};
+                    EVP_DigestFinal_ex(mdctx, md_value, &md_len);
+
+                    std::string encodedString = Base64::Encode(reinterpret_cast<char*>(md_value), md_len);
+
+                    HeadList vHeader({ std::make_pair("Connection", "Upgrade"), std::make_pair("Upgrade", "websocket"), std::make_pair("Sec-WebSocket-Accept", std::string(encodedString)) });
+                    (void)std::find_if(std::begin(pConDetails->HeaderList), std::end(pConDetails->HeaderList), [&](std::pair<std::string, std::string> pr)
+                    {
+                        return (pr.first == "sec-websocket-protocol") ? vHeader.push_back(std::make_pair("Sec-WebSocket-Protocol", pr.second)), true : false;
+                    });
+
+                    std::string strResponse("HTTP/1.1 101 Switching Protocols\r\nServer: WebSockServ/1.0\r\n");
+                    strResponse += "Date: ";
+                    auto in_time_t = chrono::system_clock::to_time_t(chrono::system_clock::now());
+
+                    stringstream ss;
+                    ss.imbue(locale("C"));
+                    ss << put_time(::gmtime(&in_time_t), "%a, %d %b %Y %H:%M:%S GMT\r\n");
+                    strResponse += ss.str();
+
+                    for (const auto &item : vHeader)
+                        strResponse += item.first + ": " + item.second + "\r\n";
+                    strResponse += "Connection: keep-alive\r\n";
+                    strResponse += "\r\n";
+
+                    pTcpSocket->Write(&strResponse[0], strResponse.size());
+                    pConDetails->bIsWebSocket = true;
+
+                    std::string strPath;
+                    auto itPath = std::find_if(std::begin(pConDetails->HeaderList), std::end(pConDetails->HeaderList), [&](std::pair<std::string, std::string> pr)
+                                { return (pr.first == ":path") ? true : false; });
+                    if (itPath != std::end(pConDetails->HeaderList))
+                        strPath = std::string(std::begin(itPath->second), end(itPath->second));
+
+                    pConDetails->pWebSocket = make_unique<WebSocket>(strPath, pTcpSocket);
+                    pConDetails->pTimer->Stop();
+
+                    m_mtxConnections.unlock();
+                    return;
                 }
             }
 

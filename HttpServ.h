@@ -18,6 +18,7 @@
 #include "SocketLib/SocketLib.h"
 #include "Timer.h"
 #include "H2Proto.h"
+#include "WebSocket.h"
 
 using namespace std;
 
@@ -28,6 +29,7 @@ class CHttpServ : public Http2Protocol
         shared_ptr<Timer<TcpSocket>> pTimer;
         string strBuffer;
         bool bIsH2Con;
+        bool bIsWebSocket;
         uint64_t nContentsSoll;
         uint64_t nContentRecv;
         HeadList HeaderList;
@@ -40,6 +42,7 @@ class CHttpServ : public Http2Protocol
         shared_ptr<mutex> mutReqData;
         deque<unique_ptr<char[]>> vecReqData;
         deque<AUTHITEM> lstAuthInfo;
+        unique_ptr<WebSocket> pWebSocket;
     } CONNECTIONDETAILS;
 
     typedef unordered_map<TcpSocket*, CONNECTIONDETAILS> CONNECTIONLIST;

@@ -417,6 +417,16 @@ int main(int argc, char* argv[])
         if (readlink(string("/proc/" + to_string(getpid()) + "/exe").c_str(), &strTmpPath[0], FILENAME_MAX) > 0)
             strTmpPath.erase(strTmpPath.find_last_of('/'));
 
+        // Load the inverter configuration file from the executable directory.
+        // remove trailing "/build" if running from a build directory
+        std::string basePath = strTmpPath;
+        const std::string buildSuffix = "/build";
+        size_t pos = basePath.rfind(buildSuffix);
+        if (pos != std::string::npos && pos + buildSuffix.size() == basePath.size()) {
+            basePath.erase(pos, buildSuffix.size());
+            strTmpPath = basePath;
+        }
+
         //Change Directory
         //If we cant find the directory we exit with failure.
         if ((chdir(strTmpPath.c_str())) < 0) // if ((chdir("/")) < 0)

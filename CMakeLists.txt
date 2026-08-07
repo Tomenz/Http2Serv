@@ -82,6 +82,7 @@ set(targetSrc
         SpawnProcess.cpp
         Trace.cpp
         MappedFile.cpp
+        WebSocket.cpp
 )
 
 add_executable(${PROJECT_NAME} ${targetSrc})
