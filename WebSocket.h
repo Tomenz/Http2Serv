@@ -6,8 +6,6 @@
 
 #include "SocketLib/SocketLib.h"
 
-using namespace std;
-
 class WebSocket
 {
      typedef struct
@@ -28,7 +26,7 @@ class WebSocket
         uint64_t nLen{0};
         uint32_t uiMask{0};
         uint64_t nReceived{0};
-        string strPath;
+        std::string strPath;
     }SOCKETPARAM;
 
 public:
@@ -37,8 +35,8 @@ public:
 
     void OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, size_t nDataLen);
 
-    virtual void TextDataReceived(const void* /*pId*/, const string /*strPath*/, uint8_t* /*szData*/, uint32_t /*nDataLen*/) { ; }
-    virtual void BinaryDataReceived(const void* /*pId*/, const string /*strPath*/, uint8_t* /*szData*/, uint32_t /*nDataLen*/, bool /*bIsLast*/) { ; }
+    virtual void TextDataReceived(const void* /*pId*/, const std::string /*strPath*/, uint8_t* /*szData*/, uint32_t /*nDataLen*/) { ; }
+    virtual void BinaryDataReceived(const void* /*pId*/, const std::string /*strPath*/, uint8_t* /*szData*/, uint32_t /*nDataLen*/, bool /*bIsLast*/) { ; }
     virtual void PongReceived(const void* /*pId*/) { ; }
     size_t WriteData(void* pId, const uint8_t* szData, uint32_t nDataLen);
     size_t SendPing(TcpSocket* pTcpSocket);

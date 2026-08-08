@@ -2,18 +2,15 @@
 #include <regex>
 #include <sstream>
 #include <codecvt>
-#include <dlfcn.h>
 
 #include "WebSocket.h"
-
-using namespace std;
-using namespace std::placeholders;
 
 #if defined (_WIN32) || defined (_WIN64)
 #include <Ws2tcpip.h>
 #else
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <dlfcn.h>
 #define ConvertToByte(x) wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
 extern void OutputDebugString(const wchar_t* pOut);
 // {   // mkfifo /tmp/dbgout
@@ -28,6 +25,8 @@ extern void OutputDebugString(const wchar_t* pOut);
 extern void OutputDebugStringA(const char* pOut);
 #endif
 
+using namespace std::placeholders;
+
 #define ntohll(x) ( ( (uint64_t)(ntohl( (uint32_t)((x << 32) >> 32) )) << 32) | ntohl(((uint32_t)(x >> 32))))
 #define htonll(x) ntohll(x)
 
@@ -37,6 +36,8 @@ WebSocket::WebSocket(const std::string& strPath, TcpSocket* pTcpSocket) : m_soSo
 {
     m_soSocketParam.strPath = strPath;
 
+#if defined(_WIN32) || defined(_WIN64)
+#else
     m_LibHandle = dlopen("/home/c++/ModbusTCP/build/libWsLog.so", RTLD_LAZY);
     if (m_LibHandle)
     {
@@ -52,12 +53,16 @@ WebSocket::WebSocket(const std::string& strPath, TcpSocket* pTcpSocket) : m_soSo
         WebSocket::WriteBackInstance = std::bind(&WebSocket::WriteData, this, _1, _2, _3);
         pSetWriteCallback(&WebSocket::staticTrampoline, reinterpret_cast<void*>(pTcpSocket));
     }
+#endif
 }
 
 WebSocket::~WebSocket()
 {
+#if defined(_WIN32) || defined(_WIN64)
+#else
     if (m_LibHandle != nullptr)
         dlclose(m_LibHandle);
+#endif
 }
 
 void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, size_t nDataLen)
@@ -86,7 +91,7 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
             }
 
             uint8_t* szData = pBuffer + iOffset;
-            size_t nBlockSize = min(static_cast<size_t>(m_soSocketParam.nLen - m_soSocketParam.nReceived), nDataLen - iOffset);
+            size_t nBlockSize = std::min(static_cast<size_t>(m_soSocketParam.nLen - m_soSocketParam.nReceived), nDataLen - iOffset);
 #if defined(_WIN32) || defined(_WIN64)
             //OutputDebugString(wstring(L"Read:" + to_wstring(nDataLen) + L", OpCode:" + to_wstring(iter->second.stHeader.OpCode) + L", FIN:" + to_wstring(iter->second.stHeader.FIN) + L", Len:" + to_wstring(iter->second.nLen) + L", BlockSize:" + to_wstring(nBlockSize) + L"\r\n").c_str());
 #endif
@@ -128,7 +133,7 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
                         if (m_soSocketParam.nLen > 65535)
                             iHeaderLen += 6;
 
-                        OutputDebugStringA(string(string(reinterpret_cast<char*>(szData), m_soSocketParam.nLen) + "\r\n").c_str());
+                        OutputDebugStringA(std::string(std::string(reinterpret_cast<char*>(szData), m_soSocketParam.nLen) + "\r\n").c_str());
 
                         if (pTextDataReceived != nullptr)
                             pTextDataReceived(pTcpSocket, m_soSocketParam.strPath.c_str(), szData, static_cast<uint32_t>(m_soSocketParam.nLen));
@@ -162,7 +167,7 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
                     sCode = ntohs(*(reinterpret_cast<short*>(szData)));
                 szData += 2;
 
-                shared_ptr<uint8_t[]> spOutput(new uint8_t[m_soSocketParam.nLen + 2]);
+                std::shared_ptr<uint8_t[]> spOutput(new uint8_t[m_soSocketParam.nLen + 2]);
 
                 HEADER* sHeader = reinterpret_cast<HEADER*>(spOutput.get());
                 *sHeader = { 0, 0, 0, 0, 0, 0, 0 };
@@ -174,7 +179,7 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
                 if (m_soSocketParam.nLen >= 2)
                     *(reinterpret_cast<short*>(spOutput.get() + 2)) = htons(sCode);
                 if (m_soSocketParam.nLen > 2)
-                    copy(szData, szData + m_soSocketParam.nLen - 2, spOutput.get() + 4);
+                    std::copy(szData, szData + m_soSocketParam.nLen - 2, spOutput.get() + 4);
                 pTcpSocket->Write(spOutput.get(), m_soSocketParam.nLen + 2);
             }
             pTcpSocket->Close();
@@ -209,7 +214,7 @@ size_t WebSocket::WriteData(void* pId, const uint8_t* szData, uint32_t nDataLen)
     if (nDataLen > 65535)
         iHeaderLen += 6;
 
-    unique_ptr<uint8_t[]> spOutput(new uint8_t[nDataLen + iHeaderLen]);
+    std::unique_ptr<uint8_t[]> spOutput(new uint8_t[nDataLen + iHeaderLen]);
     HEADER* sHeader = reinterpret_cast<HEADER*>(spOutput.get());
     *sHeader = { 0, 0, 0, 0, 0, 0, 0 };
     sHeader->FIN = 1;
@@ -220,7 +225,7 @@ size_t WebSocket::WriteData(void* pId, const uint8_t* szData, uint32_t nDataLen)
         *(reinterpret_cast<uint64_t*>(spOutput.get() + 2)) = htonll(static_cast<uint64_t>(nDataLen));
     else if (iHeaderLen > 2)
         *(reinterpret_cast<short*>(spOutput.get() + 2)) = htons(static_cast<short>(nDataLen));
-    copy(szData, szData + nDataLen, &spOutput.get()[iHeaderLen]);
+    std::copy(szData, szData + nDataLen, &spOutput.get()[iHeaderLen]);
 
     return pTcpSocket->Write(spOutput.get(), nDataLen + iHeaderLen);
 }
@@ -229,7 +234,7 @@ size_t WebSocket::SendPing(TcpSocket* pTcpSocket)
 {
     uint32_t iHeaderLen = 2;
 
-    unique_ptr<uint8_t[]> spOutput(new uint8_t[iHeaderLen]);
+    std::unique_ptr<uint8_t[]> spOutput(new uint8_t[iHeaderLen]);
     HEADER* sHeader = reinterpret_cast<HEADER*>(spOutput.get());
     *sHeader = { 0, 0, 0, 0, 0, 0, 0 };
     sHeader->FIN = 1;
