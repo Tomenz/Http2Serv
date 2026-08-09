@@ -44,14 +44,14 @@ WebSocket::WebSocket(const std::string& strPath, TcpSocket* pTcpSocket) : m_soSo
         pSetWriteCallback = (void (*)(void(*callback)(void* /*pId*/, const uint8_t* /*szData*/, uint32_t /*nDataLen*/), void* pId))dlsym(m_LibHandle, "SetWriteCallback");
         pTextDataReceived = (void (*)(void*, const char*, uint8_t*, uint32_t))dlsym(m_LibHandle, "TextDataReceived");
         if (!pSetWriteCallback || !pTextDataReceived) {
-            OutputDebugStringA(string("Error: " + string(dlerror()) + "\r\n").c_str());
+            OutputDebugStringA(std::string("Error: " + std::string(dlerror()) + "\r\n").c_str());
             dlclose(m_LibHandle);
             m_LibHandle = nullptr;
             return;
         }
 
         WebSocket::WriteBackInstance = std::bind(&WebSocket::WriteData, this, _1, _2, _3);
-        pSetWriteCallback(&WebSocket::staticTrampoline, reinterpret_cast<void*>(pTcpSocket));
+        pSetWriteCallback(&WebSocket::staticWriteBack, reinterpret_cast<void*>(pTcpSocket));
     }
 #endif
 }

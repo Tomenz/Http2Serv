@@ -41,7 +41,7 @@ public:
     size_t WriteData(void* pId, const uint8_t* szData, uint32_t nDataLen);
     size_t SendPing(TcpSocket* pTcpSocket);
 
-    static void staticTrampoline(void* pId, const uint8_t* value, uint32_t nDataLen) {
+    static void staticWriteBack(void* pId, const uint8_t* value, uint32_t nDataLen) {
         if (WriteBackInstance) WriteBackInstance(pId, value, nDataLen);
     }
 
