@@ -120,7 +120,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;ZLIB_CONST;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;_SILENCE_CXX20_ATOMIC_INIT_DEPRECATION_WARNING;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;%(PreprocessorDefinitions);NOGDICAPMASKS;NOVIRTUALKEYCODES;NOWINMESSAGES;NOWINSTYLES;NOSYSMETRICS;NOMENUS;NOICONS;NOKEYSTATES;NOSYSCOMMANDS;NORASTEROPS;NOSHOWWINDOW;OEMRESOURCE;NOATOM;NOCLIPBOARD;NOCOLOR;NOCTLMGR;NODRAWTEXT;NOGDI;NOKERNEL;NOUSER;NONLS;NOMB;NOMEMMGR;NOMETAFILE;NOMINMAX;NOMSG;NOOPENFILE;NOSCROLL;NOSOUND;NOTEXTMETRIC;NOWH;NOWINOFFSETS;NOCOMM;NOKANJI;NOHELP;NOPROFILER;NODEFERWINDOWPOS;NOMCX</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);brotli\c\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);brotli\c\include;$(OpenSSL_HOME)include;$(OPENSSL_DIR)\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -171,7 +171,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;ZLIB_CONST;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;_SILENCE_CXX20_ATOMIC_INIT_DEPRECATION_WARNING;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;%(PreprocessorDefinitions);NOGDICAPMASKS;NOVIRTUALKEYCODES;NOWINMESSAGES;NOWINSTYLES;NOSYSMETRICS;NOMENUS;NOICONS;NOKEYSTATES;NOSYSCOMMANDS;NORASTEROPS;NOSHOWWINDOW;OEMRESOURCE;NOATOM;NOCLIPBOARD;NOCOLOR;NOCTLMGR;NODRAWTEXT;NOGDI;NOKERNEL;NOUSER;NONLS;NOMB;NOMEMMGR;NOMETAFILE;NOMINMAX;NOMSG;NOOPENFILE;NOSCROLL;NOSOUND;NOTEXTMETRIC;NOWH;NOWINOFFSETS;NOCOMM;NOKANJI;NOHELP;NOPROFILER;NODEFERWINDOWPOS;NOMCX</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);brotli\c\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);brotli\c\include;$(OpenSSL_HOME)include;$(OPENSSL_DIR)\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -198,6 +198,7 @@
     <ClCompile Include="MappedFile.cpp" />
     <ClCompile Include="SpawnProcess.cpp" />
     <ClCompile Include="Trace.cpp" />
+    <ClCompile Include="WebSocket.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ConfFile.h" />
