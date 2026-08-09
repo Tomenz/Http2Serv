@@ -8,7 +8,7 @@
 
 class WebSocket
 {
-     typedef struct
+     typedef struct tagHeader
     {
         uint8_t OpCode : 4;
         uint8_t RSV3 : 1;
@@ -20,7 +20,7 @@ class WebSocket
         uint8_t Mask : 1;
     }HEADER;
 
-    typedef struct
+    typedef struct tagSocketParam
     {
         HEADER stHeader{0,0,0,0,0,0,0};
         uint64_t nLen{0};
