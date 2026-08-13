@@ -70,7 +70,7 @@ extern void OutputDebugStringA(const char* pOut);
 
 #include <openssl/evp.h>
 
-const char* CHttpServ::SERVERSIGNATUR = "Http2Serv/1.0.0";
+const char* CHttpServ::SERVERSIGNATUR = "Http2Serv/1.1.0";
 
 atomic_size_t s_nInstCount(0);
 map<string, FastCgiClient> s_mapFcgiConnections;
