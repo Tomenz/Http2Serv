@@ -11,7 +11,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <dlfcn.h>
-#define ConvertToByte(x) wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
+#define ConvertToByte(x) std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
 extern void OutputDebugString(const wchar_t* pOut);
 // {   // mkfifo /tmp/dbgout
     // int fdPipe = open("/tmp/dbgout", O_WRONLY | O_NONBLOCK);
@@ -32,26 +32,29 @@ using namespace std::placeholders;
 
 std::function<size_t(void*, const uint8_t*, uint32_t)> WebSocket::WriteBackInstance;
 
-WebSocket::WebSocket(const std::string& strPath, TcpSocket* pTcpSocket) : m_soSocketParam({0,0,0,0,0,0,0, 0, 0, 0, ""}), m_LibHandle(nullptr), pTextDataReceived(nullptr)
+WebSocket::WebSocket(const std::string& strPath, const std::wstring& strModulPath, TcpSocket* pTcpSocket) : m_soSocketParam({0,0,0,0,0,0,0, 0, 0, 0, ""}), m_LibHandle(nullptr), pTextDataReceived(nullptr)
 {
     m_soSocketParam.strPath = strPath;
 
 #if defined(_WIN32) || defined(_WIN64)
 #else
-    m_LibHandle = dlopen("/home/c++/ModbusTCP/build/libWsLog.so", RTLD_LAZY);
-    if (m_LibHandle)
+    if (strModulPath.empty() == false)
     {
-        pSetWriteCallback = (void (*)(void(*callback)(void* /*pId*/, const uint8_t* /*szData*/, uint32_t /*nDataLen*/), void* pId))dlsym(m_LibHandle, "SetWriteCallback");
-        pTextDataReceived = (void (*)(void*, const char*, uint8_t*, uint32_t))dlsym(m_LibHandle, "TextDataReceived");
-        if (!pSetWriteCallback || !pTextDataReceived) {
-            OutputDebugStringA(std::string("Error: " + std::string(dlerror()) + "\r\n").c_str());
-            dlclose(m_LibHandle);
-            m_LibHandle = nullptr;
-            return;
-        }
+        m_LibHandle = dlopen(ConvertToByte(strModulPath).c_str(), RTLD_LAZY);
+        if (m_LibHandle)
+        {
+            pSetWriteCallback = (void (*)(void(*callback)(void* /*pId*/, const uint8_t* /*szData*/, uint32_t /*nDataLen*/), void* pId))dlsym(m_LibHandle, "SetWriteCallback");
+            pTextDataReceived = (void (*)(void*, const char*, uint8_t*, uint32_t))dlsym(m_LibHandle, "TextDataReceived");
+            if (!pSetWriteCallback || !pTextDataReceived) {
+                OutputDebugStringA(std::string("Error: " + std::string(dlerror()) + "\r\n").c_str());
+                dlclose(m_LibHandle);
+                m_LibHandle = nullptr;
+                return;
+            }
 
-        WebSocket::WriteBackInstance = std::bind(&WebSocket::WriteData, this, _1, _2, _3);
-        pSetWriteCallback(&WebSocket::staticWriteBack, reinterpret_cast<void*>(pTcpSocket));
+            WebSocket::WriteBackInstance = std::bind(&WebSocket::WriteData, this, _1, _2, _3);
+            pSetWriteCallback(&WebSocket::staticWriteBack, reinterpret_cast<void*>(pTcpSocket));
+        }
     }
 #endif
 }

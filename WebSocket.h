@@ -30,7 +30,7 @@ class WebSocket
     }SOCKETPARAM;
 
 public:
-    WebSocket(const std::string& strPath, TcpSocket* pTcpSocket);
+    WebSocket(const std::string& strPath, const std::wstring& strModulPath, TcpSocket* pTcpSocket);
     virtual ~WebSocket();
 
     void OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, size_t nDataLen);

@@ -91,6 +91,7 @@ public:
         unordered_map<wstring, wstring> m_mstrReverseProxy;
         vector<wstring> m_vAuthHandler;
         int32_t m_nMaxConnPerIp;
+        unordered_map<string, wstring> m_mWebSockHandler;
     } HOSTPARAM;
 
 public:

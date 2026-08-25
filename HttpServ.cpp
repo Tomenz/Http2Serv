@@ -607,7 +607,23 @@ void CHttpServ::OnDataReceived(TcpSocket* const pTcpSocket)
                     if (itPath != std::end(pConDetails->HeaderList))
                         strPath = std::string(std::begin(itPath->second), end(itPath->second));
 
-                    pConDetails->pWebSocket = make_unique<WebSocket>(strPath, pTcpSocket);
+                    string szHost;
+                    const auto& host = pConDetails->HeaderList.find("host");   // Get the Host Header from the request
+                    if (host != end(pConDetails->HeaderList))
+                    {
+                        const string strTmp = host->second + (host->second.find(":") == string::npos ? (":" + to_string(GetPort())) : "");
+                        if (m_vHostParam.find(strTmp) != end(m_vHostParam))   // If we have it in our configuration, we use the host parameter for logging
+                            szHost = strTmp;
+                    }
+
+                    wstring strModul;
+                    const auto& websockhdl = m_vHostParam[szHost].m_mWebSockHandler.find(strPath);
+                    if (websockhdl != end(m_vHostParam[szHost].m_mWebSockHandler))
+                    {
+                        strModul = websockhdl->second;
+                    }
+
+                    pConDetails->pWebSocket = make_unique<WebSocket>(strPath, strModul, pTcpSocket);
                     pConDetails->pTimer->Stop();
 
                     m_mtxConnections.unlock();
