@@ -44,8 +44,9 @@ WebSocket::WebSocket(const std::string& strPath, const std::wstring& strModulPat
         if (m_LibHandle)
         {
             pSetWriteCallback = (void (*)(void(*callback)(void* /*pId*/, const uint8_t* /*szData*/, uint32_t /*nDataLen*/), void* pId))dlsym(m_LibHandle, "SetWriteCallback");
+            pRemoveWriteCallback = (void (*)(void* pId))dlsym(m_LibHandle, "RemoveWriteCallback");
             pTextDataReceived = (void (*)(void*, const char*, uint8_t*, uint32_t))dlsym(m_LibHandle, "TextDataReceived");
-            if (!pSetWriteCallback || !pTextDataReceived) {
+            if (!pSetWriteCallback || !pRemoveWriteCallback || !pTextDataReceived) {
                 OutputDebugStringA(std::string("Error: " + std::string(dlerror()) + "\r\n").c_str());
                 dlclose(m_LibHandle);
                 m_LibHandle = nullptr;
@@ -207,6 +208,12 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
     }
 }
 
+void WebSocket::OnConnectionClose(TcpSocket* pTcpSocket)
+{
+    if (m_LibHandle != nullptr)
+        pRemoveWriteCallback(pTcpSocket);
+}
+
 size_t WebSocket::WriteData(void* pId, const uint8_t* szData, uint32_t nDataLen)
 {
     TcpSocket* pTcpSocket = reinterpret_cast<TcpSocket*>(pId);
@@ -230,6 +237,8 @@ size_t WebSocket::WriteData(void* pId, const uint8_t* szData, uint32_t nDataLen)
         *(reinterpret_cast<short*>(spOutput.get() + 2)) = htons(static_cast<short>(nDataLen));
     std::copy(szData, szData + nDataLen, &spOutput.get()[iHeaderLen]);
 
+    if (pTcpSocket == nullptr)
+        return 0;
     return pTcpSocket->Write(spOutput.get(), nDataLen + iHeaderLen);
 }
 

@@ -713,6 +713,9 @@ void CHttpServ::OnSocketClosing(BaseSocket* const pBaseSocket)
     auto item = m_vConnections.find(reinterpret_cast<TcpSocket*>(pBaseSocket));
     if (item != end(m_vConnections))
     {
+        if (item->second.pWebSocket.get() != nullptr)
+            item->second.pWebSocket->OnConnectionClose(reinterpret_cast<TcpSocket*>(pBaseSocket));
+
         Timer<TcpSocket>* pTimer = item->second.pTimer.get();
         m_mtxConnections.unlock();
         pTimer->Stop();

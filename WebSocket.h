@@ -34,6 +34,7 @@ public:
     virtual ~WebSocket();
 
     void OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, size_t nDataLen);
+    void OnConnectionClose(TcpSocket* pTcpSocket);
 
     virtual void TextDataReceived(const void* /*pId*/, const std::string /*strPath*/, uint8_t* /*szData*/, uint32_t /*nDataLen*/) { ; }
     virtual void BinaryDataReceived(const void* /*pId*/, const std::string /*strPath*/, uint8_t* /*szData*/, uint32_t /*nDataLen*/, bool /*bIsLast*/) { ; }
@@ -49,6 +50,7 @@ private:
     SOCKETPARAM m_soSocketParam;
     void* m_LibHandle;
     void (*pSetWriteCallback)(void(*callback)(void* /*pId*/, const uint8_t* /*szData*/, uint32_t /*nDataLen*/), void* /*pId*/);
+    void (*pRemoveWriteCallback)(void* /*pId*/);
     void (*pTextDataReceived)(void* /*pId*/, const char* /*strPath*/, uint8_t* /*szData*/, uint32_t /*nDataLen*/);
 
     static std::function<size_t(void*, const uint8_t*, uint32_t)> WriteBackInstance;
