@@ -12,6 +12,10 @@
 #include <fcntl.h>
 #include <dlfcn.h>
 #define ConvertToByte(x) std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x)
+
+//
+// WebSockHandler = /opt/libWsLog.so (dll)
+
 extern void OutputDebugString(const wchar_t* pOut);
 // {   // mkfifo /tmp/dbgout
     // int fdPipe = open("/tmp/dbgout", O_WRONLY | O_NONBLOCK);
@@ -46,7 +50,10 @@ WebSocket::WebSocket(const std::string& strPath, const std::wstring& strModulPat
             pSetWriteCallback = (void (*)(void(*callback)(void* /*pId*/, const uint8_t* /*szData*/, uint32_t /*nDataLen*/), void* pId))dlsym(m_LibHandle, "SetWriteCallback");
             pRemoveWriteCallback = (void (*)(void* pId))dlsym(m_LibHandle, "RemoveWriteCallback");
             pTextDataReceived = (void (*)(void*, const char*, uint8_t*, uint32_t))dlsym(m_LibHandle, "TextDataReceived");
-            if (!pSetWriteCallback || !pRemoveWriteCallback || !pTextDataReceived) {
+            pBinaryDataReceived = (void (*)(void*, const char*, uint8_t*, uint32_t, bool))dlsym(m_LibHandle, "BinaryDataReceived");
+            pPongReceived = (void (*)(void*))dlsym(m_LibHandle, "PongReceived");
+
+            if (!pSetWriteCallback || !pRemoveWriteCallback || (!pTextDataReceived && !pBinaryDataReceived && !pPongReceived)) {
                 OutputDebugStringA(std::string("Error: " + std::string(dlerror()) + "\r\n").c_str());
                 dlclose(m_LibHandle);
                 m_LibHandle = nullptr;
@@ -55,6 +62,10 @@ WebSocket::WebSocket(const std::string& strPath, const std::wstring& strModulPat
 
             WebSocket::WriteBackInstance = std::bind(&WebSocket::WriteData, this, _1, _2, _3);
             pSetWriteCallback(&WebSocket::staticWriteBack, reinterpret_cast<void*>(pTcpSocket));
+        }
+        else
+        {
+            OutputDebugStringA(std::string("Error: " + std::string(dlerror()) + "\r\n").c_str());
         }
     }
 #endif
@@ -116,7 +127,10 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
 #if defined(_WIN32) || defined(_WIN64)
                 //OutputDebugString(L"continue frame\r\n");
 #endif
-                BinaryDataReceived(pTcpSocket, m_soSocketParam.strPath, szData, static_cast<uint32_t>(nBlockSize), m_soSocketParam.stHeader.FIN == 1 ? true : false);
+                if (pBinaryDataReceived != nullptr)
+                    pBinaryDataReceived(pTcpSocket, m_soSocketParam.strPath.c_str(), szData, static_cast<uint32_t>(nBlockSize), m_soSocketParam.stHeader.FIN == 1 ? true : false);
+                else
+                    BinaryDataReceived(pTcpSocket, m_soSocketParam.strPath, szData, static_cast<uint32_t>(nBlockSize), m_soSocketParam.stHeader.FIN == 1 ? true : false);
 
                 if (m_soSocketParam.nReceived == m_soSocketParam.nLen)
                 {
@@ -155,7 +169,10 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
 #if defined(_WIN32) || defined(_WIN64)
                 //OutputDebugString(L"binary frame\r\n");
 #endif
-                BinaryDataReceived(pTcpSocket, m_soSocketParam.strPath, szData, static_cast<uint32_t>(nBlockSize), m_soSocketParam.stHeader.FIN == 1 ? true : false);
+                if (pBinaryDataReceived != nullptr)
+                    pBinaryDataReceived(pTcpSocket, m_soSocketParam.strPath.c_str(), szData, static_cast<uint32_t>(nBlockSize), m_soSocketParam.stHeader.FIN == 1 ? true : false);
+                else
+                    BinaryDataReceived(pTcpSocket, m_soSocketParam.strPath, szData, static_cast<uint32_t>(nBlockSize), m_soSocketParam.stHeader.FIN == 1 ? true : false);
 
                 if (m_soSocketParam.nReceived == m_soSocketParam.nLen)
                 {
@@ -196,7 +213,10 @@ void WebSocket::OnDataReceivedWebSocket(TcpSocket* pTcpSocket, uint8_t* pData, s
                 break;
 
             case 10:// pong
-                PongReceived(pTcpSocket);
+                if (pPongReceived != nullptr)
+                    pPongReceived(pTcpSocket);
+                else
+                    PongReceived(pTcpSocket);
 
                 m_soSocketParam.nReceived = m_soSocketParam.nLen = 0;
                 break;
